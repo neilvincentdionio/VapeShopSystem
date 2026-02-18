@@ -11,14 +11,19 @@
 # System Discription
 - System Description – E-commerce Vapeshop
 
-The E-commerce Vapeshop is a comprehensive, web-based sales and inventory management system carefully developed to effectively support the growing online retail of various vape products. The system is intelligently designed to significantly streamline daily business operations by seamlessly integrating advanced product management, secure transaction processing, and rigorous compliance monitoring into one powerful centralized platform.
+The E-commerce Vapeshop is a web-based sales and inventory management system developed to support the online retail of vape products. The system is designed to streamline business operations by integrating product management, transaction processing, and compliance monitoring into a single centralized platform.
 
-The system delivers robust centralized product and inventory management capabilities, enabling administrators to precisely monitor real-time stock levels, promptly update detailed product information, and efficiently manage overall item availability. It fully supports smooth customer purchase and sales transaction processing, featuring automatic stock level updates immediately after each successful purchase to guarantee complete inventory accuracy and reliability.
+The system provides centralized product and inventory management, allowing administrators to efficiently monitor stock levels, update product information, and manage item availability. It supports customer purchase and sales transaction processing, with automatic stock level updates after each successful purchase to ensure inventory accuracy.
 
-To strictly meet stringent regulatory requirements, the system incorporates mandatory age-verification transaction logging for essential compliance purposes. Additional practical features such as automated receipt generation and convenient printing greatly improve transaction documentation processes, while intelligent low-stock and fast-moving product alerts effectively assist in proactive inventory planning and informed decision-making. The system also diligently monitors product expiry dates, particularly for sensitive vape liquids, to consistently maintain superior product quality and user safety.
+To meet regulatory requirements, the system includes age-verification transaction logging for compliance purposes. Additional features such as receipt generation and printing improve transaction documentation, while smart low-stock and fast-moving product alerts assist in inventory planning and decision-making. The system also monitors product expiry, particularly for vape liquids, to maintain product quality and safety.
 
-Furthermore, the platform reliably generates detailed daily and monthly enterprise sales reports to strongly support in-depth business analysis and accurate performance tracking. Role-based system access controls rigorously ensure that only properly authorized users can access and manage sensitive system functions, thereby enhancing overall security and operational control.
+Furthermore, the platform generates daily and monthly enterprise sales reports to support business analysis and performance tracking. Role-based system access ensures that only authorized users can manage sensitive system functions, improving overall security and operational control.The E-commerce Vapeshop is a web-based sales and inventory management system developed to support the online retail of vape products. The system is designed to streamline business operations by integrating product management, transaction processing, and compliance monitoring into a single centralized platform.
 
+The system provides centralized product and inventory management, allowing administrators to efficiently monitor stock levels, update product information, and manage item availability. It supports customer purchase and sales transaction processing, with automatic stock level updates after each successful purchase to ensure inventory accuracy.
+
+To meet regulatory requirements, the system includes age-verification transaction logging for compliance purposes. Additional features such as receipt generation and printing improve transaction documentation, while smart low-stock and fast-moving product alerts assist in inventory planning and decision-making. The system also monitors product expiry, particularly for vape liquids, to maintain product quality and safety.
+
+Furthermore, the platform generates daily and monthly enterprise sales reports to support business analysis and performance tracking. Role-based system access ensures that only authorized users can manage sensitive system functions, improving overall security and operational control.
 # Technologies Used
 
 * Designing UI
