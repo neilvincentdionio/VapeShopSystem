@@ -1,69 +1,34 @@
-# CodeIgniter 4 Application Starter
+# E-Commerce Inventory and Sales Management System for Vape Shop
 
-## What is CodeIgniter?
+## Group Members
+- Neil Vincent Dionio
+- Jhondell Rañises
+- Christian Bermudez
+- Mike Cidric Santillan
+- Jed Isaac Valenzuela
+- Mark Owen Lu
 
-CodeIgniter is a PHP full-stack web framework that is light, fast, flexible and secure.
-More information can be found at the [official site](https://codeigniter.com).
+# System Discription
+- System Description – E-commerce Vapeshop
 
-This repository holds a composer-installable app starter.
-It has been built from the
-[development repository](https://github.com/codeigniter4/CodeIgniter4).
+The E-commerce Vapeshop is a web-based sales and inventory management system developed to support the online retail of vape products. The system is designed to streamline business operations by integrating product management, transaction processing, and compliance monitoring into a single centralized platform.
 
-More information about the plans for version 4 can be found in [CodeIgniter 4](https://forum.codeigniter.com/forumdisplay.php?fid=28) on the forums.
+The system provides centralized product and inventory management, allowing administrators to efficiently monitor stock levels, update product information, and manage item availability. It supports customer purchase and sales transaction processing, with automatic stock level updates after each successful purchase to ensure inventory accuracy.
 
-You can read the [user guide](https://codeigniter.com/user_guide/)
-corresponding to the latest version of the framework.
+To meet regulatory requirements, the system includes age-verification transaction logging for compliance purposes. Additional features such as receipt generation and printing improve transaction documentation, while smart low-stock and fast-moving product alerts assist in inventory planning and decision-making. The system also monitors product expiry, particularly for vape liquids, to maintain product quality and safety.
 
-## Installation & updates
+Furthermore, the platform generates daily and monthly enterprise sales reports to support business analysis and performance tracking. Role-based system access ensures that only authorized users can manage sensitive system functions, improving overall security and operational control.
 
-`composer create-project codeigniter4/appstarter` then `composer update` whenever
-there is a new release of the framework.
+# Technologies Used
 
-When updating, check the release notes to see if there are any changes you might need to apply
-to your `app` folder. The affected files can be copied or merged from
-`vendor/codeigniter4/framework/app`.
+* Designing UI
+- HTML, CSS, JavaScript
 
-## Setup
+* Database
+- mySQL, PHPMyAdmin
 
-Copy `env` to `.env` and tailor for your app, specifically the baseURL
-and any database settings.
+* Applications
+- VSCode, Android Studio, XAMPP
 
-## Important Change with index.php
-
-`index.php` is no longer in the root of the project! It has been moved inside the *public* folder,
-for better security and separation of components.
-
-This means that you should configure your web server to "point" to your project's *public* folder, and
-not to the project root. A better practice would be to configure a virtual host to point there. A poor practice would be to point your web server to the project root and expect to enter *public/...*, as the rest of your logic and the
-framework are exposed.
-
-**Please** read the user guide for a better explanation of how CI4 works!
-
-## Repository Management
-
-We use GitHub issues, in our main repository, to track **BUGS** and to track approved **DEVELOPMENT** work packages.
-We use our [forum](http://forum.codeigniter.com) to provide SUPPORT and to discuss
-FEATURE REQUESTS.
-
-This repository is a "distribution" one, built by our release preparation script.
-Problems with it can be raised on our forum, or as issues in the main repository.
-
-## Server Requirements
-
-PHP version 8.2 or higher is required, with the following extensions installed:
-
-- [intl](http://php.net/manual/en/intl.requirements.php)
-- [mbstring](http://php.net/manual/en/mbstring.installation.php)
-
-> [!WARNING]
-> - The end of life date for PHP 7.4 was November 28, 2022.
-> - The end of life date for PHP 8.0 was November 26, 2023.
-> - The end of life date for PHP 8.1 was December 31, 2025.
-> - If you are still using below PHP 8.2, you should upgrade immediately.
-> - The end of life date for PHP 8.2 will be December 31, 2026.
-
-Additionally, make sure that the following extensions are enabled in your PHP:
-
-- json (enabled by default - don't turn it off)
-- [mysqlnd](http://php.net/manual/en/mysqlnd.install.php) if you plan to use MySQL
-- [libcurl](http://php.net/manual/en/curl.requirements.php) if you plan to use the HTTP\CURLRequest library
+* Back-end
+- PHP, CodeIgniter Framework
