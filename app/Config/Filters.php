@@ -112,7 +112,8 @@ class Filters extends BaseFilters
             'before' => [
                 'dashboard*',
                 'profile*',
-                'settings*'
+                'settings*',
+                'records*'
             ]
         ]
     ];
