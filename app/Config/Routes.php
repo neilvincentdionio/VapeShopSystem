@@ -22,12 +22,3 @@ $routes->get('/auth/logout', 'Auth::logout');
 $routes->get('/dashboard', 'Dashboard::index', ['filter' => 'auth']);
 $routes->get('/dashboard/profile', 'Dashboard::profile', ['filter' => 'auth']);
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth:admin']);
-
-// Records routes (protected by AuthFilter)
-$routes->get('/records', 'Records::index', ['filter' => 'auth']);
-$routes->get('/records/create', 'Records::create', ['filter' => 'auth']);
-$routes->post('/records/store', 'Records::store', ['filter' => 'auth']);
-$routes->get('/records/edit/(:num)', 'Records::edit/$1', ['filter' => 'auth']);
-$routes->post('/records/update/(:num)', 'Records::update/$1', ['filter' => 'auth']);
-$routes->post('/records/delete/(:num)', 'Records::delete/$1', ['filter' => 'auth']);
-$routes->get('/records/search', 'Records::search', ['filter' => 'auth']);

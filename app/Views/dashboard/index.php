@@ -495,8 +495,6 @@
                 <div class="nav-dropdown">
                     <button class="nav-dropdown-btn">Records ▼</button>
                     <div class="nav-dropdown-content">
-                        <a href="<?= site_url('records') ?>">📝 Records Management</a>
-                        <a href="<?= site_url('records/create') ?>">➕ Create Record</a>
                         <a href="<?= site_url('records/products') ?>">Products</a>
                         <a href="<?= site_url('records/orders') ?>">Orders</a>
                         <a href="<?= site_url('records/inventory') ?>">Inventory</a>
