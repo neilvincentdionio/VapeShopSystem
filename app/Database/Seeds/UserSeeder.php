@@ -14,14 +14,25 @@ class UserSeeder extends Seeder
                 'email'      => 'admin@vapeshop.com',
                 'password'   => password_hash('password', PASSWORD_DEFAULT),
                 'role'       => 'admin',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name'       => 'Staff Member',
-                'email'      => 'staff@vapeshop.com',
+                'email'      => 'customer@vapeshop.com',
                 'password'   => password_hash('password', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
+                'is_active'  => 1,
+                'created_at' => date('Y-m-d H:i:s'),
+            ],
+            [
+                'name'       => 'Seller',
+                'email'      => 'shopowner@vapeshop.com',
+                'password'   => password_hash('password', PASSWORD_DEFAULT),
+                'role'       => 'seller',
+                'shop_name'  => 'Quick Puff VapeShop',
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -29,7 +40,8 @@ class UserSeeder extends Seeder
                 'name'       => 'Christian Bermudez',
                 'email'      => 'christian@vapeshop.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -37,7 +49,8 @@ class UserSeeder extends Seeder
                 'name'       => 'Jhondell Rañeses',
                 'email'      => 'jhondell@vapeshop.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -46,6 +59,7 @@ class UserSeeder extends Seeder
                 'email'      => 'neilvincentdionio@gmail.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
                 'role'       => 'admin',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -53,7 +67,8 @@ class UserSeeder extends Seeder
                 'name'       => 'Mike Cidric Santillan',
                 'email'      => 'mike@vapeshop.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -61,7 +76,8 @@ class UserSeeder extends Seeder
                 'name'       => 'Jed Isaac Valenzuela',
                 'email'      => 'jed@vapeshop.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
@@ -69,12 +85,27 @@ class UserSeeder extends Seeder
                 'name'       => 'Mark Owen Lu',
                 'email'      => 'mark@vapeshop.com',
                 'password'   => password_hash('password123', PASSWORD_DEFAULT),
-                'role'       => 'staff',
+                'role'       => 'customer',
+                'shop_name'  => null,
                 'is_active'  => 1,
                 'created_at' => date('Y-m-d H:i:s'),
             ],
         ];
 
-        $this->db->table('users')->insertBatch($data);
+        foreach ($data as $row) {
+            $existing = $this->db->table('users')->where('email', $row['email'])->get()->getRowArray();
+
+            if ($existing) {
+                $this->db->table('users')->where('email', $row['email'])->update([
+                    'name' => $row['name'],
+                    'role' => $row['role'],
+                    'shop_name' => $row['shop_name'],
+                    'is_active' => $row['is_active'],
+                ]);
+                continue;
+            }
+
+            $this->db->table('users')->insert($row);
+        }
     }
 }

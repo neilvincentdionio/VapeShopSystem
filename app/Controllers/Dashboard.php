@@ -57,26 +57,23 @@ class Dashboard extends BaseController
         $userRole = $this->session->get('user_role');
         
         // Get dashboard analytics based on user role
-        $analytics = $this->dashboardModel->getAnalytics('today');
+        $shopName = $this->session->get('user_shop_name');
+        $analytics = $this->dashboardModel->getAnalytics('today', $userRole, $shopName);
         $userStats = $this->dashboardModel->getUserActivityStats();
         $systemMetrics = $this->dashboardModel->getSystemMetrics();
+        $monthlyAnalytics = $this->dashboardModel->getAnalytics('month', $userRole, $shopName);
         
-        // Get role-specific data
-        if ($userRole === 'admin') {
-            $totalUsers = $this->dashboardModel->getTotalUsers();
-            $recentRegistrations = $this->dashboardModel->getRecentRegistrations();
-        } else {
-            $totalUsers = 1; // Staff sees limited info
-            $recentRegistrations = 0;
-        }
+        $totalProducts = $this->dashboardModel->getTotalProducts($userRole, $shopName);
+        $recentRegistrations = $userRole === 'admin' ? $this->dashboardModel->getRecentRegistrations() : 0;
 
         $data = [
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
             'user_role' => $userRole,
+            'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Dashboard',
             // Real analytics data
-            'total_users' => $totalUsers,
+            'total_products' => $totalProducts,
             'orders_today' => $analytics['orders'],
             'revenue_today' => $analytics['revenue'],
             'system_uptime' => $systemMetrics['uptime'],
@@ -86,11 +83,11 @@ class Dashboard extends BaseController
             'user_stats' => $userStats,
             'system_metrics' => $systemMetrics,
             // Performance metrics
-            'system_performance' => '89%', // Could be calculated based on actual metrics
-            'notifications' => $this->getNotifications($userRole),
-            'growth_rate' => '+12%', // Could be calculated from historical data
-            'recent_orders' => $this->getRecentOrders($userRole),
-            'monthly_revenue' => $this->dashboardModel->getAnalytics('month')['revenue']
+            'system_performance' => $analytics['orders'] > 0 ? '100%' : '0%',
+            'notifications' => $this->getNotifications($analytics['orders'], $analytics['revenue']),
+            'growth_rate' => $this->dashboardModel->getGrowthRate($userRole, $shopName),
+            'recent_orders' => $analytics['orders'],
+            'monthly_revenue' => $monthlyAnalytics['revenue']
         ];
 
         return view('dashboard/index', $data);
@@ -111,6 +108,7 @@ class Dashboard extends BaseController
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
             'user_role' => $this->session->get('user_role'),
+            'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Profile'
         ];
 
@@ -138,6 +136,7 @@ class Dashboard extends BaseController
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
             'user_role' => $this->session->get('user_role'),
+            'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Settings'
         ];
 
@@ -145,38 +144,17 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get notifications based on user role
+     * Get notifications based on real data
      */
-    private function getNotifications($userRole)
+    private function getNotifications($ordersToday, $revenueToday)
     {
-        $notifications = [];
-        
-        if ($userRole === 'admin') {
-            $notifications = [
-                ['type' => 'info', 'message' => 'System backup completed successfully'],
-                ['type' => 'warning', 'message' => 'Server storage at 75% capacity'],
-                ['type' => 'success', 'message' => 'New user registration spike detected']
-            ];
-        } else {
-            $notifications = [
-                ['type' => 'info', 'message' => 'Daily sales report available'],
-                ['type' => 'success', 'message' => 'Inventory update completed']
-            ];
+        if ((int) $ordersToday <= 0) {
+            return [];
         }
-        
-        return $notifications;
-    }
 
-    /**
-     * Get recent orders based on user role
-     */
-    private function getRecentOrders($userRole)
-    {
-        // In a real application, this would fetch from orders table
-        if ($userRole === 'admin') {
-            return rand(20, 60); // Admin sees more orders
-        } else {
-            return rand(5, 20); // Staff sees limited orders
-        }
+        return [
+            ['type' => 'success', 'message' => $ordersToday . ' order(s) recorded today.'],
+            ['type' => 'info', 'message' => 'Today revenue: ' . $revenueToday],
+        ];
     }
 }

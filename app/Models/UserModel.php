@@ -17,6 +17,7 @@ class UserModel extends Model
         'email',
         'password',
         'role',
+        'shop_name',
         'is_active',
         'last_login',
         'login_attempts',
@@ -34,7 +35,8 @@ class UserModel extends Model
         'name' => 'required|min_length[3]|max_length[255]',
         'email' => 'required|valid_email|is_unique[users.email,id,{id}]',
         'password' => 'required|min_length[8]',
-        'role' => 'required|in_list[admin,staff]'
+        'role' => 'required|in_list[admin,seller,customer]',
+        'shop_name' => 'permit_empty|max_length[150]',
     ];
     protected $validationMessages = [
         'email' => [
