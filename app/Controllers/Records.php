@@ -8,7 +8,8 @@ class Records extends BaseController
 {
     protected $recordModel;
     protected $session;
-    private const ALLOWED_ROLES = ['admin', 'seller'];
+    private const ALLOWED_ROLES = ['admin'];
+    private ?bool $hasExpectedSchema = null;
 
     public function __construct()
     {
@@ -30,11 +31,70 @@ class Records extends BaseController
         return true;
     }
 
+    private function ensureSchema()
+    {
+        if ($this->hasExpectedRecordsSchema()) {
+            return true;
+        }
+
+        return redirect()->to('/dashboard')->with(
+            'error',
+            'Records module schema is outdated. Run `php spark migrate:fresh` then re-seed.'
+        );
+    }
+
+    private function hasExpectedRecordsSchema(): bool
+    {
+        if ($this->hasExpectedSchema !== null) {
+            return $this->hasExpectedSchema;
+        }
+
+        $db = \Config\Database::connect();
+        if (! $db->tableExists('records')) {
+            $this->hasExpectedSchema = false;
+            return false;
+        }
+
+        $requiredFields = [
+            'record_type',
+            'reference_number',
+            'title',
+            'quantity',
+            'unit_price',
+            'total_amount',
+            'payment_method',
+            'payment_status',
+            'record_date',
+            'status',
+            'created_by',
+        ];
+
+        foreach ($requiredFields as $field) {
+            if (! $db->fieldExists($field, 'records')) {
+                $this->hasExpectedSchema = false;
+                return false;
+            }
+        }
+
+        $this->hasExpectedSchema = true;
+        return true;
+    }
+
+    private function hasRecordsField(string $field): bool
+    {
+        $db = \Config\Database::connect();
+        return $db->tableExists('records') && $db->fieldExists($field, 'records');
+    }
+
     public function index()
     {
         $authCheck = $this->checkAuth();
         if ($authCheck !== true) {
             return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
         }
 
         $search = trim((string) $this->request->getGet('q'));
@@ -62,10 +122,6 @@ class Records extends BaseController
 
         if (in_array($status, ['pending', 'completed', 'cancelled'], true)) {
             $query = $query->where('status', $status);
-        }
-
-        if ($this->isSeller()) {
-            $query = $query->where('shop_name', (string) $this->session->get('user_shop_name'));
         }
 
         $records = $query->orderBy('id', 'DESC')->paginate(10);
@@ -97,6 +153,10 @@ class Records extends BaseController
         if ($authCheck !== true) {
             return $authCheck;
         }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
 
         return view('records/form', [
             'page_title' => 'Add Record',
@@ -116,11 +176,16 @@ class Records extends BaseController
         if ($authCheck !== true) {
             return $authCheck;
         }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
 
         $data = $this->sanitizePayload();
         $data['created_by'] = (int) $this->session->get('user_id');
-        if ($this->isSeller()) {
-            $data['shop_name'] = (string) $this->session->get('user_shop_name');
+        $shopName = trim((string) $this->session->get('user_shop_name'));
+        if ($shopName !== '' && $this->hasRecordsField('shop_name')) {
+            $data['shop_name'] = $shopName;
         }
 
         if (!$this->recordModel->insert($data)) {
@@ -136,13 +201,14 @@ class Records extends BaseController
         if ($authCheck !== true) {
             return $authCheck;
         }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
 
         $record = $this->recordModel->find((int) $id);
         if (!$record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
-        }
-        if ($this->isSeller() && (($record['shop_name'] ?? '') !== (string) $this->session->get('user_shop_name'))) {
-            return redirect()->to('/records')->with('error', 'Access denied to this record.');
         }
 
         return view('records/form', [
@@ -163,19 +229,21 @@ class Records extends BaseController
         if ($authCheck !== true) {
             return $authCheck;
         }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
 
         $recordId = (int) $id;
         $record = $this->recordModel->find($recordId);
         if (!$record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
         }
-        if ($this->isSeller() && (($record['shop_name'] ?? '') !== (string) $this->session->get('user_shop_name'))) {
-            return redirect()->to('/records')->with('error', 'Access denied to this record.');
-        }
 
         $data = $this->sanitizePayload();
-        if ($this->isSeller()) {
-            $data['shop_name'] = (string) $this->session->get('user_shop_name');
+        $shopName = trim((string) $this->session->get('user_shop_name'));
+        if ($shopName !== '' && $this->hasRecordsField('shop_name')) {
+            $data['shop_name'] = $shopName;
         }
 
         if (!$this->recordModel->update($recordId, $data)) {
@@ -191,13 +259,14 @@ class Records extends BaseController
         if ($authCheck !== true) {
             return $authCheck;
         }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
 
         $record = $this->recordModel->find((int) $id);
         if (!$record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
-        }
-        if ($this->isSeller() && (($record['shop_name'] ?? '') !== (string) $this->session->get('user_shop_name'))) {
-            return redirect()->to('/records')->with('error', 'Access denied to this record.');
         }
 
         $this->recordModel->delete((int) $id);
@@ -227,8 +296,4 @@ class Records extends BaseController
         ];
     }
 
-    private function isSeller(): bool
-    {
-        return (string) $this->session->get('user_role') === 'seller';
-    }
 }

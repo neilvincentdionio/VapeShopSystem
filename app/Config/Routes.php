@@ -24,11 +24,11 @@ $routes->get('/dashboard/profile', 'Dashboard::profile', ['filter' => 'auth']);
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth:admin']);
 
 // Records module routes (Task 3)
-$routes->group('records', ['filter' => 'auth:admin,seller'], static function ($routes) {
+$routes->group('records', ['filter' => 'auth:admin'], static function ($routes) {
     $routes->get('/', 'Records::index');
     $routes->get('create', 'Records::create');
     $routes->post('store', 'Records::store');
     $routes->get('edit/(:num)', 'Records::edit/$1');
     $routes->post('update/(:num)', 'Records::update/$1');
-    $routes->post('delete/(:num)', 'Records::delete/$1', ['filter' => 'auth:admin,seller']);
+    $routes->post('delete/(:num)', 'Records::delete/$1', ['filter' => 'auth:admin']);
 });

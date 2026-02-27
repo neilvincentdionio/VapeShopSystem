@@ -129,7 +129,7 @@
             <div class="navbar-center">
                 <div class="navbar-menu">
                     <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (in_array($user_role, ['admin', 'seller'], true)): ?>
+                    <?php if ($user_role === 'admin'): ?>
                         <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
                     <?php endif; ?>
                     <a href="<?= site_url('dashboard/profile') ?>" class="nav-link active">Profile</a>
@@ -137,7 +137,7 @@
                         <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
                     <?php endif; ?>
 
-                    <?php if (in_array($user_role, ['admin', 'seller'], true)): ?>
+                    <?php if ($user_role === 'admin'): ?>
                         <div class="nav-dropdown">
                             <button class="nav-dropdown-btn">Quick Actions</button>
                             <div class="nav-dropdown-content">

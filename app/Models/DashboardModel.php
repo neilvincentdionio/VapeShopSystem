@@ -10,6 +10,7 @@ class DashboardModel extends Model
     protected $primaryKey = 'id';
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
+    private ?bool $hasAnalyticsRecordSchema = null;
 
     /**
      * Get total number of users
@@ -25,11 +26,6 @@ class DashboardModel extends Model
     public function getAdminUsers()
     {
         return $this->where('role', 'admin')->where('is_active', 1)->countAllResults();
-    }
-
-    public function getShopOwnerUsers()
-    {
-        return $this->where('role', 'seller')->where('is_active', 1)->countAllResults();
     }
 
     public function getCustomerUsers()
@@ -58,7 +54,6 @@ class DashboardModel extends Model
         // Users by role
         $data['by_role'] = [
             'admin' => $this->getAdminUsers(),
-            'seller' => $this->getShopOwnerUsers(),
             'customer' => $this->getCustomerUsers(),
         ];
 
@@ -198,7 +193,7 @@ class DashboardModel extends Model
 
     public function getGrowthRate($userRole = 'admin', $shopName = null)
     {
-        if (! $this->db->tableExists('records')) {
+        if (! $this->hasAnalyticsRecordSchema()) {
             return '0%';
         }
 
@@ -222,7 +217,7 @@ class DashboardModel extends Model
 
     public function getTotalProducts($userRole = 'admin', $shopName = null)
     {
-        if (! $this->db->tableExists('records')) {
+        if (! $this->hasAnalyticsRecordSchema()) {
             return 0;
         }
 
@@ -237,7 +232,7 @@ class DashboardModel extends Model
 
     private function countSalesRecords($start, $end, $userRole, $shopName)
     {
-        if (! $this->db->tableExists('records')) {
+        if (! $this->hasAnalyticsRecordSchema()) {
             return 0;
         }
 
@@ -254,7 +249,7 @@ class DashboardModel extends Model
 
     private function sumSalesRevenue($start, $end, $userRole, $shopName)
     {
-        if (! $this->db->tableExists('records')) {
+        if (! $this->hasAnalyticsRecordSchema()) {
             return 0.0;
         }
 
@@ -290,8 +285,29 @@ class DashboardModel extends Model
 
     private function applyShopScope($builder, $userRole, $shopName)
     {
-        if ($userRole === 'seller' && !empty($shopName)) {
-            $builder->where('shop_name', $shopName);
+        // Role-based shop scoping removed: analytics are now based only on admin/customer roles.
+    }
+
+    private function hasAnalyticsRecordSchema(): bool
+    {
+        if ($this->hasAnalyticsRecordSchema !== null) {
+            return $this->hasAnalyticsRecordSchema;
         }
+
+        if (! $this->db->tableExists('records')) {
+            $this->hasAnalyticsRecordSchema = false;
+            return false;
+        }
+
+        $requiredFields = ['record_type', 'record_date', 'status', 'total_amount'];
+        foreach ($requiredFields as $field) {
+            if (! $this->db->fieldExists($field, 'records')) {
+                $this->hasAnalyticsRecordSchema = false;
+                return false;
+            }
+        }
+
+        $this->hasAnalyticsRecordSchema = true;
+        return true;
     }
 }

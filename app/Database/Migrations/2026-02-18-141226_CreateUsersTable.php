@@ -32,7 +32,7 @@ class CreateUsersTable extends Migration
                 'null'       => false,
             ],
             'role' => [
-                'type'       => "ENUM('admin', 'seller', 'customer')",
+                'type'       => "ENUM('admin', 'customer')",
                 'default'    => 'customer',
                 'null'       => false,
             ],

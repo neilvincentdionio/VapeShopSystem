@@ -243,7 +243,7 @@
                                 <td>
                                     <div class="actions">
                                         <a href="<?= site_url('records/edit/' . $item['id']) ?>" class="btn btn-warning">Edit</a>
-                                        <?php if (in_array($user_role, ['admin', 'seller'], true)): ?>
+                                        <?php if ($user_role === 'admin'): ?>
                                             <form action="<?= site_url('records/delete/' . $item['id']) ?>" method="post" onsubmit="return confirm('Delete this record?')" style="display:inline;">
                                                 <?= csrf_field() ?>
                                                 <button type="submit" class="btn btn-danger">Delete</button>
