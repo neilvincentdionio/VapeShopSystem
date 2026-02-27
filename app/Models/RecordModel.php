@@ -14,6 +14,7 @@ class RecordModel extends Model
     protected $allowedFields = [
         'record_type',
         'shop_name',
+        'date',
         'reference_number',
         'title',
         'description',
@@ -35,6 +36,7 @@ class RecordModel extends Model
 
     protected $validationRules = [
         'record_type' => 'required|in_list[sales,purchase,inventory,expense]',
+        'date' => 'required|valid_date[Y-m-d]',
         'reference_number' => 'required|min_length[3]|max_length[100]',
         'title' => 'required|min_length[3]|max_length[255]',
         'description' => 'permit_empty|max_length[1000]',

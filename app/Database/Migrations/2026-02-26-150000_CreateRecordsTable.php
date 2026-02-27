@@ -2,6 +2,7 @@
 
 namespace App\Database\Migrations;
 
+use CodeIgniter\Database\RawSql;
 use CodeIgniter\Database\Migration;
 
 class CreateRecordsTable extends Migration
@@ -9,7 +10,12 @@ class CreateRecordsTable extends Migration
     public function up()
     {
         if ($this->db->tableExists('records')) {
-            if ($this->hasExpectedSchema('records')) {
+            if ($this->hasExpectedSchema()) {
+                return;
+            }
+
+            if ($this->hasCompatibleSchemaWithoutDate()) {
+                $this->ensureDateColumnOnRecordsTable();
                 return;
             }
 
@@ -34,7 +40,72 @@ class CreateRecordsTable extends Migration
         }
     }
 
-    private function hasExpectedSchema(string $table): bool
+    private function ensureDateColumnOnRecordsTable(): void
+    {
+        if (! $this->db->tableExists('records')) {
+            return;
+        }
+
+        if (! $this->db->fieldExists('date', 'records')) {
+            $this->forge->addColumn('records', [
+                'date' => [
+                    'type' => 'DATE',
+                    'null' => true,
+                    'after' => 'record_type',
+                ],
+            ]);
+        }
+
+        $valueParts = ['`date`'];
+        if ($this->db->fieldExists('record_date', 'records')) {
+            $valueParts[] = '`record_date`';
+        }
+        if ($this->db->fieldExists('created_at', 'records')) {
+            $valueParts[] = 'DATE(`created_at`)';
+        }
+        $valueParts[] = 'CURDATE()';
+
+        $this->db->query(sprintf(
+            'UPDATE `records` SET `date` = COALESCE(%s) WHERE `date` IS NULL OR `date` = "0000-00-00"',
+            implode(', ', $valueParts)
+        ));
+
+        $this->forge->modifyColumn('records', [
+            'date' => [
+                'type' => 'DATE',
+                'null' => false,
+                'default' => new RawSql('CURRENT_DATE'),
+            ],
+        ]);
+    }
+
+    private function hasExpectedSchema(): bool
+    {
+        foreach ($this->requiredFields(true) as $field) {
+            if (! $this->db->fieldExists($field, 'records')) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function hasCompatibleSchemaWithoutDate(): bool
+    {
+        if ($this->db->fieldExists('date', 'records')) {
+            return false;
+        }
+
+        foreach ($this->requiredFields(false) as $field) {
+            if (! $this->db->fieldExists($field, 'records')) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function requiredFields(bool $includeDate): array
     {
         $requiredFields = [
             'record_type',
@@ -52,13 +123,11 @@ class CreateRecordsTable extends Migration
             'updated_at',
         ];
 
-        foreach ($requiredFields as $field) {
-            if (! $this->db->fieldExists($field, $table)) {
-                return false;
-            }
+        if ($includeDate) {
+            array_splice($requiredFields, 1, 0, ['date']);
         }
 
-        return true;
+        return $requiredFields;
     }
 
     private function createRecordsTable(): void
@@ -74,6 +143,11 @@ class CreateRecordsTable extends Migration
                 'type'       => "ENUM('sales','purchase','inventory','expense')",
                 'null'       => false,
                 'default'    => 'sales',
+            ],
+            'date' => [
+                'type'       => 'DATE',
+                'null'       => false,
+                'default'    => new RawSql('CURRENT_DATE'),
             ],
             'reference_number' => [
                 'type'       => 'VARCHAR',

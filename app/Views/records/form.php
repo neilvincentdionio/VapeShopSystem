@@ -90,7 +90,6 @@
         }
         .btn-danger:hover { background-color: #c82333; }
         .nav-link { padding: .45rem .75rem; border-radius: 6px; }
-        }
         .container { max-width: 760px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
         .panel {
             background: rgba(255,255,255,.1);
@@ -175,6 +174,15 @@
             <form method="post" action="<?= $is_edit ? site_url('records/update/' . $record['id']) : site_url('records/store') ?>">
                 <?= csrf_field() ?>
                 <div class="field">
+                    <label>Date</label>
+                    <?php
+                        $currentDate = old('date', $record['date'] ?? ($record['record_date'] ?? date('Y-m-d')));
+                        $dateTs = strtotime((string) $currentDate);
+                        $dateValue = $dateTs !== false ? date('Y-m-d', $dateTs) : date('Y-m-d');
+                    ?>
+                    <input type="date" name="date" value="<?= htmlspecialchars($dateValue) ?>" required>
+                </div>
+                <div class="field">
                     <label>Record Type</label>
                     <?php $currentType = old('record_type', $record['record_type'] ?? 'sales'); ?>
                     <select name="record_type" required>
@@ -222,10 +230,6 @@
                         <option value="partial" <?= $currentPaymentStatus === 'partial' ? 'selected' : '' ?>>Partial</option>
                         <option value="unpaid" <?= $currentPaymentStatus === 'unpaid' ? 'selected' : '' ?>>Unpaid</option>
                     </select>
-                </div>
-                <div class="field">
-                    <label>Record Date</label>
-                    <input type="date" name="record_date" value="<?= old('record_date', !empty($record['record_date']) ? date('Y-m-d', strtotime($record['record_date'])) : date('Y-m-d')) ?>" required>
                 </div>
                 <div class="field">
                     <label>Status</label>

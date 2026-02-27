@@ -153,7 +153,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countSalesRecords($today, $tomorrow, $userRole, $shopName),
-            'revenue' => '$' . number_format($this->sumSalesRevenue($today, $tomorrow, $userRole, $shopName), 2),
+            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($today, $tomorrow, $userRole, $shopName), 2),
             'new_users' => $userRole === 'admin' ? $this->countNewUsers($today, $tomorrow) : 0,
             'active_sessions' => $this->countActiveUsers(),
         ];
@@ -169,7 +169,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countSalesRecords($weekStart, $nextDay, $userRole, $shopName),
-            'revenue' => '$' . number_format($this->sumSalesRevenue($weekStart, $nextDay, $userRole, $shopName), 2),
+            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($weekStart, $nextDay, $userRole, $shopName), 2),
             'new_users' => $userRole === 'admin' ? $this->where('created_at >=', $weekStart)->countAllResults() : 0,
             'active_sessions' => $this->countActiveUsers(),
         ];
@@ -185,7 +185,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countSalesRecords($monthStart, $nextDay, $userRole, $shopName),
-            'revenue' => '$' . number_format($this->sumSalesRevenue($monthStart, $nextDay, $userRole, $shopName), 2),
+            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($monthStart, $nextDay, $userRole, $shopName), 2),
             'new_users' => $userRole === 'admin' ? $this->where('created_at >=', $monthStart)->countAllResults() : 0,
             'active_sessions' => $this->countActiveUsers(),
         ];

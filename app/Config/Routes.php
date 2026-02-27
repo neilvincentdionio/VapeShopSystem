@@ -27,6 +27,7 @@ $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth:ad
 $routes->group('records', ['filter' => 'auth:admin'], static function ($routes) {
     $routes->get('/', 'Records::index');
     $routes->get('create', 'Records::create');
+    $routes->get('(:num)', 'Records::show/$1');
     $routes->post('store', 'Records::store');
     $routes->get('edit/(:num)', 'Records::edit/$1');
     $routes->post('update/(:num)', 'Records::update/$1');
