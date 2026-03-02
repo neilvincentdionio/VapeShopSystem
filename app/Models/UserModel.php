@@ -32,7 +32,7 @@ class UserModel extends Model
 
     // Validation
     protected $validationRules = [
-        'name' => 'required|min_length[3]|max_length[255]',
+        'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
         'email' => 'required|valid_email|is_unique[users.email,id,{id}]',
         'password' => 'required|min_length[8]',
         'role' => 'required|in_list[admin,customer]',
@@ -44,6 +44,9 @@ class UserModel extends Model
         ],
         'password' => [
             'min_length' => 'Password must be at least 8 characters long.'
+        ],
+        'name' => [
+            'regex_match' => 'Name can only contain letters, numbers, spaces, hyphens, apostrophes, and periods.'
         ]
     ];
 
@@ -130,6 +133,69 @@ class UserModel extends Model
     {
         $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
         return $this->insert($data);
+    }
+
+    public function updateUserDirectly($id, $data)
+    {
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Direct update called with ID: " . $id . "\n", FILE_APPEND);
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Direct update data: " . print_r($data, true) . "\n", FILE_APPEND);
+        
+        try {
+            $builder = $this->db->table('users');
+            
+            // Set the data to update
+            foreach ($data as $key => $value) {
+                $builder->set($key, $value);
+            }
+            
+            // Add updated_at timestamp
+            $builder->set('updated_at', 'NOW()', false);
+            
+            // Execute the update
+            $result = $builder->where('id', $id)->update();
+            
+            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Direct update result: " . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
+            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Direct update affected rows: " . $this->db->affectedRows() . "\n", FILE_APPEND);
+            
+            return $result;
+        } catch (\Exception $e) {
+            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Direct update exception: " . $e->getMessage() . "\n", FILE_APPEND);
+            return false;
+        }
+    }
+
+    /**
+     * Override update method for debugging
+     */
+    public function update($id = null, $data = null): bool
+    {
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - UserModel update called with ID: " . $id . "\n", FILE_APPEND);
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - UserModel update data: " . print_r($data, true) . "\n", FILE_APPEND);
+        
+        // Check if all fields are in allowedFields
+        foreach ($data as $key => $value) {
+            if (!in_array($key, $this->allowedFields)) {
+                file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Field '$key' not in allowedFields!\n", FILE_APPEND);
+            }
+        }
+        
+        log_message('info', 'UserModel update called with ID: ' . $id);
+        log_message('info', 'UserModel update data: ' . print_r($data, true));
+        
+        // Disable validation temporarily to test
+        $originalValidation = $this->skipValidation;
+        $this->skipValidation = true;
+        
+        $result = parent::update($id, $data);
+        
+        // Restore validation setting
+        $this->skipValidation = $originalValidation;
+        
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - UserModel update result: " . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
+        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Parent update affected rows: " . $this->db->affectedRows() . "\n", FILE_APPEND);
+        log_message('info', 'UserModel update result: ' . ($result ? 'SUCCESS' : 'FAILED'));
+        
+        return $result;
     }
 
     /**

@@ -199,6 +199,7 @@
                     <a href="<?= site_url('dashboard') ?>" class="nav-link active">Dashboard</a>
                     <?php if ($user_role === 'admin'): ?>
                         <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
+                        <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
                     <?php endif; ?>
                     <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
                     <?php if ($user_role === 'admin'): ?>
@@ -211,6 +212,8 @@
                             <div class="nav-dropdown-content">
                                 <a href="<?= site_url('records/create') ?>">Add Record</a>
                                 <a href="<?= site_url('records') ?>">Manage Records</a>
+                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
+                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
                             </div>
                         </div>
                     <?php endif; ?>

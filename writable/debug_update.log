@@ -1,0 +1,10 @@
+2026-03-02 16:30:15 - UserModel update called with ID: 2
+2026-03-02 16:30:15 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-02 16:30:15
+)
+
+2026-03-02 16:30:15 - UserModel update result: SUCCESS
+2026-03-02 16:30:15 - Parent update affected rows: 1
