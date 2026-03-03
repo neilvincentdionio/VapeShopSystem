@@ -535,10 +535,28 @@
 
                 <div class="form-group">
                     <label for="role">User Role</label>
-                    <select id="role" name="role" required>
-                        <option value="admin" <?= old('role', $user['role']) == 'admin' ? 'selected' : '' ?>>Admin</option>
-                        <option value="customer" <?= old('role', $user['role']) == 'customer' ? 'selected' : '' ?>>Customer</option>
-                    </select>
+                    <?php 
+                    $currentUserId = session()->get('user_id');
+                    $isEditingSelf = ($currentUserId == $user['id']);
+                    ?>
+                    <?php if ($isEditingSelf): ?>
+                        <input 
+                            type="text" 
+                            id="role" 
+                            name="role" 
+                            value="<?= htmlspecialchars(ucfirst($user['role'])) ?>" 
+                            readonly 
+                            style="background: rgba(255, 255, 255, 0.05); cursor: not-allowed;"
+                        >
+                        <small style="color: #ffc107; display: block; margin-top: 0.25rem;">
+                            ⚠️ You cannot change your own role for security reasons.
+                        </small>
+                    <?php else: ?>
+                        <select id="role" name="role" required>
+                            <option value="admin" <?= old('role', $user['role']) == 'admin' ? 'selected' : '' ?>>Admin</option>
+                            <option value="customer" <?= old('role', $user['role']) == 'customer' ? 'selected' : '' ?>>Customer</option>
+                        </select>
+                    <?php endif; ?>
                 </div>
 
                 <button type="submit" class="btn">Update User</button>

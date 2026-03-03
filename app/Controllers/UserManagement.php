@@ -234,9 +234,13 @@ class UserManagement extends BaseController
         // Validate input data
         $rules = [
             'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
-            'email' => 'required|valid_email|is_unique[users.email,id,' . $id . ']',
-            'role' => 'required|in_list[admin,customer]'
+            'email' => 'required|valid_email|is_unique[users.email,id,' . $id . ']'
         ];
+
+        // Only validate role if not editing self
+        if ($currentUserId != $id) {
+            $rules['role'] = 'required|in_list[admin,customer]';
+        }
 
         if (!$this->validate($rules)) {
             $errors = $this->validator->getErrors();
@@ -250,9 +254,16 @@ class UserManagement extends BaseController
         // Sanitize input
         $data = [
             'name' => htmlspecialchars($request->getPost('name'), ENT_QUOTES, 'UTF-8'),
-            'email' => filter_var($request->getPost('email'), FILTER_SANITIZE_EMAIL),
-            'role' => $request->getPost('role')
+            'email' => filter_var($request->getPost('email'), FILTER_SANITIZE_EMAIL)
         ];
+
+        // Only allow role change if not editing self
+        if ($currentUserId != $id) {
+            $data['role'] = $request->getPost('role');
+        } else {
+            // Keep existing role when editing self
+            $data['role'] = $user['role'];
+        }
 
         // Update password if provided
         if (!empty($request->getPost('password'))) {
