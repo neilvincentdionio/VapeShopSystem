@@ -198,7 +198,7 @@
             .nav-right { justify-content: space-between; }
             .detail-grid { grid-template-columns: 1fr; }
         }
-    </style>
+</style>
 </head>
 <body>
     <nav class="navbar">
@@ -525,3 +525,5 @@
     </script>
 </body>
 </html>
+
+

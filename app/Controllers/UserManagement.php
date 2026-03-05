@@ -83,7 +83,7 @@ class UserManagement extends BaseController
             'page_title' => 'User Management'
         ];
 
-        return view('user_management/index', $data);
+        return view('admin/user_management/index', $data);
     }
 
     /**
@@ -96,7 +96,7 @@ class UserManagement extends BaseController
             return $authCheck;
         }
 
-        return view('user_management/create');
+        return view('admin/user_management/create');
     }
 
     /**
@@ -192,7 +192,7 @@ class UserManagement extends BaseController
             'page_title' => 'Edit User'
         ];
 
-        return view('user_management/edit', $data);
+        return view('admin/user_management/edit', $data);
     }
 
     /**
@@ -349,7 +349,7 @@ class UserManagement extends BaseController
             'page_title' => 'Delete User'
         ];
 
-        return view('user_management/delete', $data);
+        return view('admin/user_management/delete', $data);
     }
 
     /**

@@ -76,6 +76,28 @@
         }
         .nav-dropdown:hover .nav-dropdown-content { display: block; }
         .nav-dropdown-content a { display: block; }
+        .customer-actions {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-left: .35rem;
+        }
+        .customer-action-btn {
+            color: #fff;
+            text-decoration: none;
+            padding: .45rem .85rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+            font-size: .82rem;
+            font-weight: 600;
+            transition: transform .2s ease, background .2s ease, border-color .2s ease;
+        }
+        .customer-action-btn:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
+            border-color: rgba(255, 255, 255, 0.55);
+        }
         .nav-right { display: flex; align-items: center; gap: .8rem; flex: 0 0 auto; }
         .user-info { display: flex; align-items: center; gap: .55rem; color: #fff; }
         .user-name {
@@ -111,15 +133,17 @@
             padding: 1.5rem;
             backdrop-filter: blur(20px);
         }
-        ul { margin: 1rem 0 0 1.2rem; }
-        li { margin-bottom: .6rem; }
+        .row { margin-top: 1rem; }
+        .label { color: #ddd; font-size: .9rem; }
+        .value { font-size: 1.1rem; font-weight: 600; margin-top: .25rem; }
         @media (max-width: 768px) {
             .navbar-content { flex-direction: column; align-items: stretch; gap: .8rem; }
             .navbar-center { justify-content: flex-start; }
             .navbar-menu { flex-wrap: wrap; }
+            .customer-actions { width: 100%; margin-left: 0; }
             .nav-right { justify-content: space-between; }
         }
-    </style>
+</style>
 </head>
 <body>
     <nav class="navbar">
@@ -132,9 +156,16 @@
                         <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
                         <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
                     <?php endif; ?>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
+                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link active">Profile</a>
+                    <?php if (isset($user_role) && $user_role === 'customer'): ?>
+                        <div class="customer-actions">
+                            <a href="<?= site_url('dashboard') ?>" class="customer-action-btn">Shop</a>
+                            <a href="<?= site_url('dashboard') ?>#recent-orders" class="customer-action-btn">My Orders</a>
+                            <a href="<?= site_url('dashboard') ?>#offers" class="customer-action-btn">Offers</a>
+                        </div>
+                    <?php endif; ?>
                     <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link active">Settings</a>
+                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
                     <?php endif; ?>
 
                     <?php if (isset($user_role) && $user_role === 'admin'): ?>
@@ -166,14 +197,16 @@
 
     <div class="container">
         <div class="card">
-            <h1>Settings (Admin)</h1>
-            <p style="margin-top: .75rem;">Core admin options for the dashboard and records module.</p>
-            <ul>
-                <li>Review user roles and access.</li>
-                <li>Monitor system updates and alerts.</li>
-                <li>Audit critical record changes regularly.</li>
-            </ul>
+            <h1>Profile</h1>
+            <div class="row"><div class="label">Name</div><div class="value"><?= htmlspecialchars($user_name) ?></div></div>
+            <div class="row"><div class="label">Email</div><div class="value"><?= htmlspecialchars($user_email) ?></div></div>
+            <div class="row"><div class="label">Role</div><div class="value"><?= htmlspecialchars(ucfirst($user_role)) ?></div></div>
+            <?php if (!empty($user_shop_name)): ?>
+                <div class="row"><div class="label">Shop Name</div><div class="value"><?= htmlspecialchars($user_shop_name) ?></div></div>
+            <?php endif; ?>
         </div>
     </div>
 </body>
 </html>
+
+

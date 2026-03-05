@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create User - E-Commerce Vape Shop</title>
+    <title>Edit User - E-Commerce Vape Shop</title>
     <style>
         * {
             margin: 0;
@@ -37,8 +37,9 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             padding: 1rem 2rem;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            position: relative;
-            z-index: 10;
+            position: sticky;
+            top: 0;
+            z-index: 20;
         }
 
         .navbar-content {
@@ -47,6 +48,21 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1.2rem;
+        }
+
+        .navbar-center {
+            flex: 1 1 auto;
+            display: flex;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        .navbar-menu {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex-wrap: nowrap;
         }
 
         .navbar-brand {
@@ -55,19 +71,105 @@
             font-weight: bold;
             text-decoration: none;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            flex: 0 0 auto;
         }
 
-        .navbar-menu a {
+        .navbar-menu a,
+        .nav-dropdown-btn {
             color: white;
             text-decoration: none;
-            padding: 0.5rem 1rem;
+            padding: .5rem 1rem;
             border-radius: 5px;
-            transition: background-color 0.3s;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: .95rem;
+            transition: background-color .3s;
         }
 
-        .navbar-menu a:hover {
-            background-color: rgba(255,255,255,0.2);
+        .navbar-menu a:hover,
+        .nav-link.active,
+        .nav-dropdown-btn:hover {
+            background-color: rgba(255,255,255,.2);
+        }
+
+        .nav-dropdown {
+            position: relative;
+        }
+
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: .5rem;
+            min-width: 220px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 50;
+        }
+
+        .nav-dropdown:hover .nav-dropdown-content {
+            display: block;
+        }
+
+        .nav-dropdown-content a {
+            display: block;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            flex: 0 0 auto;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            color: #fff;
+        }
+
+        .user-name {
+            max-width: 170px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .badge {
+            border: 1px solid rgba(255,255,255,.3);
+            padding: .2rem .5rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: #fff;
+            border-radius: 5px;
+            padding: .5rem .8rem;
+            text-decoration: none;
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
         }
 
         .container {
@@ -103,6 +205,23 @@
         .form-header p {
             color: #f0f0f0;
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-info p {
+            margin-bottom: 0.5rem;
+            color: #f0f0f0;
+        }
+
+        .user-info strong {
+            color: #ffffff;
         }
 
         .form-group {
@@ -143,6 +262,20 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
+        /* Fix dropdown option text color - matching theme */
+        .form-group select option {
+            background: rgba(44, 62, 80, 0.9);
+            color: #ffffff;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group select option:hover,
+        .form-group select option:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
         .form-group .error {
             color: #dc3545;
             font-size: 0.875rem;
@@ -150,6 +283,13 @@
             background-color: rgba(220, 53, 69, 0.2);
             padding: 0.25rem;
             border-radius: 5px;
+        }
+
+        .password-hint {
+            font-size: 0.8rem;
+            color: #f0f0f0;
+            margin-top: 0.5rem;
+            font-style: italic;
         }
 
         .btn {
@@ -183,106 +323,6 @@
         .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.25);
         }
-
-        .navbar-brand {
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-            text-decoration: none;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-        }
-
-        .navbar-center {
-            flex: 1 1 auto;
-            display: flex;
-            justify-content: center;
-            min-width: 0;
-        }
-
-        .navbar-menu { 
-            display: flex; 
-            align-items: center; 
-            gap: .75rem; 
-            flex-wrap: nowrap; 
-        }
-
-        .navbar-menu a, .nav-dropdown-btn {
-            color: #fff;
-            text-decoration: none;
-            padding: .5rem 1rem;
-            border-radius: 5px;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: .95rem;
-            transition: background-color .3s;
-        }
-
-        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { 
-            background-color: rgba(255,255,255,.2); 
-        }
-
-        .nav-dropdown { position: relative; }
-        .nav-dropdown-content {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            margin-top: .5rem;
-            min-width: 220px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.2);
-            border-radius: 12px;
-            overflow: hidden;
-            z-index: 50;
-        }
-        .nav-dropdown:hover .nav-dropdown-content { display: block; }
-        .nav-dropdown-content a { display: block; }
-
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: .8rem;
-            flex: 0 0 auto;
-        }
-
-        .user-info { 
-            display: flex; 
-            align-items: center; 
-            gap: .55rem; 
-            color: #fff; 
-        }
-
-        .user-name {
-            max-width: 170px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .user-avatar {
-            width: 36px; height: 36px; border-radius: 50%;
-            background: rgba(255,255,255,.2);
-            display: flex; align-items: center; justify-content: center; font-weight: 700;
-        }
-
-        .badge {
-            border: 1px solid rgba(255,255,255,.3);
-            padding: .2rem .5rem;
-            border-radius: 999px;
-            font-size: .75rem;
-        }
-
-        .btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-            border-radius: 5px;
-            padding: .5rem .8rem;
-            text-decoration: none;
-        }
-        .btn-danger:hover { background-color: #c82333; }
 
         .alert {
             padding: 1rem;
@@ -345,14 +385,34 @@
             .form-header h1 {
                 font-size: 1.5rem;
             }
+
+            .navbar-content {
+                flex-direction: column;
+                align-items: stretch;
+                gap: .8rem;
+            }
+
+            .navbar-center {
+                justify-content: flex-start;
+            }
+
+            .navbar-menu {
+                flex-wrap: wrap;
+            }
+
+            .nav-right {
+                justify-content: space-between;
+            }
         }
-    </style>
+</style>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
+            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
+                E-Commerce Vape Shop
+            </a>
             <div class="navbar-center">
                 <div class="navbar-menu">
                     <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
@@ -378,6 +438,7 @@
                     <?php endif; ?>
                 </div>
             </div>
+
             <div class="nav-right">
                 <div class="user-info">
                     <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
@@ -419,11 +480,19 @@
 
         <div class="form-container">
             <div class="form-header">
-                <h1>Create New User</h1>
-                <p>Fill in the form below to create a new user account.</p>
+                <h1>Edit User Profile</h1>
+                <p>Update user information below.</p>
             </div>
 
-            <form action="<?= site_url('user-management/store') ?>" method="post">
+            <div class="user-info">
+                <p><strong>Current User:</strong> <?= htmlspecialchars($user['name']) ?></p>
+                <p><strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></p>
+                <p><strong>Role:</strong> <?= htmlspecialchars(ucfirst($user['role'])) ?></p>
+                <p><strong>Status:</strong> <?= $user['is_active'] ? 'Active' : 'Inactive' ?></p>
+                <p><strong>Created:</strong> <?= date('M d, Y', strtotime($user['created_at'])) ?></p>
+            </div>
+
+            <form action="<?= site_url('user-management/update/' . $user['id']) ?>" method="post">
                 <?= csrf_field() ?>
                 
                 <div class="form-group">
@@ -432,7 +501,7 @@
                         type="text" 
                         id="name" 
                         name="name" 
-                        value="<?= old('name') ?>" 
+                        value="<?= old('name', $user['name']) ?>" 
                         required 
                         autocomplete="name"
                         placeholder="Enter full name"
@@ -445,7 +514,7 @@
                         type="email" 
                         id="email" 
                         name="email" 
-                        value="<?= old('email') ?>" 
+                        value="<?= old('email', $user['email']) ?>" 
                         required 
                         autocomplete="email"
                         placeholder="Enter email address"
@@ -453,27 +522,44 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">New Password (leave blank to keep current)</label>
                     <input 
                         type="password" 
                         id="password" 
                         name="password" 
-                        required 
                         autocomplete="new-password"
-                        placeholder="Enter password (min 8 characters)"
+                        placeholder="Enter new password (optional)"
                     >
+                    <div class="password-hint">Password must be at least 8 characters long</div>
                 </div>
 
                 <div class="form-group">
                     <label for="role">User Role</label>
-                    <select id="role" name="role" required>
-                        <option value="">Select Role</option>
-                        <option value="admin" <?= old('role') == 'admin' ? 'selected' : '' ?>>Admin</option>
-                        <option value="customer" <?= old('role') == 'customer' ? 'selected' : '' ?>>Customer</option>
-                    </select>
+                    <?php 
+                    $currentUserId = session()->get('user_id');
+                    $isEditingSelf = ($currentUserId == $user['id']);
+                    ?>
+                    <?php if ($isEditingSelf): ?>
+                        <input 
+                            type="text" 
+                            id="role" 
+                            name="role" 
+                            value="<?= htmlspecialchars(ucfirst($user['role'])) ?>" 
+                            readonly 
+                            style="background: rgba(255, 255, 255, 0.05); cursor: not-allowed;"
+                        >
+                        <small style="color: #ffc107; display: block; margin-top: 0.25rem;">
+                            ⚠️ You cannot change your own role for security reasons.
+                        </small>
+                    <?php else: ?>
+                        <select id="role" name="role" required>
+                            <option value="admin" <?= old('role', $user['role']) == 'admin' ? 'selected' : '' ?>>Admin</option>
+                            <option value="customer" <?= old('role', $user['role']) == 'customer' ? 'selected' : '' ?>>Customer</option>
+                        </select>
+                    <?php endif; ?>
                 </div>
 
-                <button type="submit" class="btn">Create User</button>
+                <button type="submit" class="btn">Update User</button>
             </form>
 
             <div class="back-link">
@@ -506,8 +592,13 @@
         // Password strength indicator
         document.getElementById('password').addEventListener('input', function() {
             const password = this.value;
-            let strength = 0;
             
+            if (password.length === 0) {
+                this.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                return;
+            }
+            
+            let strength = 0;
             if (password.length >= 8) strength++;
             if (password.match(/[a-z]/)) strength++;
             if (password.match(/[A-Z]/)) strength++;
@@ -522,3 +613,5 @@
     </script>
 </body>
 </html>
+
+

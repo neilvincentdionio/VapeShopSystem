@@ -87,6 +87,28 @@
         }
         .nav-dropdown:hover .nav-dropdown-content { display: block; }
         .nav-dropdown-content a { display: block; }
+        .customer-actions {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-left: .35rem;
+        }
+        .customer-action-btn {
+            color: #fff;
+            text-decoration: none;
+            padding: .45rem .85rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+            font-size: .82rem;
+            font-weight: 600;
+            transition: transform .2s ease, background .2s ease, border-color .2s ease;
+        }
+        .customer-action-btn:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
+            border-color: rgba(255, 255, 255, 0.55);
+        }
         .nav-right {
             display: flex;
             align-items: center;
@@ -185,10 +207,11 @@
             }
             .navbar-center { justify-content: flex-start; }
             .navbar-menu { flex-wrap: wrap; }
+            .customer-actions { width: 100%; margin-left: 0; }
             .nav-right { justify-content: space-between; }
             .container { padding: 0 1rem; }
         }
-    </style>
+</style>
 </head>
 <body>
     <nav class="navbar">
@@ -202,6 +225,13 @@
                         <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
                     <?php endif; ?>
                     <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
+                    <?php if (isset($user_role) && $user_role === 'customer'): ?>
+                        <div class="customer-actions">
+                            <a href="<?= site_url('dashboard') ?>" class="customer-action-btn">Shop</a>
+                            <a href="<?= site_url('dashboard') ?>#recent-orders" class="customer-action-btn">My Orders</a>
+                            <a href="<?= site_url('dashboard') ?>#offers" class="customer-action-btn">Offers</a>
+                        </div>
+                    <?php endif; ?>
                     <?php if (isset($user_role) && $user_role === 'admin'): ?>
                         <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
                     <?php endif; ?>
@@ -272,7 +302,7 @@
                 <div class="card-value"><?= $growth_rate ?></div>
                 <div>Monthly growth compared to the same period last year.</div>
             </div>
-            <div class="card">
+            <div class="card" id="recent-orders">
                 <div class="card-header"><div class="card-icon" style="background:#fff3e0;color:#ff9800;">RO</div><div class="card-title">Recent Orders</div></div>
                 <div class="card-value"><?= number_format($recent_orders) ?></div>
                 <div>New orders in the last 24 hours.</div>
@@ -290,7 +320,7 @@
         </div>
 
         <?php if (!empty($notifications)): ?>
-            <div class="notifications-panel">
+            <div class="notifications-panel" id="offers">
                 <h3>Recent Notifications</h3>
                 <?php foreach ($notifications as $notification): ?>
                     <div class="notification-item notification-<?= $notification['type'] ?>">
@@ -308,3 +338,5 @@
     </script>
 </body>
 </html>
+
+

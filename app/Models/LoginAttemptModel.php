@@ -10,74 +10,70 @@ class LoginAttemptModel extends Model
     protected $primaryKey = 'id';
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
-    protected $useSoftDeletes = false;
     protected $protectFields = true;
     protected $allowedFields = [
         'email',
         'ip_address',
         'user_agent',
         'success',
-        'attempt_time'
+        'attempt_time',
     ];
 
-    // Dates
-    protected $useTimestamps = false; // Disable automatic timestamps
-    protected $dateFormat = 'datetime';
-    protected $createdField = 'attempt_time';
-    protected $updatedField = null;
+    protected $useTimestamps = false;
 
     /**
-     * Record login attempt
+     * Persist a login attempt. Fail-open to avoid breaking auth flow.
      */
-    public function recordAttempt($email, $success = false)
+    public function recordAttempt(string $email, bool $success = false): bool
     {
-        $request = service('request');
-        
-        $data = [
-            'email' => $email,
-            'ip_address' => $request->getIPAddress(),
-            'user_agent' => $request->getUserAgent(),
-            'success' => $success ? 1 : 0,
-            'attempt_time' => date('Y-m-d H:i:s')
-        ];
+        try {
+            $request = service('request');
+            $userAgent = $request->getUserAgent();
 
-        return $this->insert($data);
+            $data = [
+                'email' => $email,
+                'ip_address' => $request->getIPAddress(),
+                'user_agent' => $userAgent ? $userAgent->getAgentString() : null,
+                'success' => $success ? 1 : 0,
+                'attempt_time' => date('Y-m-d H:i:s'),
+            ];
+
+            return (bool) $this->insert($data, false);
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to record login attempt: {message}', ['message' => $e->getMessage()]);
+            return false;
+        }
     }
 
     /**
-     * Check if IP has too many failed attempts
+     * Checks failed attempts from same IP in a short time window.
+     * Fail-open on DB issues to avoid locking out all users.
      */
-    public function isIpBlocked($ipAddress, $minutes = 15, $maxAttempts = 10)
+    public function isIpBlocked(string $ipAddress, int $minutes = 15, int $maxAttempts = 10): bool
     {
-        $since = date('Y-m-d H:i:s', strtotime("-$minutes minutes"));
-        
-        $count = $this->where('ip_address', $ipAddress)
-                     ->where('success', 0)
-                     ->where('attempt_time >', $since)
-                     ->countAllResults();
+        try {
+            $since = date('Y-m-d H:i:s', strtotime("-{$minutes} minutes"));
 
-        return $count >= $maxAttempts;
+            $count = $this->where('ip_address', $ipAddress)
+                ->where('success', 0)
+                ->where('attempt_time >', $since)
+                ->countAllResults();
+
+            return $count >= $maxAttempts;
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to check IP block status: {message}', ['message' => $e->getMessage()]);
+            return false;
+        }
     }
 
-    /**
-     * Get failed attempts count for email in last hour
-     */
-    public function getFailedAttemptsCount($email, $hours = 1)
+    public function cleanupOldAttempts(int $days = 30): bool
     {
-        $since = date('Y-m-d H:i:s', strtotime("-$hours hours"));
-        
-        return $this->where('email', $email)
-                   ->where('success', 0)
-                   ->where('attempt_time >', $since)
-                   ->countAllResults();
-    }
-
-    /**
-     * Clean up old login attempts
-     */
-    public function cleanupOldAttempts($days = 30)
-    {
-        $since = date('Y-m-d H:i:s', strtotime("-$days days"));
-        return $this->where('attempt_time <', $since)->delete();
+        try {
+            $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+            return (bool) $this->where('attempt_time <', $since)->delete();
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to clean old login attempts: {message}', ['message' => $e->getMessage()]);
+            return false;
+        }
     }
 }

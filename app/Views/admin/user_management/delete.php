@@ -323,7 +323,7 @@
                 font-size: 1.5rem;
             }
         }
-    </style>
+</style>
 </head>
 <body>
     <!-- Navigation -->
@@ -435,3 +435,5 @@
     </script>
 </body>
 </html>
+
+

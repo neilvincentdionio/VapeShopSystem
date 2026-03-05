@@ -53,7 +53,5 @@ class UserSeeder extends Seeder
         
         // Update any existing 'staff' roles to 'customer'
         $this->db->query("UPDATE users SET role = 'customer' WHERE role = 'staff'");
-        
-        echo "User roles have been fixed - staff roles converted to customer.\n";
     }
 }

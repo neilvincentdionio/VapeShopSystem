@@ -173,7 +173,7 @@ class Records extends BaseController
             'date_sort' => $dateSort === 'asc' ? 'desc' : 'asc',
         ], static fn ($value) => $value !== '');
 
-        return view('records/index', [
+        return view('admin/records/index', [
             'page_title' => 'Records Module',
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
@@ -204,7 +204,7 @@ class Records extends BaseController
             return $schemaCheck;
         }
 
-        return view('records/form', [
+        return view('admin/records/form', [
             'page_title' => 'Add Record',
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
@@ -302,7 +302,7 @@ class Records extends BaseController
             return redirect()->to('/records')->with('error', 'Record not found.');
         }
 
-        return view('records/form', [
+        return view('admin/records/form', [
             'page_title' => 'Edit Record',
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),

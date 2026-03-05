@@ -23,6 +23,12 @@ $routes->get('/dashboard', 'Dashboard::index', ['filter' => 'auth']);
 $routes->get('/dashboard/profile', 'Dashboard::profile', ['filter' => 'auth']);
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth']);
 
+// Customer storefront routes (protected by AuthFilter)
+$routes->get('/customer/home', 'Dashboard::customerHome', ['filter' => 'auth']);
+$routes->get('/customer/products', 'Dashboard::customerProducts', ['filter' => 'auth']);
+$routes->get('/customer/orders', 'Dashboard::customerOrders', ['filter' => 'auth']);
+$routes->get('/customer/cart', 'Dashboard::customerCart', ['filter' => 'auth']);
+
 // User Management routes (protected by AuthFilter)
 $routes->get('/user-management', 'UserManagement::index', ['filter' => 'auth:admin']);
 $routes->get('/user-management/create', 'UserManagement::create', ['filter' => 'auth:admin']);

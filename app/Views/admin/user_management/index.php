@@ -377,7 +377,7 @@
                 flex-direction: column;
             }
         }
-    </style>
+</style>
 </head>
 <body>
     <!-- Navigation -->
@@ -554,3 +554,5 @@
     </script>
 </body>
 </html>
+
+

@@ -40,7 +40,7 @@ class Auth extends BaseController
     public function authenticate()
     {
         $request = service('request');
-        
+
         // Get form data
         $email = $this->request->getPost('email');
         $password = $this->request->getPost('password');
@@ -57,21 +57,22 @@ class Auth extends BaseController
                            ->with('errors', $this->validator->getErrors());
         }
 
+        // Sanitize input
+        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+
         // Check IP-based rate limiting
         $ipAddress = $request->getIPAddress();
         if ($this->loginAttemptModel->isIpBlocked($ipAddress)) {
             return redirect()->back()
-                           ->with('error', 'Too many login attempts. Please try again later.');
+                           ->withInput()
+                           ->with('error', 'Too many login attempts from this IP. Please try again later.');
         }
-
-        // Sanitize input
-        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
 
         // Attempt authentication
         $user = $this->userModel->verifyCredentials($email, $password);
 
         if ($user) {
-            // Record successful login attempt
+            // Record successful login attempt for audit/rate limiting.
             $this->loginAttemptModel->recordAttempt($email, true);
 
             // Regenerate session ID for security
@@ -91,7 +92,7 @@ class Auth extends BaseController
             return redirect()->to('/dashboard')
                            ->with('success', 'Welcome back, ' . htmlspecialchars($user['name']) . '!');
         } else {
-            // Record failed login attempt
+            // Record failed login attempt for audit/rate limiting.
             $this->loginAttemptModel->recordAttempt($email, false);
 
             // Check if account is locked

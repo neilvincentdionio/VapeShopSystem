@@ -121,7 +121,7 @@
             .navbar-menu { flex-wrap: wrap; }
             .nav-right { justify-content: space-between; }
         }
-    </style>
+</style>
 </head>
 <body>
     <nav class="navbar">
@@ -260,3 +260,5 @@
     </div>
 </body>
 </html>
+
+
