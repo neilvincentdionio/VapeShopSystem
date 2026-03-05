@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password</title>
+    <link rel="stylesheet" href="<?= base_url('assets/css/background.css') ?>">
     <style>
         * {
             margin: 0;
@@ -13,7 +14,6 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
             min-height: 100vh;
             display: flex;
             align-items: center;

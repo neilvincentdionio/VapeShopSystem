@@ -1,0 +1,45 @@
+/* Optimized background styles */
+body {
+    background: #1a1a1a; /* Dark fallback color */
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('../img/smokebg.jpg') center/cover no-repeat;
+    opacity: 1;
+    z-index: 1;
+    transition: opacity 0.3s ease;
+}
+
+body::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.4) 100%);
+    z-index: 2;
+}
+
+/* Fallback for when image is not loaded */
+body.no-bg::before {
+    opacity: 0;
+}
+
+/* Performance optimization */
+@media (prefers-reduced-motion: reduce) {
+    body::before {
+        transition: none;
+    }
+}

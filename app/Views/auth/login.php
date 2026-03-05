@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - E-Commerce Vape Shop</title>
+    <link rel="stylesheet" href="<?= base_url('assets/css/background.css') ?>">
     <style>
         * {
             margin: 0;
@@ -13,23 +14,11 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-        }
-
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
-            z-index: 1;
         }
 
         .login-container {
@@ -43,7 +32,7 @@
             width: 100%;
             max-width: 400px;
             position: relative;
-            z-index: 2;
+            z-index: 3;
         }
 
         .login-header {
@@ -244,6 +233,19 @@
     </div>
 
     <script>
+        // Preload background image with fallback
+        const bgImage = new Image();
+        bgImage.src = '<?= base_url('assets/img/smokebg.jpg') ?>';
+        bgImage.onload = function() {
+            // Image loaded successfully
+            console.log('Background image loaded');
+        };
+        bgImage.onerror = function() {
+            // Fallback to gradient if image fails to load
+            console.log('Background image failed to load, using gradient fallback');
+            document.body.classList.add('no-bg');
+        };
+
         // Auto-hide success messages after 5 seconds
         setTimeout(function() {
             const successAlert = document.querySelector('.alert-success');

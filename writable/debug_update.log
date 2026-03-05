@@ -350,3 +350,33 @@
     [locked_until] => 
 )
 
+2026-03-05 16:09:30 - UserModel update called with ID: 1
+2026-03-05 16:09:30 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 16:09:30
+)
+
+2026-03-05 16:09:30 - UserModel update result: SUCCESS
+2026-03-05 16:09:30 - Parent update affected rows: 1
+2026-03-05 16:12:22 - UserModel update called with ID: 1
+2026-03-05 16:12:22 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 16:12:22
+)
+
+2026-03-05 16:12:22 - UserModel update result: SUCCESS
+2026-03-05 16:12:22 - Parent update affected rows: 1
+2026-03-05 16:32:42 - UserModel update called with ID: 1
+2026-03-05 16:32:42 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 16:32:42
+)
+
+2026-03-05 16:32:42 - UserModel update result: SUCCESS
+2026-03-05 16:32:42 - Parent update affected rows: 1

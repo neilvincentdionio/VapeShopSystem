@@ -46,5 +46,14 @@ class UserSeeder extends Seeder
 
             $this->db->table('users')->insert($row);
         }
+
+        // Fix user roles - moved from FixUserRolesSeeder
+        // Update users with empty or null roles to 'customer'
+        $this->db->query("UPDATE users SET role = 'customer' WHERE role = '' OR role IS NULL");
+        
+        // Update any existing 'staff' roles to 'customer'
+        $this->db->query("UPDATE users SET role = 'customer' WHERE role = 'staff'");
+        
+        echo "User roles have been fixed - staff roles converted to customer.\n";
     }
 }
