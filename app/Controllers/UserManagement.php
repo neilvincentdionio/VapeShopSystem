@@ -48,20 +48,17 @@ class UserManagement extends BaseController
         // Super admin (id = 1) can edit anyone
         if ($currentUserRole === 'admin' && $currentUserId == 1) {
             file_put_contents(WRITEPATH . 'debug_security.log', date('Y-m-d H:i:s') . " - Security Check: Super admin access granted\n", FILE_APPEND);
-            return true; // Super admin can edit anyone
+            return true;
         }
         
-        // Regular admins can only edit themselves
-        $canEdit = $currentUserId == $targetUserId;
-        file_put_contents(WRITEPATH . 'debug_security.log', date('Y-m-d H:i:s') . " - Security Check: Regular admin access " . ($canEdit ? "granted" : "denied") . "\n", FILE_APPEND);
-        
-        // For testing: if this is a security violation, let's stop execution
-        if (!$canEdit) {
-            file_put_contents(WRITEPATH . 'debug_security.log', date('Y-m-d H:i:s') . " - SECURITY VIOLATION DETECTED: User $currentUserId trying to edit user $targetUserId\n", FILE_APPEND);
-            die("Security violation: Access denied. You can only edit your own profile.");
+        // Regular users can only edit their own profile
+        if ($currentUserId == $targetUserId) {
+            file_put_contents(WRITEPATH . 'debug_security.log', date('Y-m-d H:i:s') . " - Security Check: User editing own profile\n", FILE_APPEND);
+            return true;
         }
         
-        return $canEdit;
+        file_put_contents(WRITEPATH . 'debug_security.log', date('Y-m-d H:i:s') . " - Security Check: Access denied\n", FILE_APPEND);
+        return false;
     }
 
     /**

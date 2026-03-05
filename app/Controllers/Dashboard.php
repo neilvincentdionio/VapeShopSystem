@@ -53,9 +53,13 @@ class Dashboard extends BaseController
         // Update last activity
         $this->session->set('last_activity', time());
 
-        // Get real data from database
+        // Get user role information
         $userRole = $this->session->get('user_role');
         
+        if (!$userRole) {
+            return redirect()->to('/login')->with('error', 'Invalid user session.');
+        }
+
         // Get dashboard analytics based on user role
         $shopName = $this->session->get('user_shop_name');
         $analytics = $this->dashboardModel->getAnalytics('today', $userRole, $shopName);
@@ -64,7 +68,7 @@ class Dashboard extends BaseController
         $monthlyAnalytics = $this->dashboardModel->getAnalytics('month', $userRole, $shopName);
         
         $totalProducts = $this->dashboardModel->getTotalProducts($userRole, $shopName);
-        $recentRegistrations = $userRole === 'admin' ? $this->dashboardModel->getRecentRegistrations() : 0;
+        $recentRegistrations = $this->dashboardModel->getRecentRegistrations();
 
         $data = [
             'user_name' => $this->session->get('user_name'),

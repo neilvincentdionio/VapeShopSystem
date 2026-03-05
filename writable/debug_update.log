@@ -256,3 +256,97 @@
     [locked_until] => 
 )
 
+2026-03-04 17:33:21 - UserModel update called with ID: 1
+2026-03-04 17:33:21 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-04 17:33:21
+)
+
+2026-03-04 17:33:21 - UserModel update result: SUCCESS
+2026-03-04 17:33:21 - Parent update affected rows: 1
+2026-03-05 11:02:02 - UserModel update called with ID: 1
+2026-03-05 11:02:02 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 11:02:02
+)
+
+2026-03-05 11:02:02 - UserModel update result: SUCCESS
+2026-03-05 11:02:02 - Parent update affected rows: 1
+2026-03-05 11:15:07 - UserModel update called with ID: 1
+2026-03-05 11:15:07 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 11:15:07
+)
+
+2026-03-05 11:15:07 - UserModel update result: SUCCESS
+2026-03-05 11:15:07 - Parent update affected rows: 1
+2026-03-05 11:33:55 - UserModel update called with ID: 1
+2026-03-05 11:33:55 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 11:33:55
+)
+
+2026-03-05 11:33:55 - UserModel update result: SUCCESS
+2026-03-05 11:33:55 - Parent update affected rows: 1
+2026-03-05 13:58:40 - UserModel update called with ID: 2
+2026-03-05 13:58:40 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 13:58:40
+)
+
+2026-03-05 13:58:40 - UserModel update result: SUCCESS
+2026-03-05 13:58:40 - Parent update affected rows: 1
+2026-03-05 13:59:22 - UserModel update called with ID: 1
+2026-03-05 13:59:22 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-05 13:59:22
+)
+
+2026-03-05 13:59:22 - UserModel update result: SUCCESS
+2026-03-05 13:59:22 - Parent update affected rows: 1
+2026-03-05 14:02:33 - Edit method called for user ID: 1
+2026-03-05 14:02:33 - User data loaded: Array
+(
+    [id] => 1
+    [role_id] => 2
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$cUYd4TSCyyVNHv0qwHq.yeRU.Ih9/H7u5dT2e5DMLc89ooGjNWYUC
+    [role] => admin
+    [created_at] => 2026-03-04 17:27:27
+    [updated_at] => 2026-03-05 13:59:22
+    [is_active] => 1
+    [last_login] => 2026-03-05 13:59:22
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-05 14:02:57 - Edit method called for user ID: 1
+2026-03-05 14:02:57 - User data loaded: Array
+(
+    [id] => 1
+    [role_id] => 2
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$cUYd4TSCyyVNHv0qwHq.yeRU.Ih9/H7u5dT2e5DMLc89ooGjNWYUC
+    [role] => admin
+    [created_at] => 2026-03-04 17:27:27
+    [updated_at] => 2026-03-05 13:59:22
+    [is_active] => 1
+    [last_login] => 2026-03-05 13:59:22
+    [login_attempts] => 0
+    [locked_until] => 
+)
+

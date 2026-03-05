@@ -416,16 +416,16 @@
             <div class="navbar-center">
                 <div class="navbar-menu">
                     <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (session()->get('user_role') === 'admin'): ?>
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
                         <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
                         <a href="<?= site_url('user-management') ?>" class="nav-link active">User Management</a>
                     <?php endif; ?>
                     <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
-                    <?php if (session()->get('user_role') === 'admin'): ?>
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
                         <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
                     <?php endif; ?>
 
-                    <?php if (session()->get('user_role') === 'admin'): ?>
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
                         <div class="nav-dropdown">
                             <button class="nav-dropdown-btn">Quick Actions</button>
                             <div class="nav-dropdown-content">
@@ -441,11 +441,11 @@
 
             <div class="nav-right">
                 <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr(session()->get('user_name'), 0, 1)) ?></div>
-                    <span class="user-name"><?= htmlspecialchars(session()->get('user_name')) ?></span>
-                    <span class="badge"><?= htmlspecialchars(ucfirst(session()->get('user_role'))) ?></span>
-                    <?php if (!empty(session()->get('user_shop_name'))): ?>
-                        <span class="badge"><?= htmlspecialchars(session()->get('user_shop_name')) ?></span>
+                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
+                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
+                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
+                    <?php if (!empty($user_shop_name)): ?>
+                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
                     <?php endif; ?>
                 </div>
                 <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>

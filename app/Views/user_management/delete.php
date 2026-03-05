@@ -70,6 +70,98 @@
             background-color: rgba(255,255,255,0.2);
         }
 
+        .navbar-center {
+            flex: 1 1 auto;
+            display: flex;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        .navbar-menu { 
+            display: flex; 
+            align-items: center; 
+            gap: .75rem; 
+            flex-wrap: nowrap; 
+        }
+
+        .navbar-menu a, .nav-dropdown-btn {
+            color: #fff;
+            text-decoration: none;
+            padding: .5rem 1rem;
+            border-radius: 5px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: .95rem;
+            transition: background-color .3s;
+        }
+
+        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { 
+            background-color: rgba(255,255,255,.2); 
+        }
+
+        .nav-dropdown { position: relative; }
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: .5rem;
+            min-width: 220px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 50;
+        }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content a { display: block; }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            flex: 0 0 auto;
+        }
+
+        .user-info-nav { 
+            display: flex; 
+            align-items: center; 
+            gap: .55rem; 
+            color: #fff; 
+        }
+
+        .user-name {
+            max-width: 170px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: rgba(255,255,255,.2);
+            display: flex; align-items: center; justify-content: center; font-weight: 700;
+        }
+
+        .badge {
+            border: 1px solid rgba(255,255,255,.3);
+            padding: .2rem .5rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+
+        .btn-danger-nav {
+            background-color: #dc3545;
+            color: #fff;
+            border-radius: 5px;
+            padding: .5rem .8rem;
+            text-decoration: none;
+        }
+        .btn-danger-nav:hover { background-color: #c82333; }
+
         .container {
             max-width: 600px;
             margin: 2rem auto;
@@ -237,14 +329,42 @@
     <!-- Navigation -->
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
-                E-Commerce Vape Shop
-            </a>
-            <div class="navbar-menu">
-                <a href="<?= site_url('dashboard') ?>">Dashboard</a>
-                <a href="<?= site_url('user-management') ?>" class="active">User Management</a>
-                <a href="<?= site_url('dashboard/profile') ?>">Profile</a>
-                <a href="<?= site_url('auth/logout') ?>">Logout</a>
+            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
+            <div class="navbar-center">
+                <div class="navbar-menu">
+                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
+                        <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
+                        <a href="<?= site_url('user-management') ?>" class="nav-link active">User Management</a>
+                    <?php endif; ?>
+                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
+                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
+                    <?php endif; ?>
+
+                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
+                        <div class="nav-dropdown">
+                            <button class="nav-dropdown-btn">Quick Actions</button>
+                            <div class="nav-dropdown-content">
+                                <a href="<?= site_url('records/create') ?>">Add Record</a>
+                                <a href="<?= site_url('records') ?>">Manage Records</a>
+                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
+                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="user-info-nav">
+                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
+                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
+                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
+                    <?php if (!empty($user_shop_name)): ?>
+                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
+                    <?php endif; ?>
+                </div>
+                <a href="<?= site_url('auth/logout') ?>" class="btn-danger-nav" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
             </div>
         </div>
     </nav>
