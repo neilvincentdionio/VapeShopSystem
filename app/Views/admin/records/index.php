@@ -159,12 +159,13 @@
         .modal-overlay.active { display: flex; }
         .modal-card {
             width: min(760px, 100%);
+            max-width: 90vw;
             max-height: 85vh;
             overflow: auto;
             background: #ffffff;
             border: 1px solid #e0e0e0;
             border-radius: 16px;
-            padding: 1rem;
+            padding: 1.5rem;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
         .modal-head {
@@ -176,30 +177,34 @@
         }
         .detail-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(200px, 1fr));
             gap: .6rem 1rem;
         }
         .detail-item {
             border-bottom: 1px solid #e0e0e0;
-            padding-bottom: .45rem;
+            padding-bottom: .6rem;
         }
         .detail-label {
-            font-size: .78rem;
+            font-size: .82rem;
             color: #666666;
-            margin-bottom: .15rem;
+            margin-bottom: .2rem;
+            font-weight: 500;
         }
         .detail-value {
-            font-size: .92rem;
+            font-size: .95rem;
             word-break: break-word;
             color: #333333;
+            font-weight: 600;
         }
         .modal-note {
-            margin-top: .8rem;
+            margin-top: 1rem;
             border: 1px solid #e0e0e0;
             border-radius: 10px;
-            padding: .75rem;
+            padding: 1rem;
             background: #f8f9fa;
             color: #333333;
+            font-size: .9rem;
+            line-height: 1.4;
         }
         .modal-actions {
             margin-top: 1rem;
@@ -212,6 +217,10 @@
             .navbar-menu { flex-wrap: wrap; }
             .nav-right { justify-content: space-between; }
             .detail-grid { grid-template-columns: 1fr; }
+            .modal-card { 
+                width: 95vw;
+                padding: 1rem;
+            }
         }
 </style>
 </head>

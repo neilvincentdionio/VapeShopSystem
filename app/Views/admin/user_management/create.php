@@ -80,14 +80,15 @@
 
         .form-header h1 {
             font-size: 1.8rem;
-            color: #ffffff;
+            color: #333333;
             margin-bottom: 0.5rem;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            font-weight: 700;
         }
 
         .form-header p {
-            color: #f0f0f0;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            color: #666666;
+            font-size: 1rem;
+            line-height: 1.5;
         }
 
         .form-group {
@@ -97,35 +98,33 @@
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
-            color: #ffffff;
+            color: #333333;
             font-weight: 500;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .form-group input,
         .form-group select {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
             border-radius: 10px;
             font-size: 1rem;
-            color: #ffffff;
+            color: #333333;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
         }
 
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            border-color: #27c56f;
+            background: #ffffff;
+            box-shadow: 0 0 15px rgba(39, 197, 111, 0.2);
         }
 
         .form-group input::placeholder,
         .form-group select::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+            color: #999999;
         }
 
         .form-group .error {
@@ -140,33 +139,34 @@
         .btn {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #27c56f;
+            color: #ffffff;
+            border: 1px solid #27c56f;
             border-radius: 10px;
             font-size: 1rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: #218838;
+            border-color: #218838;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 15px rgba(39, 197, 111, 0.3);
         }
 
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: transparent;
+            border: 1px solid #e0e0e0;
+            color: #333333;
             margin-top: 0.5rem;
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.25);
+            background: #f8f9fa;
+            border-color: #27c56f;
+            color: #27c56f;
         }
 
         .navbar-brand {
@@ -236,7 +236,11 @@
             display: flex; 
             align-items: center; 
             gap: .55rem; 
-            color: #fff; 
+            color: #333333; 
+            background: #f8f9fa;
+            padding: .4rem .6rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
         }
 
         .user-name {
@@ -244,19 +248,25 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            font-weight: 500;
+            color: #333333;
         }
 
         .user-avatar {
             width: 36px; height: 36px; border-radius: 50%;
-            background: rgba(255,255,255,.2);
+            background: #27c56f;
             display: flex; align-items: center; justify-content: center; font-weight: 700;
+            color: #ffffff;
         }
 
         .badge {
-            border: 1px solid rgba(255,255,255,.3);
+            border: 1px solid #e0e0e0;
             padding: .2rem .5rem;
             border-radius: 999px;
             font-size: .75rem;
+            background: #f8f9fa;
+            color: #666666;
+            font-weight: 500;
         }
 
         .btn-danger {

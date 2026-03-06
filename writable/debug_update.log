@@ -568,3 +568,235 @@
 
 2026-03-06 06:10:07 - UserModel update result: SUCCESS
 2026-03-06 06:10:07 - Parent update affected rows: 1
+2026-03-06 06:16:33 - UserModel update called with ID: 1
+2026-03-06 06:16:33 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-06 06:16:33
+)
+
+2026-03-06 06:16:33 - UserModel update result: SUCCESS
+2026-03-06 06:16:33 - Parent update affected rows: 1
+2026-03-06 06:16:48 - Edit method called for user ID: 1
+2026-03-06 06:16:48 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:17:07 - Edit method called for user ID: 1
+2026-03-06 06:17:07 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:19:18 - Edit method called for user ID: 1
+2026-03-06 06:19:18 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:19:31 - Edit method called for user ID: 2
+2026-03-06 06:19:31 - User data loaded: Array
+(
+    [id] => 2
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [password] => $2y$10$yFghsrINVVkorrHIO0cxouSii0GsaT6ED5vUf/8JJjMoNIxyl2ppG
+    [role] => customer
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:09:39
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:09:39
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:19:35 - Edit method called for user ID: 1
+2026-03-06 06:19:35 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:21:11 - Edit method called for user ID: 1
+2026-03-06 06:21:11 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:21:13 - Edit method called for user ID: 1
+2026-03-06 06:21:13 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:29:22 - Edit method called for user ID: 1
+2026-03-06 06:29:22 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:29:34 - Edit method called for user ID: 2
+2026-03-06 06:29:34 - User data loaded: Array
+(
+    [id] => 2
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [password] => $2y$10$yFghsrINVVkorrHIO0cxouSii0GsaT6ED5vUf/8JJjMoNIxyl2ppG
+    [role] => customer
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:09:39
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:09:39
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 06:29:46 - Update request data: Array
+(
+    [csrf_test_name] => 3e7329d2a95b6191b19979536bd20ff6
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [password] => password
+    [role] => customer
+)
+
+2026-03-06 06:29:46 - Direct update called with ID: 2
+2026-03-06 06:29:46 - Direct update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [role] => customer
+    [password] => $2y$10$/MGkzzCUkwb5hgMOpbkGKOdslSD5HmySKZZypSNQlQ7MvINJFuh9G
+)
+
+2026-03-06 06:29:46 - Direct update result: SUCCESS
+2026-03-06 06:29:46 - Direct update affected rows: 1
+2026-03-06 06:29:46 - User update result: SUCCESS
+2026-03-06 06:29:46 - Update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [role] => customer
+    [password] => $2y$10$/MGkzzCUkwb5hgMOpbkGKOdslSD5HmySKZZypSNQlQ7MvINJFuh9G
+)
+
+2026-03-06 06:29:46 - Verification - Name updated: YES
+2026-03-06 06:29:46 - Verification - Email updated: YES
+2026-03-06 06:29:46 - Verification - Role updated: YES
+2026-03-06 06:53:06 - Edit method called for user ID: 1
+2026-03-06 06:53:06 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$v8t.kERNHqN2yJ/hssfveeYO7PbTuPobb.byy.E7tUrYjdK4NfOPe
+    [role] => admin
+    [created_at] => 2026-03-06 05:44:27
+    [updated_at] => 2026-03-06 06:16:33
+    [is_active] => 1
+    [last_login] => 2026-03-06 06:16:33
+    [login_attempts] => 0
+    [locked_until] => 
+)
+
+2026-03-06 07:00:20 - UserModel update called with ID: 2
+2026-03-06 07:00:20 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-06 07:00:20
+)
+
+2026-03-06 07:00:20 - UserModel update result: SUCCESS
+2026-03-06 07:00:20 - Parent update affected rows: 1
+2026-03-06 07:01:29 - UserModel update called with ID: 1
+2026-03-06 07:01:29 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-06 07:01:29
+)
+
+2026-03-06 07:01:29 - UserModel update result: SUCCESS
+2026-03-06 07:01:29 - Parent update affected rows: 1
+2026-03-06 07:04:48 - UserModel update called with ID: 2
+2026-03-06 07:04:48 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-06 07:04:48
+)
+
+2026-03-06 07:04:48 - UserModel update result: SUCCESS
+2026-03-06 07:04:48 - Parent update affected rows: 1

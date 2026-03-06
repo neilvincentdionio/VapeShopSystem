@@ -8,7 +8,7 @@
         min-height: 420px;
         border: 1px solid #e0e0e0;
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     }
 
     .promo-content {
@@ -29,6 +29,7 @@
         color: #27c56f;
         margin-bottom: .7rem;
         background: rgba(39, 197, 111, 0.1);
+        font-weight: 600;
     }
 
     .promo-content h1 {
@@ -37,7 +38,7 @@
         margin-bottom: .78rem;
         letter-spacing: .2px;
         color: #333333;
-        text-shadow: none;
+        font-weight: 700;
     }
 
     .promo-content p {
@@ -91,6 +92,7 @@
         color: #666666;
         font-size: .92rem;
         opacity: .95;
+        font-weight: 500;
     }
 
     @media (max-width: 768px) {

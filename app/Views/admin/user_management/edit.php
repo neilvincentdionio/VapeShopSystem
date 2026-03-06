@@ -92,12 +92,12 @@
             left: 0;
             margin-top: .5rem;
             min-width: 220px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             overflow: hidden;
             z-index: 50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .nav-dropdown:hover .nav-dropdown-content {
@@ -106,6 +106,15 @@
 
         .nav-dropdown-content a {
             display: block;
+            color: #333333;
+            text-decoration: none;
+            padding: .5rem 1rem;
+            transition: background-color .3s;
+        }
+
+        .nav-dropdown-content a:hover {
+            background-color: #f8f9fa;
+            color: #27c56f;
         }
 
         .nav-right {
@@ -119,7 +128,7 @@
             display: flex;
             align-items: center;
             gap: .55rem;
-            color: #fff;
+            color: #333333;
         }
 
         .user-name {
@@ -133,7 +142,8 @@
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: rgba(255,255,255,.2);
+            background: #27c56f;
+            color: #ffffff;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -141,10 +151,12 @@
         }
 
         .badge {
-            border: 1px solid rgba(255,255,255,.3);
+            border: 1px solid #e0e0e0;
             padding: .2rem .5rem;
             border-radius: 999px;
             font-size: .75rem;
+            background: #f8f9fa;
+            color: #666666;
         }
 
         .btn-danger {
@@ -168,13 +180,11 @@
         }
 
         .form-container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 2rem;
             border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
 
         .form-header {
@@ -194,11 +204,11 @@
         }
 
         .user-info {
-            background: rgba(255, 255, 255, 0.05);
+            background: #f8f9fa;
             padding: 1rem;
             border-radius: 10px;
             margin-bottom: 1.5rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid #e0e0e0;
         }
 
         .user-info p {
@@ -236,31 +246,27 @@
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: #e0e0e0;
+            border-color: #27c56f;
             background: #ffffff;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(39, 197, 111, 0.2);
         }
 
         .form-group input::placeholder,
         .form-group select::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+            color: #999999;
         }
 
         /* Fix dropdown option text color - matching theme */
         .form-group select option {
-            background: rgba(44, 62, 80, 0.9);
-            color: #ffffff;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #ffffff;
+            color: #333333;
+            border: 1px solid #e0e0e0;
         }
 
         .form-group select option:hover,
         .form-group select option:focus {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.3);
+            background: #f8f9fa;
+            border-color: #27c56f;
         }
 
         .form-group .error {
@@ -300,13 +306,16 @@
         }
 
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: transparent;
+            border: 1px solid #e0e0e0;
+            color: #333333;
             margin-top: 0.5rem;
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.25);
+            background: #f8f9fa;
+            border-color: #27c56f;
+            color: #27c56f;
         }
 
         .alert {

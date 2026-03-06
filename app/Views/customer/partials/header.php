@@ -63,9 +63,10 @@
             align-items: center;
             justify-content: center;
             background: linear-gradient(135deg, var(--accent), #7ef0b2);
-            color: #05311a;
+            color: #ffffff;
             font-size: .85rem;
-            font-weight: 800;
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(39, 197, 111, 0.2);
         }
 
         .nav-links {
@@ -81,7 +82,7 @@
             text-decoration: none;
             padding: .45rem .86rem;
             border-radius: 999px;
-            border: 1px solid transparent;
+            border: 1px solid var(--border);
             font-size: .9rem;
             transition: all .2s ease;
         }
@@ -97,6 +98,14 @@
             border-color: rgba(39, 197, 111, 0.55);
             background: linear-gradient(135deg, rgba(39, 197, 111, 0.34), rgba(39, 197, 111, 0.14));
             font-weight: 600;
+            position: relative;
+        }
+
+        .nav-links .cart-link:hover {
+            border-color: var(--accent);
+            background: linear-gradient(135deg, rgba(39, 197, 111, 0.44), rgba(39, 197, 111, 0.24));
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(39, 197, 111, 0.2);
         }
 
         .nav-right {
@@ -137,21 +146,21 @@
             background: var(--danger);
             border: 1px solid var(--danger);
             font-size: .9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
 
-        .btn-logout:hover { background: #c82333; }
-
-        .container {
-            max-width: 1240px;
-            margin: 1.5rem auto 2rem;
-            padding: 0 1.5rem;
+        .btn-logout:hover { 
+            background: #c82333; 
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
         }
 
         .alert {
             margin-bottom: 1rem;
             padding: .86rem 1rem;
             border-radius: 10px;
-            border: 1px solid transparent;
+            border: 1px solid var(--border);
         }
 
         .alert-success {
