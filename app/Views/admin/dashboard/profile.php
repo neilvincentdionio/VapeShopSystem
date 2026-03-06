@@ -9,19 +9,17 @@
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body {
             font-family: var(--main-font);
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
-            min-height: 100vh; position: relative; color: #fff;
+            background: #ffffff;
+            min-height: 100vh; position: relative; color: #333333;
         }
-        body::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,.4) 0%, rgba(0,0,0,.6) 100%); z-index: 1; }
         .navbar {
             position: sticky;
             top: 0;
             z-index: 20;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 1rem 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         .navbar-content {
             max-width: 1200px;
@@ -32,7 +30,7 @@
             gap: 1.2rem;
         }
         .navbar-brand {
-            color: #fff;
+            color: #333333;
             font-size: 1.5rem;
             font-weight: 700;
             text-decoration: none;
@@ -47,7 +45,7 @@
         }
         .navbar-menu { display: flex; align-items: center; gap: .75rem; flex-wrap: nowrap; }
         .navbar-menu a, .nav-dropdown-btn {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             padding: .5rem 1rem;
             border-radius: 5px;
@@ -56,9 +54,9 @@
             cursor: pointer;
             font-family: inherit;
             font-size: .95rem;
-            transition: background-color .3s;
+            transition: all .3s;
         }
-        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: rgba(255,255,255,.2); }
+        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: #f8f9fa; color: #27c56f; }
         .nav-dropdown { position: relative; }
         .nav-dropdown-content {
             display: none;
@@ -67,15 +65,25 @@
             left: 0;
             margin-top: .5rem;
             min-width: 220px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             overflow: hidden;
             z-index: 50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .nav-dropdown:hover .nav-dropdown-content { display: block; }
-        .nav-dropdown-content a { display: block; }
+        .nav-dropdown-content a { 
+            display: block; 
+            color: #333333; 
+            text-decoration: none; 
+            padding: .5rem 1rem; 
+            transition: background-color .3s; 
+        }
+        .nav-dropdown-content a:hover { 
+            background-color: #f8f9fa; 
+            color: #27c56f; 
+        }
         .customer-actions {
             display: flex;
             align-items: center;
@@ -83,23 +91,24 @@
             margin-left: .35rem;
         }
         .customer-action-btn {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             padding: .45rem .85rem;
             border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+            border: 1px solid #27c56f;
+            background: rgba(39, 197, 111, 0.1);
             font-size: .82rem;
             font-weight: 600;
             transition: transform .2s ease, background .2s ease, border-color .2s ease;
         }
         .customer-action-btn:hover {
             transform: translateY(-1px);
-            background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
-            border-color: rgba(255, 255, 255, 0.55);
+            background: #27c56f;
+            color: #ffffff;
+            border-color: #27c56f;
         }
         .nav-right { display: flex; align-items: center; gap: .8rem; flex: 0 0 auto; }
-        .user-info { display: flex; align-items: center; gap: .55rem; color: #fff; }
+        .user-info { display: flex; align-items: center; gap: .55rem; color: #333333; }
         .user-name {
             max-width: 170px;
             overflow: hidden;
@@ -108,14 +117,17 @@
         }
         .user-avatar {
             width: 36px; height: 36px; border-radius: 50%;
-            background: rgba(255,255,255,.2);
+            background: #27c56f;
+            color: #ffffff;
             display: flex; align-items: center; justify-content: center; font-weight: 700;
         }
         .badge {
-            border: 1px solid rgba(255,255,255,.3);
+            border: 1px solid #e0e0e0;
             padding: .2rem .5rem;
             border-radius: 999px;
             font-size: .75rem;
+            background: #f8f9fa;
+            color: #666666;
         }
         .btn-danger {
             background-color: #dc3545;
@@ -127,15 +139,15 @@
         .btn-danger:hover { background-color: #c82333; }
         .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
         .card {
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 16px;
             padding: 1.5rem;
-            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
         .row { margin-top: 1rem; }
-        .label { color: #ddd; font-size: .9rem; }
-        .value { font-size: 1.1rem; font-weight: 600; margin-top: .25rem; }
+        .label { color: #666666; font-size: .9rem; }
+        .value { font-size: 1.1rem; font-weight: 600; margin-top: .25rem; color: #333333; }
         @media (max-width: 768px) {
             .navbar-content { flex-direction: column; align-items: stretch; gap: .8rem; }
             .navbar-center { justify-content: flex-start; }

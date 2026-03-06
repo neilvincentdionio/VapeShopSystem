@@ -13,30 +13,18 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
+            background: #ffffff;
             min-height: 100vh;
             position: relative;
-            color: #ffffff;
+            color: #333333;
         }
 
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
-            z-index: 1;
-        }
 
         .navbar {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 1rem 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             position: relative;
             z-index: 10;
         }
@@ -50,11 +38,10 @@
         }
 
         .navbar-brand {
-            color: white;
+            color: #333333;
             font-size: 1.5rem;
             font-weight: bold;
             text-decoration: none;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .navbar-center {
@@ -72,7 +59,7 @@
         }
 
         .navbar-menu a, .nav-dropdown-btn {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             padding: .5rem 1rem;
             border-radius: 5px;
@@ -81,11 +68,12 @@
             cursor: pointer;
             font-family: inherit;
             font-size: .95rem;
-            transition: background-color .3s;
+            transition: all .3s;
         }
 
         .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { 
-            background-color: rgba(255,255,255,.2); 
+            background-color: #f8f9fa; 
+            color: #27c56f;
         }
 
         .nav-dropdown { position: relative; }
@@ -96,12 +84,12 @@
             left: 0;
             margin-top: .5rem;
             min-width: 220px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             overflow: hidden;
             z-index: 50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .nav-dropdown:hover .nav-dropdown-content { display: block; }
         .nav-dropdown-content a { display: block; }
@@ -117,7 +105,7 @@
             display: flex; 
             align-items: center; 
             gap: .55rem; 
-            color: #fff; 
+            color: #333333; 
         }
 
         .user-name {
@@ -129,15 +117,18 @@
 
         .user-avatar {
             width: 36px; height: 36px; border-radius: 50%;
-            background: rgba(255,255,255,.2);
+            background: #27c56f;
+            color: #ffffff;
             display: flex; align-items: center; justify-content: center; font-weight: 700;
         }
 
         .badge {
-            border: 1px solid rgba(255,255,255,.3);
+            border: 1px solid #e0e0e0;
             padding: .2rem .5rem;
             border-radius: 999px;
             font-size: .75rem;
+            background: #f8f9fa;
+            color: #666666;
         }
 
         .btn-danger {
@@ -150,17 +141,17 @@
         .btn-danger:hover { background-color: #c82333; }
 
         .navbar-menu a {
-            color: white;
+            color: #333333;
             text-decoration: none;
             padding: 0.5rem 1rem;
             border-radius: 5px;
-            transition: background-color 0.3s;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s;
         }
 
         .navbar-menu a:hover,
         .navbar-menu a.active {
-            background-color: rgba(255,255,255,0.2);
+            background-color: #f8f9fa;
+            color: #27c56f;
         }
 
         .container {
@@ -178,14 +169,12 @@
 
         .page-header h1 {
             font-size: 2rem;
-            color: #ffffff;
+            color: #333333;
             margin-bottom: 0.5rem;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .page-header p {
-            color: #f0f0f0;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            color: #666666;
         }
 
         .actions-bar {
@@ -204,54 +193,51 @@
         .search-box input {
             width: 100%;
             padding: 0.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
             border-radius: 10px;
-            color: #ffffff;
-            backdrop-filter: blur(10px);
+            color: #333333;
         }
 
         .btn {
             padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #ffffff;
+            color: #333333;
+            border: 1px solid #e0e0e0;
             border-radius: 10px;
             font-size: 0.9rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
             text-decoration: none;
             display: inline-block;
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: #f8f9fa;
+            border-color: #27c56f;
+            color: #27c56f;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
 
         .btn-success {
-            background: rgba(40, 167, 69, 0.2);
-            border: 1px solid rgba(40, 167, 69, 0.3);
-            color: #d4edda;
+            background: #27c56f;
+            border: 1px solid #27c56f;
+            color: #ffffff;
         }
 
         .btn-success:hover {
-            background: rgba(40, 167, 69, 0.3);
+            background: #218838;
+            border-color: #218838;
         }
 
         .users-table {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
 
         .table {
@@ -263,25 +249,24 @@
         .table td {
             padding: 1rem;
             text-align: left;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid #e0e0e0;
         }
 
         .table th {
-            background: rgba(255, 255, 255, 0.05);
+            background: #f8f9fa;
             font-weight: 600;
-            color: #ffffff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            color: #333333;
             position: sticky;
             top: 0;
             z-index: 5;
         }
 
         .table tr:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: #f8f9fa;
         }
 
         .table td {
-            color: #f0f0f0;
+            color: #333333;
         }
 
         .status-badge {
@@ -289,19 +274,18 @@
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 500;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
         }
 
         .status-active {
-            background: rgba(40, 167, 69, 0.2);
-            color: #d4edda;
-            border: 1px solid rgba(40, 167, 69, 0.3);
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
         .status-inactive {
-            background: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
         .role-badge {
@@ -309,13 +293,12 @@
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 500;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
         }
 
         .role-admin {
-            background: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
         
@@ -339,15 +322,15 @@
         }
 
         .alert-success {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: #d4edda;
-            border: 1px solid rgba(40, 167, 69, 0.3);
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
         .alert-error {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
         @media (max-width: 768px) {
@@ -453,7 +436,7 @@
 
         <div class="users-table">
             <?php if (empty($users)): ?>
-                <div style="text-align: center; padding: 2rem; color: #f0f0f0;">
+                <div style="text-align: center; padding: 2rem; color: #666666;">
                     <h3>No users found</h3>
                     <p>Start by adding your first user account.</p>
                 </div>

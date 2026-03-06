@@ -154,6 +154,12 @@ class Auth extends BaseController
                            ->with('success', 'If an account with that email exists, a password reset link has been sent.');
         }
 
+        // Check if user is admin - admins cannot reset password via forgot password
+        if ($user['role'] === 'admin') {
+            return redirect()->back()
+                           ->with('error', 'Administrators cannot use the forgot password feature. Please contact the system administrator.');
+        }
+
         // Generate reset token
         $token = $this->passwordResetModel->createToken($email);
 
@@ -179,6 +185,19 @@ class Auth extends BaseController
         if (!$reset) {
             return redirect()->to('/forgot-password')
                            ->with('error', 'Invalid or expired reset link.');
+        }
+
+        // Get user and check if admin
+        $user = $this->userModel->getUserByEmail($email);
+        if (!$user) {
+            return redirect()->to('/forgot-password')
+                           ->with('error', 'User not found.');
+        }
+
+        // Check if user is admin - admins cannot reset password
+        if ($user['role'] === 'admin') {
+            return redirect()->to('/forgot-password')
+                           ->with('error', 'Administrators cannot use the password reset feature. Please contact the system administrator.');
         }
 
         return view('auth/reset_password', [
@@ -221,6 +240,12 @@ class Auth extends BaseController
         if (!$user) {
             return redirect()->to('/forgot-password')
                            ->with('error', 'User not found.');
+        }
+
+        // Check if user is admin - admins cannot reset password
+        if ($user['role'] === 'admin') {
+            return redirect()->to('/forgot-password')
+                           ->with('error', 'Administrators cannot use the password reset feature. Please contact the system administrator.');
         }
 
         // Update password

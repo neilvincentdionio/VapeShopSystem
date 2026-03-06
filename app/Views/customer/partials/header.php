@@ -9,11 +9,11 @@
 
         :root {
             --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            --text-main: #f7f9ff;
-            --text-muted: #c9d2ea;
-            --surface: rgba(8, 18, 36, 0.72);
-            --surface-soft: rgba(255, 255, 255, 0.08);
-            --border: rgba(255, 255, 255, 0.22);
+            --text-main: #333333;
+            --text-muted: #666666;
+            --surface: #ffffff;
+            --surface-soft: #f8f9fa;
+            --border: #e0e0e0;
             --accent: #27c56f;
             --danger: #dc3545;
         }
@@ -22,19 +22,17 @@
             font-family: var(--main-font);
             min-height: 100vh;
             color: var(--text-main);
-            background:
-                linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.4) 100%),
-                url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
+            background: #ffffff;
         }
 
         .navbar {
             position: sticky;
             top: 0;
             z-index: 30;
-            background: rgba(5, 13, 27, 0.78);
-            backdrop-filter: blur(16px);
+            background: #ffffff;
             border-bottom: 1px solid var(--border);
             padding: .9rem 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .navbar-content {
@@ -47,7 +45,7 @@
         }
 
         .brand {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
@@ -79,7 +77,7 @@
         }
 
         .nav-links a {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             padding: .45rem .86rem;
             border-radius: 999px;
@@ -90,8 +88,9 @@
 
         .nav-links a:hover,
         .nav-links a.active {
-            border-color: rgba(255, 255, 255, 0.36);
-            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent);
+            background: rgba(39, 197, 111, 0.1);
+            color: var(--accent);
         }
 
         .nav-links .cart-link {
@@ -110,7 +109,7 @@
             display: inline-flex;
             align-items: center;
             gap: .5rem;
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--surface-soft);
             border: 1px solid var(--border);
             border-radius: 999px;
             padding: .3rem .6rem;
@@ -125,18 +124,18 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
+            background: var(--accent);
+            color: #ffffff;
             font-weight: 700;
         }
 
         .btn-logout {
-            color: #fff;
+            color: #ffffff;
             text-decoration: none;
             border-radius: 8px;
             padding: .45rem .82rem;
             background: var(--danger);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--danger);
             font-size: .9rem;
         }
 
@@ -156,15 +155,15 @@
         }
 
         .alert-success {
-            background: rgba(23, 160, 69, 0.2);
-            border-color: rgba(23, 160, 69, 0.48);
-            color: #d9ffe8;
+            background: rgba(23, 160, 69, 0.1);
+            border-color: rgba(23, 160, 69, 0.3);
+            color: #155724;
         }
 
         .alert-error {
-            background: rgba(220, 53, 69, 0.2);
-            border-color: rgba(220, 53, 69, 0.48);
-            color: #ffe2e6;
+            background: rgba(220, 53, 69, 0.1);
+            border-color: rgba(220, 53, 69, 0.3);
+            color: #721c24;
         }
 
         .panel {

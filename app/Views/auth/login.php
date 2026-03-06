@@ -22,13 +22,11 @@
         }
 
         .login-container {
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 2rem;
             border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
             width: 100%;
             max-width: 400px;
             position: relative;
@@ -41,17 +39,15 @@
         }
 
         .login-header h1 {
-            color: #ffffff;
+            color: #333333;
             font-size: 1.8rem;
             margin-bottom: 0.5rem;
             font-weight: 700;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .login-header p {
-            color: #f0f0f0;
+            color: #666666;
             font-size: 0.9rem;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .form-group {
@@ -61,32 +57,30 @@
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
-            color: #ffffff;
+            color: #333333;
             font-weight: 500;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .form-group input {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
             border-radius: 10px;
             font-size: 1rem;
-            color: #ffffff;
+            color: #333333;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(255, 255, 255, 0.3);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            border-color: #27c56f;
+            background: #ffffff;
+            box-shadow: 0 0 15px rgba(39, 197, 111, 0.2);
         }
 
         .form-group input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+            color: #999999;
         }
 
         .form-group .error {
@@ -98,23 +92,21 @@
         .btn {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #27c56f;
+            color: #ffffff;
+            border: 1px solid #27c56f;
             border-radius: 10px;
             font-size: 1rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: #218838;
+            border-color: #218838;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 15px rgba(39, 197, 111, 0.3);
         }
 
         .alert {

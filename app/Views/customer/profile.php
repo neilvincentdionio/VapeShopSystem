@@ -7,7 +7,7 @@
     }
 
     .profile-card p {
-        color: #c9d2ea;
+        color: #666666;
         margin-bottom: .9rem;
     }
 
@@ -15,13 +15,13 @@
         margin-top: .72rem;
         padding: .65rem .75rem;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
     }
 
     .profile-label {
         display: block;
-        color: #c9d2ea;
+        color: #666666;
         font-size: .82rem;
         margin-bottom: .2rem;
     }
@@ -29,6 +29,7 @@
     .profile-value {
         font-size: .96rem;
         font-weight: 600;
+        color: #333333;
     }
 </style>
 

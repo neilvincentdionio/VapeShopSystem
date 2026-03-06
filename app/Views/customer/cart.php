@@ -7,7 +7,7 @@
     }
 
     .cart-panel p {
-        color: #c9d2ea;
+        color: #666666;
         margin-bottom: .4rem;
     }
 </style>

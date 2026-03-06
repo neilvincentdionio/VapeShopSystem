@@ -9,20 +9,19 @@
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body {
             font-family: var(--main-font);
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
-            min-height: 100vh; position: relative; color: #fff;
+            background: #ffffff;
+            min-height: 100vh; position: relative; color: #333333;
         }
-        body::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.58); z-index: 1; }
         .navbar {
             position: sticky; top: 0; z-index: 20;
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 1rem 2rem;
-            backdrop-filter: blur(18px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         .navbar-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 1.2rem; }
         .navbar-brand {
-            color: #fff;
+            color: #333333;
             font-size: 1.5rem;
             font-weight: 700;
             text-decoration: none;
@@ -32,7 +31,7 @@
         .navbar-center { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
         .navbar-menu { display: flex; align-items: center; gap: .75rem; flex-wrap: nowrap; }
         .navbar-menu a, .nav-dropdown-btn {
-            color: #fff;
+            color: #333333;
             text-decoration: none;
             padding: .5rem 1rem;
             border-radius: 5px;
@@ -41,9 +40,9 @@
             cursor: pointer;
             font-family: inherit;
             font-size: .95rem;
-            transition: background-color .3s;
+            transition: all .3s;
         }
-        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: rgba(255,255,255,.2); }
+        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: #f8f9fa; color: #27c56f; }
         .nav-dropdown { position: relative; }
         .nav-dropdown-content {
             display: none;
@@ -52,17 +51,27 @@
             left: 0;
             margin-top: .5rem;
             min-width: 220px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             overflow: hidden;
             z-index: 50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .nav-dropdown:hover .nav-dropdown-content { display: block; }
-        .nav-dropdown-content a { display: block; }
+        .nav-dropdown-content a { 
+            display: block; 
+            color: #333333; 
+            text-decoration: none; 
+            padding: .5rem 1rem; 
+            transition: background-color .3s; 
+        }
+        .nav-dropdown-content a:hover { 
+            background-color: #f8f9fa; 
+            color: #27c56f; 
+        }
         .nav-right { display: flex; align-items: center; gap: .8rem; flex: 0 0 auto; }
-        .user-info { display: flex; align-items: center; gap: .55rem; color: #fff; }
+        .user-info { display: flex; align-items: center; gap: .55rem; color: #333333; }
         .user-name {
             max-width: 170px;
             overflow: hidden;
@@ -98,21 +107,32 @@
             padding: 1.2rem;
             backdrop-filter: blur(18px);
         }
-        .field { margin-top: .8rem; }
-        .field label { display: block; margin-bottom: .35rem; font-size: .9rem; }
-        .field input, .field select {
+        .field {
+            margin-bottom: 1rem;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: .4rem;
+            color: #333333;
+            font-weight: 500;
+        }
+
+        .field input,
+        .field select,
+        .field textarea {
             width: 100%;
-            padding: .6rem .7rem;
+            padding: .55rem .7rem;
             border-radius: 8px;
-            border: 1px solid rgba(255,255,255,.3);
-            background: rgba(255,255,255,.15);
-            color: #fff;
+            border: 1px solid #e0e0e0;
+            background: #ffffff;
+            color: #333333;
             font-family: inherit;
         }
         .field select option { color: #000; }
         .error-list { margin-top: .8rem; color: #ffd2d2; }
         .actions { margin-top: 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
-        .btn { text-decoration: none; padding: .55rem .8rem; border-radius: 8px; color: #fff; border: none; cursor: pointer; font-family: inherit; }
+        .btn { text-decoration: none; padding: .55rem .8rem; border-radius: 8px; color: #ffffff; border: none; cursor: pointer; font-family: inherit; }
         .btn-primary { background: #2f6fed; }
         .btn-muted { background: rgba(255,255,255,.2); }
         @media (max-width: 768px) {

@@ -13,30 +13,18 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: url('<?= base_url('assets/img/smokebg.jpg') ?>') center/cover no-repeat;
+            background: #ffffff;
             min-height: 100vh;
             position: relative;
-            color: #ffffff;
+            color: #333333;
         }
 
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
-            z-index: 1;
-        }
 
         .navbar {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 1rem 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             position: relative;
             z-index: 10;
         }
@@ -50,24 +38,23 @@
         }
 
         .navbar-brand {
-            color: white;
+            color: #333333;
             font-size: 1.5rem;
             font-weight: bold;
             text-decoration: none;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .navbar-menu a {
-            color: white;
+            color: #333333;
             text-decoration: none;
             padding: 0.5rem 1rem;
             border-radius: 5px;
-            transition: background-color 0.3s;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s;
         }
 
         .navbar-menu a:hover {
-            background-color: rgba(255,255,255,0.2);
+            background-color: #f8f9fa;
+            color: #27c56f;
         }
 
         .navbar-center {
