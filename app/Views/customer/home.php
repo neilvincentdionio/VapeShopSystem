@@ -9,6 +9,8 @@
         border: 1px solid #e0e0e0;
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        margin: 0 auto;
+        max-width: 900px;
     }
 
     .promo-content {

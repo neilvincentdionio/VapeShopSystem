@@ -210,7 +210,12 @@
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            line-height: 1.1;
+            white-space: nowrap;
         }
 
         .btn:hover {
@@ -230,6 +235,30 @@
         .btn-success:hover {
             background: #218838;
             border-color: #218838;
+        }
+
+        .btn-info-soft {
+            background: #d8f3f9;
+            border: 1px solid #8fd7e6;
+            color: #0b6c84;
+        }
+
+        .btn-info-soft:hover {
+            background: #c7ecf4;
+            border-color: #78cddd;
+            color: #075d73;
+        }
+
+        .btn-danger-soft {
+            background: #fde2e6;
+            border: 1px solid #f5b7c0;
+            color: #a32135;
+        }
+
+        .btn-danger-soft:hover {
+            background: #fbd3db;
+            border-color: #f09faa;
+            color: #8a1629;
         }
 
         .users-table {
@@ -305,13 +334,13 @@
         .actions {
             display: flex;
             gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .actions a {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.8rem;
-            border-radius: 5px;
-            text-decoration: none;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            border-radius: 8px;
         }
 
         .alert {
@@ -360,51 +389,12 @@
                 flex-direction: column;
             }
         }
-</style>
+    </style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
-            <div class="navbar-center">
-                <div class="navbar-menu">
-                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
-                        <a href="<?= site_url('user-management') ?>" class="nav-link active">User Management</a>
-                    <?php endif; ?>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
-                    <?php endif; ?>
-
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <div class="nav-dropdown">
-                            <button class="nav-dropdown-btn">Quick Actions</button>
-                            <div class="nav-dropdown-content">
-                                <a href="<?= site_url('records/create') ?>">Add Record</a>
-                                <a href="<?= site_url('records') ?>">Manage Records</a>
-                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
-                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="nav-right">
-                <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
-                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
-                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
-                    <?php if (!empty($user_shop_name)): ?>
-                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
-                    <?php endif; ?>
-                </div>
-                <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
-            </div>
-        </div>
-    </nav>
+    <?= $this->include('admin/partials/sidebar') ?>
 
     <!-- Main Content -->
     <div class="container">
@@ -430,7 +420,7 @@
                 <input type="text" placeholder="Search users..." id="searchInput" onkeyup="searchUsers()">
             </div>
             <a href="<?= site_url('user-management/create') ?>" class="btn btn-success">
-                ➕ Add New User
+                + Add New User
             </a>
         </div>
 
@@ -475,15 +465,13 @@
                                 <td>
                                     <div class="actions">
                                         <a href="<?= site_url('user-management/edit/' . $user['id']) ?>" 
-                                           class="btn" 
-                                           style="background: rgba(23, 162, 184, 0.2); border-color: rgba(23, 162, 184, 0.3);">
-                                            ✏️ Edit
+                                           class="btn btn-info-soft">
+                                            Edit
                                         </a>
                                         <?php if ($user['role'] !== 'admin'): ?>
                                         <a href="<?= site_url('user-management/delete/' . $user['id']) ?>" 
-                                           class="btn" 
-                                           style="background: rgba(220, 53, 69, 0.2); border-color: rgba(220, 53, 69, 0.3);">
-                                            🗑️ Delete
+                                           class="btn btn-danger-soft">
+                                            Delete
                                         </a>
                                         <?php endif; ?>
                                     </div>
@@ -537,5 +525,4 @@
     </script>
 </body>
 </html>
-
 

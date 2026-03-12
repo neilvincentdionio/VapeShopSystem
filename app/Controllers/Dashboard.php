@@ -4,18 +4,21 @@ namespace App\Controllers;
 
 use App\Models\DashboardModel;
 use App\Models\UserModel;
+use App\Models\ProductModel;
 
 class Dashboard extends BaseController
 {
     protected $session;
     protected $dashboardModel;
     protected $userModel;
+    protected $productModel;
 
     public function __construct()
     {
         $this->session = session();
         $this->dashboardModel = new DashboardModel();
         $this->userModel = new UserModel();
+        $this->productModel = new ProductModel();
     }
 
     /**
@@ -183,15 +186,30 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $products = [
-            ['name' => 'VapeHub X Pod Kit', 'description' => 'Compact pod system, smooth draw', 'price' => 1250],
-            ['name' => 'Salt Mint E-Liquid', 'description' => '30ml, cool mint profile', 'price' => 320],
-            ['name' => 'Replacement Coil Pack', 'description' => 'Long-life mesh coils (pack of 3)', 'price' => 450],
-            ['name' => 'Portable Charger Case', 'description' => 'Fast charging pocket case', 'price' => 680],
-        ];
+        // Get search and filter parameters
+        $search = $this->request->getGet('search') ?? '';
+        $category = $this->request->getGet('category') ?? 'all';
+        $allowedCategories = $this->productModel->getCategoryOptions();
+        if ($category !== 'all' && !in_array($category, $allowedCategories, true)) {
+            $category = 'all';
+        }
+
+        // Get products from database
+        if (!empty($search)) {
+            $products = $this->productModel->searchProducts($search, $category);
+        } elseif ($category !== 'all') {
+            $products = $this->productModel->getProductsByCategory($category);
+        } else {
+            $products = $this->productModel->getActiveProducts();
+        }
+
+        $categories = $allowedCategories;
 
         return view('customer/products', $this->getCustomerPageData('Products', 'products', [
             'products' => $products,
+            'categories' => $categories,
+            'search' => $search,
+            'selectedCategory' => $category,
         ]));
     }
 
@@ -237,6 +255,27 @@ class Dashboard extends BaseController
         return view('customer/cart', $this->getCustomerPageData('Cart', 'cart', [
             'cart_items' => $cartItems,
             'estimated_total' => $estimatedTotal,
+        ]));
+    }
+
+    /**
+     * Product details page for customers
+     */
+    public function productDetails($id)
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $product = $this->productModel->getProductById($id, true);
+
+        if (!$product) {
+            return redirect()->to('/customer/products')->with('error', 'Product not found.');
+        }
+
+        return view('customer/product_details', $this->getCustomerPageData('Product Details', 'products', [
+            'product' => $product,
         ]));
     }
 

@@ -90,14 +90,6 @@
             border-radius: 999px;
             font-size: .75rem;
         }
-        .btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-            border-radius: 5px;
-            padding: .5rem .8rem;
-            text-decoration: none;
-        }
-        .btn-danger:hover { background-color: #c82333; }
         .nav-link { padding: .45rem .75rem; border-radius: 6px; }
         .container { max-width: 760px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
         .panel {
@@ -132,58 +124,32 @@
         .field select option { color: #000; }
         .error-list { margin-top: .8rem; color: #ffd2d2; }
         .actions { margin-top: 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
-        .btn { text-decoration: none; padding: .55rem .8rem; border-radius: 8px; color: #ffffff; border: none; cursor: pointer; font-family: inherit; }
+        .btn {
+            text-decoration: none;
+            padding: .55rem .85rem;
+            border-radius: 8px;
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
         .btn-primary { background: #2f6fed; }
-        .btn-muted { background: rgba(255,255,255,.2); }
+        .btn-secondary { background: #6b7280; }
         @media (max-width: 768px) {
             .navbar-content { flex-direction: column; align-items: stretch; gap: .75rem; }
             .navbar-center { justify-content: flex-start; }
             .navbar-menu { flex-wrap: wrap; }
             .nav-right { justify-content: space-between; }
         }
-</style>
+    </style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
-            <div class="navbar-center">
-                <div class="navbar-menu">
-                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('records') ?>" class="nav-link active">Records</a>
-                        <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
-                    <?php endif; ?>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
-                    <?php endif; ?>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <div class="nav-dropdown">
-                            <button class="nav-dropdown-btn">Quick Actions</button>
-                            <div class="nav-dropdown-content">
-                                <a href="<?= site_url('records/create') ?>">Add Record</a>
-                                <a href="<?= site_url('records') ?>">Manage Records</a>
-                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
-                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="nav-right">
-                <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
-                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
-                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
-                    <?php if (!empty($user_shop_name)): ?>
-                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
-                    <?php endif; ?>
-                </div>
-                <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
-            </div>
-        </div>
-    </nav>
+    <?= $this->include('admin/partials/sidebar') ?>
 
     <div class="container">
         <div class="panel">
@@ -273,12 +239,16 @@
                 </div>
                 <div class="actions">
                     <button type="submit" class="btn btn-primary"><?= $is_edit ? 'Update Record' : 'Save Record' ?></button>
-                    <a href="<?= site_url('records') ?>" class="btn btn-muted">Cancel</a>
+                    <a href="<?= site_url('records') ?>" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </div>
     </div>
 </body>
 </html>
+
+
+
+
 
 

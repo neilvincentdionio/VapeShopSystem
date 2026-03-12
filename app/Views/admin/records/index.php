@@ -94,14 +94,6 @@
             background: #f8f9fa;
             color: #666666;
         }
-        .btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-            border-radius: 5px;
-            padding: .5rem .8rem;
-            text-decoration: none;
-        }
-        .btn-danger:hover { background-color: #c82333; }
 
         .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
         .panel {
@@ -122,13 +114,27 @@
             padding: .55rem .7rem;
         }
         select option { color: #000; }
-        .btn { text-decoration: none; display: inline-block; padding: .55rem .75rem; border-radius: 8px; color: #ffffff; border: none; cursor: pointer; }
+        .btn {
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: .55rem .85rem;
+            border-radius: 8px;
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
         .btn-primary { background: #2f6fed; }
         .btn-success { background: #1f9d55; }
         .btn-info { background: #0ea5e9; }
         .btn-warning { background: #d48806; }
         .btn-danger { background: #dc3545; }
-        .btn-muted { background: rgba(255,255,255,.2); }
+        .btn-secondary { background: #6b7280; color: #ffffff; }
+        .btn:hover { filter: brightness(0.95); }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: .7rem; border-bottom: 1px solid #e0e0e0; text-align: left; font-size: .92rem; color: #333333; }
         th { color: #333333; font-weight: 600; background: #f8f9fa; }
@@ -139,7 +145,9 @@
         .alert { padding: .8rem; border-radius: 8px; margin-bottom: 1rem; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+        .actions { display: flex; gap: .4rem; flex-wrap: nowrap; align-items: center; }
+        .actions form { margin: 0; display: inline-flex; }
+        th:last-child, td:last-child { min-width: 220px; }
         .pagination-wrap { margin-top: 1rem; }
         .pagination-wrap ul { list-style: none; display: flex; gap: .35rem; flex-wrap: wrap; }
         .pagination-wrap a, .pagination-wrap span {
@@ -222,49 +230,11 @@
                 padding: 1rem;
             }
         }
-</style>
+    </style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
-            <div class="navbar-center">
-                <div class="navbar-menu">
-                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('records') ?>" class="nav-link active">Records</a>
-                        <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
-                    <?php endif; ?>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
-                    <?php endif; ?>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <div class="nav-dropdown">
-                            <button class="nav-dropdown-btn">Quick Actions</button>
-                            <div class="nav-dropdown-content">
-                                <a href="<?= site_url('records/create') ?>">Add Record</a>
-                                <a href="<?= site_url('records') ?>">Manage Records</a>
-                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
-                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="nav-right">
-                <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
-                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
-                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
-                    <?php if (!empty($user_shop_name)): ?>
-                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
-                    <?php endif; ?>
-                </div>
-                <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
-            </div>
-        </div>
-    </nav>
+    <?= $this->include('admin/partials/sidebar') ?>
 
     <div class="container">
         <?php if (session()->getFlashdata('success')): ?>
@@ -305,7 +275,7 @@
                 <label for="to_date">To</label>
                 <input id="to_date" type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" title="To Date">
                 <button type="submit" class="btn btn-primary">Filter</button>
-                <a href="<?= site_url('records') ?>" class="btn btn-muted">Reset</a>
+                <a href="<?= site_url('records') ?>" class="btn btn-secondary">Reset</a>
             </form>
         </div>
 
@@ -375,7 +345,7 @@
             <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="record-modal-title">
                 <div class="modal-head">
                     <h3 id="record-modal-title">Record Details</h3>
-                    <button type="button" class="btn btn-muted" id="record-modal-close-top">Close</button>
+                    <button type="button" class="btn btn-secondary" id="record-modal-close-top">Close</button>
                 </div>
                 <div id="record-modal-content">Select a record to view details.</div>
                 <div class="modal-actions">
@@ -549,5 +519,9 @@
     </script>
 </body>
 </html>
+
+
+
+
 
 

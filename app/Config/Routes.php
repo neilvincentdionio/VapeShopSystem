@@ -48,3 +48,17 @@ $routes->group('records', ['filter' => 'auth'], static function ($routes) {
     $routes->post('update/(:num)', 'Records::update/$1');
     $routes->post('delete/(:num)', 'Records::delete/$1');
 });
+
+// Products module routes (Admin only)
+$routes->group('products', ['filter' => 'auth:admin'], static function ($routes) {
+    $routes->get('/', 'Products::index');
+    $routes->get('create', 'Products::create');
+    $routes->post('store', 'Products::store');
+    $routes->get('edit/(:num)', 'Products::edit/$1');
+    $routes->post('update/(:num)', 'Products::update/$1');
+    $routes->get('delete/(:num)', 'Products::delete/$1');
+    $routes->get('toggle-status/(:num)', 'Products::toggleStatus/$1');
+});
+
+// Customer product details route
+$routes->get('/customer/product/(:num)', 'Dashboard::productDetails/$1', ['filter' => 'auth']);

@@ -130,50 +130,11 @@
             .navbar-menu { flex-wrap: wrap; }
             .nav-right { justify-content: space-between; }
         }
-</style>
+    </style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
-            <div class="navbar-center">
-                <div class="navbar-menu">
-                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
-                        <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
-                    <?php endif; ?>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="nav-link">Profile</a>
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <a href="<?= site_url('dashboard/settings') ?>" class="nav-link active">Settings</a>
-                    <?php endif; ?>
-
-                    <?php if (isset($user_role) && $user_role === 'admin'): ?>
-                        <div class="nav-dropdown">
-                            <button class="nav-dropdown-btn">Quick Actions</button>
-                            <div class="nav-dropdown-content">
-                                <a href="<?= site_url('records/create') ?>">Add Record</a>
-                                <a href="<?= site_url('records') ?>">Manage Records</a>
-                                <a href="<?= site_url('user-management/create') ?>">Create User</a>
-                                <a href="<?= site_url('user-management') ?>">Manage Users</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="nav-right">
-                <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr($user_name ?? '', 0, 1)) ?></div>
-                    <span class="user-name"><?= htmlspecialchars($user_name ?? '') ?></span>
-                    <span class="badge"><?= htmlspecialchars(ucfirst($user_role ?? '')) ?></span>
-                    <?php if (!empty($user_shop_name)): ?>
-                        <span class="badge"><?= htmlspecialchars($user_shop_name) ?></span>
-                    <?php endif; ?>
-                </div>
-                <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
-            </div>
-        </div>
-    </nav>
+    <?= $this->include('admin/partials/sidebar') ?>
 
     <div class="container">
         <div class="card">
@@ -188,5 +149,9 @@
     </div>
 </body>
 </html>
+
+
+
+
 
 

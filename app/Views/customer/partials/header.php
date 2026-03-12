@@ -125,6 +125,18 @@
             color: var(--text-muted);
             font-size: .84rem;
         }
+        
+        .user-chip-link {
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .user-chip-link:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(39, 197, 111, 0.2);
+        }
 
         .avatar {
             width: 28px;
@@ -182,6 +194,12 @@
             padding: 1rem;
         }
 
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
         .page-grid {
             display: grid;
             gap: 1rem;
@@ -192,7 +210,7 @@
             .navbar-content { flex-direction: column; align-items: stretch; gap: .65rem; }
             .nav-links { justify-content: flex-start; }
             .nav-right { justify-content: space-between; }
-            .container { padding: 0 .95rem; }
+            .container { padding: 1.5rem .95rem; }
         }
     </style>
 </head>
@@ -209,14 +227,13 @@
                 <a href="<?= site_url('customer/products') ?>" class="<?= ($active_page ?? '') === 'products' ? 'active' : '' ?>">Products</a>
                 <a href="<?= site_url('customer/orders') ?>" class="<?= ($active_page ?? '') === 'orders' ? 'active' : '' ?>">Orders</a>
                 <a href="<?= site_url('customer/cart') ?>" class="cart-link <?= ($active_page ?? '') === 'cart' ? 'active' : '' ?>">Cart &#128722;</a>
-                <a href="<?= site_url('dashboard/profile') ?>" class="<?= ($active_page ?? '') === 'profile' ? 'active' : '' ?>">Profile &#128100;</a>
             </div>
 
             <div class="nav-right">
-                <div class="user-chip">
+                <a href="<?= site_url('dashboard/profile') ?>" class="user-chip user-chip-link" title="Profile">
                     <span class="avatar"><?= strtoupper(substr((string) ($user_name ?? ''), 0, 1)) ?></span>
                     <span><?= esc($user_name ?? '') ?></span>
-                </div>
+                </a>
                 <a href="<?= site_url('auth/logout') ?>" class="btn-logout" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
             </div>
         </div>
