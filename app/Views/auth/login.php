@@ -143,6 +143,22 @@
             text-decoration: underline;
         }
 
+        .register-link {
+            text-align: center;
+            margin-top: 0.75rem;
+        }
+
+        .register-link a {
+            color: #27c56f;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .register-link a:hover {
+            text-decoration: underline;
+        }
+
         .validation-errors {
             background-color: #f8d7da;
             color: #721c24;
@@ -221,6 +237,10 @@
 
         <div class="forgot-password">
             <a href="<?= site_url('forgot-password') ?>">Forgot your password?</a>
+        </div>
+
+        <div class="register-link">
+            <a href="<?= site_url('register') ?>">Create a customer account</a>
         </div>
     </div>
 

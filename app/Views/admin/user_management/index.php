@@ -261,6 +261,18 @@
             color: #8a1629;
         }
 
+        .btn-approve-soft {
+            background: #fff3cd;
+            border: 1px solid #ffe08a;
+            color: #7a5a00;
+        }
+
+        .btn-approve-soft:hover {
+            background: #ffe8a6;
+            border-color: #f6d56d;
+            color: #6a4d00;
+        }
+
         .users-table {
             background: #ffffff;
             border: 1px solid #e0e0e0;
@@ -317,6 +329,31 @@
             border: 1px solid #f5c6cb;
         }
 
+        .approval-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .approval-approved {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .approval-pending {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .approval-rejected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
         .role-badge {
             padding: 0.25rem 0.75rem;
             border-radius: 20px;
@@ -337,7 +374,17 @@
             flex-wrap: wrap;
         }
 
+        .actions form {
+            margin: 0;
+        }
+
         .actions a {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            border-radius: 8px;
+        }
+
+        .actions button {
             padding: 0.4rem 0.75rem;
             font-size: 0.85rem;
             border-radius: 8px;
@@ -438,12 +485,14 @@
                             <th>Email</th>
                             <th>Role</th>
                             <th>Status</th>
+                            <th>Approval</th>
                             <th>Last Login</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="userTableBody">
                         <?php foreach ($users as $user): ?>
+                            <?php $approvalStatus = $user['approval_status'] ?? 'approved'; ?>
                             <tr>
                                 <td>
                                     <strong><?= htmlspecialchars($user['name']) ?></strong>
@@ -460,10 +509,27 @@
                                     </span>
                                 </td>
                                 <td>
+                                    <span class="approval-badge approval-<?= htmlspecialchars($approvalStatus) ?>">
+                                        <?= htmlspecialchars(ucfirst($approvalStatus)) ?>
+                                    </span>
+                                </td>
+                                <td>
                                     <?= $user['last_login'] ? date('M d, Y', strtotime($user['last_login'])) : 'Never' ?>
                                 </td>
                                 <td>
                                     <div class="actions">
+                                        <?php if ($user['role'] === 'customer'): ?>
+                                            <a href="<?= site_url('user-management/view/' . $user['id']) ?>" 
+                                               class="btn btn-info-soft">
+                                                View
+                                            </a>
+                                        <?php endif; ?>
+                                        <?php if ($user['role'] === 'customer' && $approvalStatus === 'pending'): ?>
+                                            <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post">
+                                                <?= csrf_field() ?>
+                                                <button type="submit" class="btn btn-approve-soft">Approve</button>
+                                            </form>
+                                        <?php endif; ?>
                                         <a href="<?= site_url('user-management/edit/' . $user['id']) ?>" 
                                            class="btn btn-info-soft">
                                             Edit

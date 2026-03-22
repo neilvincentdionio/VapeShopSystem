@@ -18,6 +18,14 @@ class UserModel extends Model
         'password',
         'role',
         'shop_name',
+        'phone_number',
+        'address_line',
+        'city',
+        'province',
+        'postal_code',
+        'legal_age_confirmed',
+        'approval_status',
+        'verification_id_path',
         'is_active',
         'last_login',
         'login_attempts',
@@ -37,6 +45,14 @@ class UserModel extends Model
         'password' => 'required|min_length[8]',
         'role' => 'required|in_list[admin,customer]',
         'shop_name' => 'permit_empty|max_length[150]',
+        'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
+        'address_line' => 'permit_empty|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\.\'#,\/]+$/]',
+        'city' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+        'province' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+        'postal_code' => 'permit_empty|max_length[20]|regex_match[/^[a-zA-Z0-9\s\-]+$/]',
+        'legal_age_confirmed' => 'permit_empty|in_list[0,1]',
+        'approval_status' => 'permit_empty|in_list[pending,approved,rejected]',
+        'verification_id_path' => 'permit_empty|max_length[255]',
     ];
     protected $validationMessages = [
         'email' => [
@@ -47,6 +63,21 @@ class UserModel extends Model
         ],
         'name' => [
             'regex_match' => 'Name can only contain letters, numbers, spaces, hyphens, apostrophes, and periods.'
+        ],
+        'phone_number' => [
+            'regex_match' => 'Phone number can only contain digits, spaces, parentheses, plus signs, and hyphens.'
+        ],
+        'address_line' => [
+            'regex_match' => 'Street address contains unsupported characters.'
+        ],
+        'city' => [
+            'regex_match' => 'City contains unsupported characters.'
+        ],
+        'province' => [
+            'regex_match' => 'Province contains unsupported characters.'
+        ],
+        'postal_code' => [
+            'regex_match' => 'Postal code can only contain letters, numbers, spaces, and hyphens.'
         ]
     ];
 
@@ -57,7 +88,13 @@ class UserModel extends Model
     {
         return $this->where('email', $email)
                    ->where('is_active', 1)
+                   ->where('approval_status', 'approved')
                    ->first();
+    }
+
+    public function findUserByEmail($email)
+    {
+        return $this->where('email', $email)->first();
     }
 
     /**
@@ -133,6 +170,14 @@ class UserModel extends Model
     {
         $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
         return $this->insert($data);
+    }
+
+    public function approveUser($userId)
+    {
+        return $this->update($userId, [
+            'approval_status' => 'approved',
+            'is_active' => 1,
+        ]);
     }
 
     public function updateUserDirectly($id, $data)

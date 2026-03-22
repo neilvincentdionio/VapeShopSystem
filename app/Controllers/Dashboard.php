@@ -298,7 +298,11 @@ class Dashboard extends BaseController
         $userRole = (string) $this->session->get('user_role');
 
         if ($userRole === 'customer') {
-            return view('customer/profile', $this->getCustomerPageData('Profile', 'profile'));
+            $customerAccount = $this->userModel->find((int) $this->session->get('user_id'));
+
+            return view('customer/profile', $this->getCustomerPageData('Profile', 'profile', [
+                'customer_account' => $customerAccount,
+            ]));
         }
 
         $data = [

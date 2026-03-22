@@ -36,6 +36,48 @@ class CreateUsersTable extends Migration
                 'default'    => 'customer',
                 'null'       => false,
             ],
+            'phone_number' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 30,
+                'null'       => true,
+            ],
+            'legal_age_confirmed' => [
+                'type'       => 'TINYINT',
+                'constraint' => 1,
+                'default'    => 0,
+                'null'       => false,
+            ],
+            'approval_status' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 20,
+                'default'    => 'approved',
+                'null'       => false,
+            ],
+            'verification_id_path' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
+                'null'       => true,
+            ],
+            'address_line' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
+                'null'       => true,
+            ],
+            'city' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 120,
+                'null'       => true,
+            ],
+            'province' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 120,
+                'null'       => true,
+            ],
+            'postal_code' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 20,
+                'null'       => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => false,
@@ -69,6 +111,7 @@ class CreateUsersTable extends Migration
         $this->forge->addKey('id', true);
         $this->forge->addKey('role');
         $this->forge->addKey('is_active');
+        $this->forge->addKey('approval_status');
         $this->forge->createTable('users');
     }
 

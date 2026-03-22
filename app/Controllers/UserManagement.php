@@ -100,6 +100,106 @@ class UserManagement extends BaseController
     }
 
     /**
+     * View customer details before approval
+     */
+    public function view($id)
+    {
+        $authCheck = $this->checkAdminAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $user = $this->userModel->find($id);
+
+        if (!$user) {
+            return redirect()->to('/user-management')
+                           ->with('error', 'User not found.');
+        }
+
+        return view('admin/user_management/view', [
+            'user' => $user,
+            'user_name' => $this->session->get('user_name'),
+            'user_role' => $this->session->get('user_role'),
+            'page_title' => 'View Customer',
+        ]);
+    }
+
+    /**
+     * Stream the uploaded verification ID to admins only.
+     */
+    public function verificationId($id)
+    {
+        $authCheck = $this->checkAdminAuth();
+        if ($authCheck !== true) {
+            return $this->response->setStatusCode(403)->setBody('Access denied.');
+        }
+
+        $user = $this->userModel->find($id);
+        if (!$user) {
+            return $this->response->setStatusCode(404)->setBody('User not found.');
+        }
+
+        $absolutePath = $this->resolveVerificationIdAbsolutePath($user['verification_id_path'] ?? null);
+        if ($absolutePath === null || !is_file($absolutePath)) {
+            return $this->response->setStatusCode(404)->setBody('Verification ID not found.');
+        }
+
+        $mimeType = 'application/octet-stream';
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $detectedType = $finfo->file($absolutePath);
+        if (is_string($detectedType) && $detectedType !== '') {
+            $mimeType = $detectedType;
+        }
+
+        return $this->response
+            ->setHeader('Content-Type', $mimeType)
+            ->setHeader('Content-Disposition', 'inline; filename="' . basename($absolutePath) . '"')
+            ->setBody((string) file_get_contents($absolutePath));
+    }
+
+    /**
+     * Approve a pending customer account
+     */
+    public function approve($id)
+    {
+        $authCheck = $this->checkAdminAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $user = $this->userModel->find($id);
+
+        if (!$user) {
+            return redirect()->to('/user-management')
+                           ->with('error', 'User not found.');
+        }
+
+        if (($user['role'] ?? '') !== 'customer') {
+            return redirect()->to('/user-management')
+                           ->with('error', 'Only customer accounts require approval.');
+        }
+
+        if (($user['approval_status'] ?? 'approved') === 'approved') {
+            return redirect()->to('/user-management')
+                           ->with('success', 'This customer account is already approved.');
+        }
+
+        try {
+            if ($this->userModel->approveUser($id)) {
+                return redirect()->to('/user-management')
+                               ->with('success', 'Customer account approved successfully.');
+            }
+
+            return redirect()->to('/user-management')
+                           ->with('error', 'Failed to approve the customer account.');
+        } catch (\Exception $e) {
+            log_message('error', 'User approval error: ' . $e->getMessage());
+            return redirect()->to('/user-management')
+                           ->with('error', 'Failed to approve the customer account.');
+        }
+    }
+
+    /**
      * Process user registration
      */
     public function store()
@@ -131,6 +231,7 @@ class UserManagement extends BaseController
             'email' => filter_var($request->getPost('email'), FILTER_SANITIZE_EMAIL),
             'password' => $request->getPost('password'),
             'role' => $request->getPost('role'),
+            'approval_status' => 'approved',
             'is_active' => 1
         ];
 
@@ -398,5 +499,24 @@ class UserManagement extends BaseController
             return redirect()->back()
                            ->with('error', 'Failed to delete user. Please try again.');
         }
+    }
+
+    private function resolveVerificationIdAbsolutePath(?string $relativePath): ?string
+    {
+        if (empty($relativePath)) {
+            return null;
+        }
+
+        $uploadRoot = realpath(WRITEPATH . 'uploads');
+        if ($uploadRoot === false) {
+            return null;
+        }
+
+        $absolutePath = realpath($uploadRoot . DIRECTORY_SEPARATOR . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath), DIRECTORY_SEPARATOR));
+        if ($absolutePath === false) {
+            return null;
+        }
+
+        return str_starts_with($absolutePath, $uploadRoot . DIRECTORY_SEPARATOR) ? $absolutePath : null;
     }
 }

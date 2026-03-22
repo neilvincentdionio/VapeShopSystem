@@ -11,7 +11,9 @@ $routes->get('/', 'Auth::login');
 
 // Authentication routes
 $routes->get('/login', 'Auth::login');
+$routes->get('/register', 'Auth::register');
 $routes->post('/auth/authenticate', 'Auth::authenticate');
+$routes->post('/auth/register', 'Auth::storeRegistration');
 $routes->get('/forgot-password', 'Auth::forgotPassword');
 $routes->post('/auth/sendResetLink', 'Auth::sendResetLink');
 $routes->get('/reset-password', 'Auth::resetPassword');
@@ -33,6 +35,9 @@ $routes->get('/customer/cart', 'Dashboard::customerCart', ['filter' => 'auth']);
 $routes->get('/user-management', 'UserManagement::index', ['filter' => 'auth:admin']);
 $routes->get('/user-management/create', 'UserManagement::create', ['filter' => 'auth:admin']);
 $routes->post('/user-management/store', 'UserManagement::store', ['filter' => 'auth:admin']);
+$routes->get('/user-management/view/(:num)', 'UserManagement::view/$1', ['filter' => 'auth:admin']);
+$routes->get('/user-management/verification-id/(:num)', 'UserManagement::verificationId/$1', ['filter' => 'auth:admin']);
+$routes->post('/user-management/approve/(:num)', 'UserManagement::approve/$1', ['filter' => 'auth:admin']);
 $routes->get('/user-management/edit/(:num)', 'UserManagement::edit/$1', ['filter' => 'auth:admin']);
 $routes->post('/user-management/update/(:num)', 'UserManagement::update/$1', ['filter' => 'auth:admin']);
 $routes->get('/user-management/delete/(:num)', 'UserManagement::delete/$1', ['filter' => 'auth:admin']);

@@ -34,6 +34,7 @@
 </style>
 
 <section class="panel profile-card">
+    <?php $customerAccount = $customer_account ?? []; ?>
     <h1>Profile</h1>
     <p>Manage your customer details and keep account information updated.</p>
 
@@ -50,6 +51,32 @@
     <div class="profile-row">
         <span class="profile-label">Role</span>
         <span class="profile-value"><?= esc(ucfirst((string) ($user_role ?? 'customer'))) ?></span>
+    </div>
+
+    <?php if (!empty($customerAccount['phone_number'])): ?>
+        <div class="profile-row">
+            <span class="profile-label">Phone Number</span>
+            <span class="profile-value"><?= esc($customerAccount['phone_number']) ?></span>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($customerAccount['address_line']) || !empty($customerAccount['city']) || !empty($customerAccount['province']) || !empty($customerAccount['postal_code'])): ?>
+        <div class="profile-row">
+            <span class="profile-label">Address</span>
+            <span class="profile-value">
+                <?= esc(implode(', ', array_filter([
+                    $customerAccount['address_line'] ?? '',
+                    $customerAccount['city'] ?? '',
+                    $customerAccount['province'] ?? '',
+                    $customerAccount['postal_code'] ?? '',
+                ]))) ?>
+            </span>
+        </div>
+    <?php endif; ?>
+
+    <div class="profile-row">
+        <span class="profile-label">ID Verification</span>
+        <span class="profile-value"><?= !empty($customerAccount['verification_id_path']) ? 'ID uploaded' : 'No ID uploaded' ?></span>
     </div>
 
     <?php if (!empty($user_shop_name)): ?>

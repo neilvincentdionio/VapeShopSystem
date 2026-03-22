@@ -900,3 +900,256 @@
 
 2026-03-12 17:16:35 - UserModel update result: SUCCESS
 2026-03-12 17:16:35 - Parent update affected rows: 1
+2026-03-22 15:30:41 - UserModel update called with ID: 1
+2026-03-22 15:30:41 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 15:30:41
+)
+
+2026-03-22 15:30:41 - UserModel update result: SUCCESS
+2026-03-22 15:30:41 - Parent update affected rows: 1
+2026-03-22 15:49:16 - UserModel update called with ID: 2
+2026-03-22 15:49:16 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 15:49:16
+)
+
+2026-03-22 15:49:16 - UserModel update result: SUCCESS
+2026-03-22 15:49:16 - Parent update affected rows: 1
+2026-03-22 15:51:42 - UserModel update called with ID: 2
+2026-03-22 15:51:42 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 15:51:42
+)
+
+2026-03-22 15:51:42 - UserModel update result: SUCCESS
+2026-03-22 15:51:42 - Parent update affected rows: 1
+2026-03-22 16:18:26 - UserModel update called with ID: 2
+2026-03-22 16:18:26 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 16:18:26
+)
+
+2026-03-22 16:18:26 - UserModel update result: SUCCESS
+2026-03-22 16:18:26 - Parent update affected rows: 1
+2026-03-22 16:24:12 - UserModel update called with ID: 3
+2026-03-22 16:24:12 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 16:24:12
+)
+
+2026-03-22 16:24:12 - UserModel update result: SUCCESS
+2026-03-22 16:24:12 - Parent update affected rows: 1
+2026-03-22 17:36:06 - UserModel update called with ID: 1
+2026-03-22 17:36:06 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 17:36:06
+)
+
+2026-03-22 17:36:06 - UserModel update result: SUCCESS
+2026-03-22 17:36:06 - Parent update affected rows: 1
+2026-03-22 17:43:03 - UserModel update called with ID: 1
+2026-03-22 17:43:03 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 17:43:03
+)
+
+2026-03-22 17:43:03 - UserModel update result: SUCCESS
+2026-03-22 17:43:03 - Parent update affected rows: 1
+2026-03-22 17:43:27 - Edit method called for user ID: 4
+2026-03-22 17:43:27 - User data loaded: Array
+(
+    [id] => 4
+    [name] => jobert
+    [email] => jobert@gmail.com
+    [password] => $2y$10$oNhm58Sf6yyKvop4qCcGcuGCGT0GpVU8YUr2/ZNl2qW8fEzd94boC
+    [role] => customer
+    [created_at] => 2026-03-22 17:35:48
+    [updated_at] => 2026-03-22 17:35:48
+    [is_active] => 0
+    [last_login] => 
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => 09918240479
+    [legal_age_confirmed] => 1
+    [approval_status] => pending
+    [verification_id_path] => customer_ids/1774200948_2b49aecf3ab2767fbae5.jpg
+    [address_line] => Capres
+    [city] => Alabel
+    [province] => Sarangani
+    [postal_code] => 9501
+)
+
+2026-03-22 17:43:44 - Edit method called for user ID: 3
+2026-03-22 17:43:44 - User data loaded: Array
+(
+    [id] => 3
+    [name] => wakwak
+    [email] => wakwak@vapeshop.com
+    [password] => $2y$10$6bK7yLr6qsdIi77cbThv1eBtPGxkfUWgWOr6N7wqifq1OcubgVr3K
+    [role] => customer
+    [created_at] => 2026-03-22 16:24:03
+    [updated_at] => 2026-03-22 16:24:12
+    [is_active] => 1
+    [last_login] => 2026-03-22 16:24:12
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => 09918240479
+    [legal_age_confirmed] => 1
+    [approval_status] => approved
+    [verification_id_path] => customer_ids/1774196643_631dee427d702bfb6c61.png
+    [address_line] => Capres
+    [city] => Alabel
+    [province] => Sarangani
+    [postal_code] => 9501
+)
+
+2026-03-22 17:45:00 - UserModel update called with ID: 4
+2026-03-22 17:45:00 - UserModel update data: Array
+(
+    [approval_status] => approved
+    [is_active] => 1
+)
+
+2026-03-22 17:45:00 - UserModel update result: SUCCESS
+2026-03-22 17:45:00 - Parent update affected rows: 1
+2026-03-22 17:45:11 - UserModel update called with ID: 4
+2026-03-22 17:45:11 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 17:45:11
+)
+
+2026-03-22 17:45:11 - UserModel update result: SUCCESS
+2026-03-22 17:45:11 - Parent update affected rows: 1
+2026-03-22 18:25:21 - UserModel update called with ID: 1
+2026-03-22 18:25:21 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 18:25:21
+)
+
+2026-03-22 18:25:21 - UserModel update result: SUCCESS
+2026-03-22 18:25:21 - Parent update affected rows: 1
+2026-03-22 18:25:40 - Edit method called for user ID: 1
+2026-03-22 18:25:40 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$8CE/Qg0Kb1MYFkr2ShBgeebOJhoN3YDZ8kCq7PxQ72XmBpicUc5pK
+    [role] => admin
+    [created_at] => 2026-03-22 15:30:15
+    [updated_at] => 2026-03-22 18:25:21
+    [is_active] => 1
+    [last_login] => 2026-03-22 18:25:21
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => +63 900 000 0001
+    [legal_age_confirmed] => 1
+    [approval_status] => approved
+    [verification_id_path] => 
+    [address_line] => 101 Cloud Mint Avenue
+    [city] => Manila
+    [province] => Metro Manila
+    [postal_code] => 1000
+)
+
+2026-03-22 18:25:51 - Edit method called for user ID: 2
+2026-03-22 18:25:51 - User data loaded: Array
+(
+    [id] => 2
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [password] => $2y$10$H.tcVpUib6E4O8QIFnFQeuVraO482VwhDLM8GP7MzlEU08Gumqs4W
+    [role] => customer
+    [created_at] => 2026-03-22 15:30:15
+    [updated_at] => 2026-03-22 17:26:01
+    [is_active] => 1
+    [last_login] => 2026-03-22 16:18:26
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => +63 900 000 0002
+    [legal_age_confirmed] => 1
+    [approval_status] => approved
+    [verification_id_path] => 
+    [address_line] => 22 Vapor Street
+    [city] => Quezon City
+    [province] => Metro Manila
+    [postal_code] => 1100
+)
+
+2026-03-22 18:30:24 - Edit method called for user ID: 1
+2026-03-22 18:30:24 - User data loaded: Array
+(
+    [id] => 1
+    [name] => Administrator
+    [email] => admin@vapeshop.com
+    [password] => $2y$10$8CE/Qg0Kb1MYFkr2ShBgeebOJhoN3YDZ8kCq7PxQ72XmBpicUc5pK
+    [role] => admin
+    [created_at] => 2026-03-22 15:30:15
+    [updated_at] => 2026-03-22 18:25:21
+    [is_active] => 1
+    [last_login] => 2026-03-22 18:25:21
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => +63 900 000 0001
+    [legal_age_confirmed] => 1
+    [approval_status] => approved
+    [verification_id_path] => 
+    [address_line] => 101 Cloud Mint Avenue
+    [city] => Manila
+    [province] => Metro Manila
+    [postal_code] => 1000
+)
+
+2026-03-22 18:30:27 - Edit method called for user ID: 3
+2026-03-22 18:30:27 - User data loaded: Array
+(
+    [id] => 3
+    [name] => wakwak
+    [email] => wakwak@vapeshop.com
+    [password] => $2y$10$6bK7yLr6qsdIi77cbThv1eBtPGxkfUWgWOr6N7wqifq1OcubgVr3K
+    [role] => customer
+    [created_at] => 2026-03-22 16:24:03
+    [updated_at] => 2026-03-22 16:24:12
+    [is_active] => 1
+    [last_login] => 2026-03-22 16:24:12
+    [login_attempts] => 0
+    [locked_until] => 
+    [phone_number] => 09918240479
+    [legal_age_confirmed] => 1
+    [approval_status] => approved
+    [verification_id_path] => customer_ids/1774196643_631dee427d702bfb6c61.png
+    [address_line] => Capres
+    [city] => Alabel
+    [province] => Sarangani
+    [postal_code] => 9501
+)
+
+2026-03-22 18:38:03 - UserModel update called with ID: 1
+2026-03-22 18:38:03 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-03-22 18:38:03
+)
+
+2026-03-22 18:38:03 - UserModel update result: SUCCESS
+2026-03-22 18:38:03 - Parent update affected rows: 1
