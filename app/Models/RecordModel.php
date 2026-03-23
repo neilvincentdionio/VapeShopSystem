@@ -44,7 +44,7 @@ class RecordModel extends Model
         'unit_price' => 'required|decimal|greater_than_equal_to[0]',
         'total_amount' => 'required|decimal|greater_than_equal_to[0]',
         'payment_method' => 'permit_empty|in_list[cash,card,gcash,bank_transfer]',
-        'payment_status' => 'permit_empty|in_list[paid,partial,unpaid]',
+        'payment_status' => 'permit_empty|in_list[paid,partial,unpaid,pending]',
         'record_date' => 'required|valid_date[Y-m-d]',
         'status' => 'required|in_list[pending,completed,cancelled]',
         'notes' => 'permit_empty|max_length[1000]',

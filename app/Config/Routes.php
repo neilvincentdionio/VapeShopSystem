@@ -25,6 +25,11 @@ $routes->get('/dashboard', 'Dashboard::index', ['filter' => 'auth']);
 $routes->get('/dashboard/profile', 'Dashboard::profile', ['filter' => 'auth']);
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth']);
 
+// Orders routes (Admin only)
+$routes->get('/orders', 'Dashboard::adminOrders', ['filter' => 'auth:admin']);
+$routes->get('/orders/checkout/(:num)', 'Dashboard::adminCheckout/$1', ['filter' => 'auth:admin']);
+$routes->post('/orders/checkout-submit/(:num)', 'Dashboard::adminCheckoutSubmit/$1', ['filter' => 'auth:admin']);
+
 // Customer storefront routes (protected by AuthFilter)
 $routes->get('/customer/home', 'Dashboard::customerHome', ['filter' => 'auth']);
 $routes->get('/customer/products', 'Dashboard::customerProducts', ['filter' => 'auth']);
@@ -67,3 +72,20 @@ $routes->group('products', ['filter' => 'auth:admin'], static function ($routes)
 
 // Customer product details route
 $routes->get('/customer/product/(:num)', 'Dashboard::productDetails/$1', ['filter' => 'auth']);
+
+// Customer cart actions
+$routes->post('/customer/cart/add', 'Dashboard::customerCartAdd', ['filter' => 'auth']);
+$routes->post('/customer/cart/update', 'Dashboard::customerCartUpdate', ['filter' => 'auth']);
+$routes->post('/customer/cart/remove', 'Dashboard::customerCartRemove', ['filter' => 'auth']);
+
+// Customer direct order processing
+$routes->post('/customer/direct-order', 'Dashboard::customerDirectOrder', ['filter' => 'auth']);
+
+// Customer checkout & receipt (cashier system)
+$routes->get('/customer/checkout', 'Dashboard::customerCheckout', ['filter' => 'auth']);
+$routes->post('/customer/checkout', 'Dashboard::customerCheckoutSubmit', ['filter' => 'auth']);
+$routes->get('/customer/receipt/(:num)', 'Dashboard::customerReceipt', ['filter' => 'auth']);
+
+// Customer 18+ age verification
+$routes->get('/customer/age-verification', 'Dashboard::customerAgeVerification', ['filter' => 'auth']);
+$routes->post('/customer/age-verification', 'Dashboard::customerAgeVerificationSubmit', ['filter' => 'auth']);

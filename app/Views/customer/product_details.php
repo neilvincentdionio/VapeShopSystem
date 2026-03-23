@@ -371,9 +371,11 @@
                     </a>
                     <button class="btn btn-primary" 
                             onclick="addToCart()"
-                            <?= $product['stock'] <= 0 ? 'disabled' : '' ?>>
+                            <?= ($product['stock'] <= 0 || empty($age_allowed)) ? 'disabled' : '' ?>>
                         <?php if ($product['stock'] <= 0): ?>
                             Out of Stock
+                        <?php elseif (empty($age_allowed)): ?>
+                            18+ Required
                         <?php else: ?>
                             <i class="fas fa-shopping-cart"></i> Add to Cart
                         <?php endif; ?>
@@ -387,6 +389,8 @@
 <script>
 const maxQuantity = <?= $product['stock'] ?>;
 const productId = <?= $product['id'] ?>;
+const addUrl = '<?= site_url('customer/cart/add') ?>';
+const cartUrl = '<?= site_url('customer/cart') ?>';
 
 function increaseQuantity() {
     const input = document.getElementById('quantity');
@@ -406,9 +410,32 @@ function decreaseQuantity() {
 
 function addToCart() {
     const quantity = document.getElementById('quantity').value;
-    
-    // This will be implemented when we add cart functionality
-    alert(`Add ${quantity} x Product ID ${productId} to cart functionality will be implemented soon!`);
+
+    fetch(addUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({ product_id: productId, quantity: quantity })
+    })
+        .then(async (res) => {
+            const data = await res.json().catch(() => null);
+            if (res.ok && data && data.success) {
+                window.location.href = cartUrl;
+                return;
+            }
+
+            if (data && data.ageVerificationUrl) {
+                window.location.href = data.ageVerificationUrl;
+                return;
+            }
+
+            alert((data && data.message) ? data.message : 'Failed to add to cart.');
+        })
+        .catch(() => {
+            alert('Network error. Please try again.');
+        });
 }
 </script>
 

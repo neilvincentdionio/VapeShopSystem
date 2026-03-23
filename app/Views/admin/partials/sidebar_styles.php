@@ -23,11 +23,17 @@
         align-items: stretch !important;
         gap: 1rem !important;
         text-align: left !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
     .admin-sidebar .navbar-brand {
         display: block !important;
         font-size: 1.1rem !important;
         padding: 0.35rem 0.25rem 0.85rem !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
         border-bottom: 1px solid #ececec !important;
         font-weight: 700 !important;
         text-align: left !important;
@@ -38,12 +44,17 @@
     .admin-sidebar .navbar-center {
         flex: 1 1 auto !important;
         min-width: 0 !important;
+        width: 100% !important;
     }
     .admin-sidebar .navbar-menu {
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 0.35rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
     .admin-sidebar .navbar-menu a,
     .admin-sidebar .nav-dropdown-btn {
@@ -103,6 +114,9 @@
         align-items: stretch !important;
         gap: 0.7rem !important;
         text-align: left !important;
+        margin: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
     .admin-sidebar .user-info {
         justify-content: flex-start !important;
@@ -111,6 +125,9 @@
         align-items: center !important;
         gap: 0.55rem !important;
         text-align: left !important;
+        margin: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
 
      .admin-sidebar .user-name {

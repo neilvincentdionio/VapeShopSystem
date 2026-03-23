@@ -5,6 +5,7 @@ $seg2 = service('uri')->getSegment(2);
 $isDashboard = $seg1 === 'dashboard' && !in_array($seg2, ['profile', 'settings'], true);
 $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
+$isOrders = $seg1 === 'orders';
 $isUsers = $seg1 === 'user-management';
 $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
 ?>
@@ -16,6 +17,7 @@ $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
             <div class="navbar-menu">
                 <a href="<?= site_url('dashboard') ?>" class="nav-link <?= $isDashboard ? 'active' : '' ?>">Dashboard</a>
                 <a href="<?= site_url('products') ?>" class="nav-link <?= $isProducts ? 'active' : '' ?>">Products</a>
+                <a href="<?= site_url('orders') ?>" class="nav-link <?= $isOrders ? 'active' : '' ?>">Orders</a>
                 <a href="<?= site_url('records') ?>" class="nav-link <?= $isRecords ? 'active' : '' ?>">Records</a>
                 <a href="<?= site_url('user-management') ?>" class="nav-link <?= $isUsers ? 'active' : '' ?>">User Management</a>
                 <a href="<?= site_url('dashboard/settings') ?>" class="nav-link <?= $isSettings ? 'active' : '' ?>">Settings</a>

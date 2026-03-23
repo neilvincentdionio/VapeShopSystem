@@ -5,6 +5,9 @@ namespace App\Controllers;
 use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
+use App\Models\RecordModel;
+use CodeIgniter\HTTP\ResponseInterface;
+use CodeIgniter\Database\BaseConnection;
 
 class Dashboard extends BaseController
 {
@@ -205,11 +208,17 @@ class Dashboard extends BaseController
 
         $categories = $allowedCategories;
 
+        $ageAllowed = $this->canCustomerPurchase();
+        $cart = $this->getCustomerCart();
+
         return view('customer/products', $this->getCustomerPageData('Products', 'products', [
             'products' => $products,
             'categories' => $categories,
             'search' => $search,
             'selectedCategory' => $category,
+            'age_allowed' => $ageAllowed,
+            'cart_items' => $cart['items'],
+            'cart_total' => $cart['total'],
         ]));
     }
 
@@ -223,16 +232,42 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $todayStats = $this->dashboardModel->getAnalytics('today', 'customer', $this->session->get('user_shop_name'));
-        $todayOrders = (int) ($todayStats['orders'] ?? 0);
+        $userId = (int) $this->session->get('user_id');
+        $recordModel = new RecordModel();
+        
+        // Get customer's orders (sales records)
+        $orders = $recordModel
+            ->where('record_type', 'sales')
+            ->where('created_by', $userId)
+            ->orderBy('created_at', 'DESC')
+            ->findAll();
 
-        $orderItems = [
-            ['title' => 'Recent Orders', 'message' => 'You have ' . number_format($todayOrders) . ' order(s) today.'],
-            ['title' => 'Order Notifications', 'message' => 'Enable profile updates so delivery status alerts reach you quickly.'],
-        ];
+        // Parse order items from notes
+        $orderDetails = [];
+        foreach ($orders as $order) {
+            $orderItems = [];
+            $notes = $order['notes'] ?? '';
+            
+            if (!empty($notes)) {
+                $decoded = json_decode($notes, true);
+                if ($decoded && isset($decoded['items'])) {
+                    $orderItems = $decoded['items'];
+                }
+            }
+            
+            $orderDetails[] = [
+                'id' => $order['id'],
+                'reference_number' => $order['reference_number'],
+                'date' => $order['created_at'],
+                'total_amount' => $order['total_amount'],
+                'payment_method' => $order['payment_method'],
+                'status' => $order['status'],
+                'items' => $orderItems
+            ];
+        }
 
         return view('customer/orders', $this->getCustomerPageData('Orders', 'orders', [
-            'order_items' => $orderItems,
+            'orders' => $orderDetails,
         ]));
     }
 
@@ -246,16 +281,591 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $cartItems = [
-            ['name' => 'Starter Pod Kit', 'quantity' => 1, 'amount' => 1250],
-            ['name' => 'Salt Mint E-Liquid', 'quantity' => 2, 'amount' => 640],
-        ];
-        $estimatedTotal = array_sum(array_column($cartItems, 'amount'));
+        $cart = $this->getCustomerCart();
+        $cartItems = $cart['items'];
+        $estimatedTotal = $cart['total'];
 
         return view('customer/cart', $this->getCustomerPageData('Cart', 'cart', [
             'cart_items' => $cartItems,
             'estimated_total' => $estimatedTotal,
         ]));
+    }
+
+    /**
+     * Customer: Add product to cart (AJAX).
+     */
+    public function customerCartAdd()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $productId = (int) $this->request->getPost('product_id');
+        $quantity = (int) ($this->request->getPost('quantity') ?? 1);
+        if ($productId <= 0) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'success' => false,
+                'message' => 'Invalid product.',
+            ]);
+        }
+        if ($quantity <= 0) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'success' => false,
+                'message' => 'Invalid quantity.',
+            ]);
+        }
+
+        if (! $this->canCustomerPurchase()) {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Age verification required (18+).',
+                'ageVerificationUrl' => site_url('customer/age-verification'),
+            ]);
+        }
+
+        $product = $this->productModel->getProductById($productId, true);
+        if (! $product) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'message' => 'Product not found.',
+            ]);
+        }
+
+        if ((int) $product['stock'] <= 0) {
+            return $this->response->setStatusCode(409)->setJSON([
+                'success' => false,
+                'message' => 'This product is out of stock.',
+            ]);
+        }
+
+        $cart = $this->getCustomerCart();
+        $items = $cart['raw_items'];
+        $currentQty = (int) ($items[(string) $productId] ?? 0);
+        $requestedQty = $currentQty + $quantity;
+
+        if ($requestedQty > (int) $product['stock']) {
+            return $this->response->setStatusCode(409)->setJSON([
+                'success' => false,
+                'message' => 'Insufficient stock.',
+                'available' => (int) $product['stock'],
+            ]);
+        }
+
+        $items[(string) $productId] = $requestedQty;
+        $this->setCustomerCartRawItems($items);
+
+        $cartCount = array_sum(array_map(static fn ($v) => (int) $v, $items));
+
+        return $this->response->setStatusCode(200)->setJSON([
+            'success' => true,
+            'message' => 'Added to cart.',
+            'cart_count' => $cartCount,
+        ]);
+    }
+
+    /**
+     * Customer: Update quantity in cart (non-AJAX form).
+     */
+    public function customerCartUpdate()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $productId = (int) $this->request->getPost('product_id');
+        $quantity = (int) ($this->request->getPost('quantity') ?? 0);
+
+        if ($productId <= 0) {
+            return redirect()->to('/customer/cart')->with('error', 'Invalid product.');
+        }
+
+        $product = $this->productModel->getProductById($productId, true);
+        if (! $product) {
+            return redirect()->to('/customer/cart')->with('error', 'Product not found.');
+        }
+
+        $items = $this->getCustomerCart()['raw_items'];
+        if ($quantity <= 0) {
+            unset($items[(string) $productId]);
+        } else {
+            $quantity = min($quantity, (int) $product['stock']);
+            $items[(string) $productId] = $quantity;
+        }
+
+        $this->setCustomerCartRawItems($items);
+
+        return redirect()->to('/customer/cart')->with('success', 'Cart updated successfully.');
+    }
+
+    /**
+     * Customer: Remove item from cart (non-AJAX form).
+     */
+    public function customerCartRemove()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $productId = (int) $this->request->getPost('product_id');
+        if ($productId <= 0) {
+            return redirect()->to('/customer/cart')->with('error', 'Invalid product.');
+        }
+
+        $items = $this->getCustomerCart()['raw_items'];
+        unset($items[(string) $productId]);
+        $this->setCustomerCartRawItems($items);
+
+        return redirect()->to('/customer/cart')->with('success', 'Item removed from cart.');
+    }
+
+    /**
+     * Customer: Direct order processing (skip checkout)
+     */
+    public function customerDirectOrder()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        if (! $this->canCustomerPurchase()) {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Age verification required (18+).',
+                'redirect' => site_url('customer/age-verification'),
+            ]);
+        }
+
+        $cart = $this->getCustomerCart();
+        $cartItems = $cart['items'];
+        $total = (float) $cart['total'];
+
+        if (count($cartItems) === 0 || $total <= 0) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'message' => 'Your cart is empty.',
+            ]);
+        }
+
+        $customer = $this->userModel->find((int) $this->session->get('user_id'));
+        $customerId = (int) ($customer['id'] ?? 0);
+
+        $referenceNumber = $this->generateReceiptNumber();
+
+        $receiptItems = array_map(static function (array $item): array {
+            return [
+                'id' => (int) $item['id'],
+                'qty' => (int) $item['quantity'],
+                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
+                'unit_price' => (float) $item['price'],
+            ];
+        }, $cartItems);
+
+        $notesPayload = [
+            'items' => $receiptItems,
+            'total' => round($total, 2),
+            'direct_order' => true,
+        ];
+
+        // Ensure RecordModel's notes max_length[1000] validation won't fail.
+        $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($notes === false) {
+            $notes = '';
+        }
+        if (strlen($notes) > 950) {
+            $notesPayload['items'] = array_slice($receiptItems, 0, 10);
+            $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        $recordModel = new RecordModel();
+        $db = \Config\Database::connect();
+
+        $db->transStart();
+
+        try {
+            $totalQty = (int) array_sum(array_column($cartItems, 'quantity'));
+            $unitPrice = $totalQty > 0 ? round($total / $totalQty, 2) : 0.00;
+
+            $insertOk = $recordModel->insert([
+                'record_type' => 'sales',
+                'date' => date('Y-m-d'),
+                'record_date' => date('Y-m-d'),
+                'reference_number' => $referenceNumber,
+                'title' => 'Direct Order',
+                'description' => 'Customer direct order purchase.',
+                'quantity' => $totalQty,
+                'unit_price' => $unitPrice,
+                'total_amount' => round($total, 2),
+                'payment_method' => 'cash',
+                'payment_status' => 'pending',
+                'status' => 'pending',
+                'notes' => $notes,
+                'created_by' => $customerId > 0 ? $customerId : null,
+            ]);
+
+            if (! $insertOk) {
+                // Get validation errors if any
+                $errors = $recordModel->errors();
+                $errorMsg = 'Failed to create order.';
+                if (!empty($errors)) {
+                    $errorMsg .= ' Validation errors: ' . implode(', ', $errors);
+                }
+                throw new \RuntimeException($errorMsg);
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Order processing failed.');
+            }
+
+            $this->clearCustomerCart();
+
+            return $this->response->setStatusCode(200)->setJSON([
+                'success' => true,
+                'message' => 'Order processed successfully!',
+                'redirect' => site_url('customer/orders'),
+            ]);
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Customer: Checkout (cashiering system).
+     */
+    public function customerCheckout()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        if (! $this->canCustomerPurchase()) {
+            return redirect()->to('/customer/age-verification')->with('error', 'Age verification required (18+).');
+        }
+
+        $cart = $this->getCustomerCart();
+        if (count($cart['items']) === 0) {
+            return redirect()->to('/customer/products')->with('error', 'Your cart is empty.');
+        }
+
+        return view('customer/checkout', $this->getCustomerPageData('Checkout', 'cart', [
+            'cart_items' => $cart['items'],
+            'estimated_total' => $cart['total'],
+        ]));
+    }
+
+    /**
+     * Customer: Checkout submit (cash only) with change calculation + receipt.
+     */
+    public function customerCheckoutSubmit()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        if (! $this->canCustomerPurchase()) {
+            return redirect()->to('/customer/age-verification')->with('error', 'Age verification required (18+).');
+        }
+
+        $cashGiven = (float) ($this->request->getPost('cash_given') ?? 0);
+        if ($cashGiven <= 0) {
+            return redirect()->to('/customer/checkout')->with('error', 'Please enter a valid cash amount.');
+        }
+
+        $cart = $this->getCustomerCart();
+        $cartItems = $cart['items'];
+        $total = (float) $cart['total'];
+
+        if (count($cartItems) === 0 || $total <= 0) {
+            return redirect()->to('/customer/products')->with('error', 'Your cart is empty.');
+        }
+
+        if ($cashGiven < $total) {
+            return redirect()->to('/customer/checkout')->with('error', 'Cash amount is not enough. Please provide sufficient cash.');
+        }
+
+        $change = $cashGiven - $total;
+
+        $customer = $this->userModel->find((int) $this->session->get('user_id'));
+        $customerId = (int) ($customer['id'] ?? 0);
+
+        $referenceNumber = $this->generateReceiptNumber();
+
+        $receiptItems = array_map(static function (array $item): array {
+            return [
+                'id' => (int) $item['id'],
+                'qty' => (int) $item['quantity'],
+                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
+                'unit_price' => (float) $item['price'],
+            ];
+        }, $cartItems);
+
+        $notesPayload = [
+            'items' => $receiptItems,
+            'cash_given' => round($cashGiven, 2),
+            'change' => round($change, 2),
+            'total' => round($total, 2),
+        ];
+
+        // Ensure RecordModel's notes max_length[1000] validation won't fail.
+        $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($notes === false) {
+            $notes = '';
+        }
+        if (strlen($notes) > 950) {
+            $notesPayload['items'] = array_slice($receiptItems, 0, 10);
+            $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        $recordModel = new RecordModel();
+        $db = \Config\Database::connect();
+
+        $db->transStart();
+
+        try {
+            // Re-validate stock at checkout time.
+            foreach ($cartItems as $item) {
+                $product = $this->productModel->getProductById((int) $item['id'], true);
+                if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
+                    throw new \RuntimeException('Insufficient stock for one of the items.');
+                }
+
+                // updateStock uses: stock = stock + $quantity, so pass negative to decrement.
+                $ok = $this->productModel->updateStock((int) $item['id'], -((int) $item['quantity']));
+                if (! $ok) {
+                    throw new \RuntimeException('Failed to update stock.');
+                }
+            }
+
+            $totalQty = (int) array_sum(array_column($cartItems, 'quantity'));
+            $unitPrice = $totalQty > 0 ? round($total / $totalQty, 2) : 0.00;
+
+            $insertOk = $recordModel->insert([
+                'record_type' => 'sales',
+                'date' => date('Y-m-d'),
+                'record_date' => date('Y-m-d'),
+                'reference_number' => $referenceNumber,
+                'title' => 'Cash Sale',
+                'description' => 'Customer checkout purchase.',
+                'quantity' => $totalQty,
+                'unit_price' => $unitPrice,
+                'total_amount' => round($total, 2),
+                'payment_method' => 'cash',
+                'payment_status' => 'paid',
+                'status' => 'completed',
+                'notes' => $notes,
+                'created_by' => $customerId > 0 ? $customerId : null,
+            ]);
+
+            if (! $insertOk) {
+                throw new \RuntimeException('Failed to create sales record.');
+            }
+
+            $recordId = (int) $recordModel->getInsertID();
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Checkout transaction failed.');
+            }
+
+            $this->clearCustomerCart();
+
+            return redirect()->to(site_url('customer/receipt/' . $recordId));
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->to('/customer/checkout')->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Customer: Receipt (printable).
+     */
+    public function customerReceipt($id)
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $recordId = (int) $id;
+        if ($recordId <= 0) {
+            return redirect()->to('/customer/products')->with('error', 'Invalid receipt.');
+        }
+
+        $recordModel = new RecordModel();
+        $record = $recordModel->find($recordId);
+
+        if (! $record || ($record['record_type'] ?? '') !== 'sales') {
+            return redirect()->to('/customer/products')->with('error', 'Receipt not found.');
+        }
+
+        return view('customer/receipt', $this->getCustomerPageData('Receipt', 'cart', [
+            'receipt' => $record,
+        ]));
+    }
+
+    /**
+     * Customer: 18+ age verification page.
+     */
+    public function customerAgeVerification()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        if ($this->canCustomerPurchase()) {
+            return redirect()->to('/customer/products')->with('success', 'You are already verified as 18+.');
+        }
+
+        return view('customer/age_verification', $this->getCustomerPageData('Age Verification', 'products', []));
+    }
+
+    /**
+     * Customer: Confirm 18+ using date of birth.
+     */
+    public function customerAgeVerificationSubmit()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $birthDate = (string) ($this->request->getPost('birth_date') ?? '');
+        if ($birthDate === '') {
+            return redirect()->back()->withInput()->with('error', 'Please enter your birth date.');
+        }
+
+        try {
+            $birth = new \DateTime($birthDate);
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', 'Invalid birth date.');
+        }
+
+        $now = new \DateTime('today');
+        $age = (int) $birth->diff($now)->y;
+
+        if ($age < 18) {
+            return redirect()->back()->withInput()->with('error', 'You must be at least 18 years old to purchase vape products.');
+        }
+
+        $userId = (int) $this->session->get('user_id');
+        if ($userId <= 0) {
+            return redirect()->to('/login')->with('error', 'Session expired. Please login again.');
+        }
+
+        $this->userModel->update($userId, ['legal_age_confirmed' => 1]);
+        $this->session->set('age_verified', 1);
+
+        return redirect()->to('/customer/products')->with('success', 'Age verification successful. You can now purchase vape products.');
+    }
+
+    /**
+     * Build customer cart items from the raw session items.
+     *
+     * @return array{raw_items: array<string,int>, items: array<int,array<string,mixed>>, total: float}
+     */
+    private function getCustomerCart(): array
+    {
+        $rawCart = $this->session->get('cart');
+        $rawItems = [];
+
+        if (is_array($rawCart) && isset($rawCart['items']) && is_array($rawCart['items'])) {
+            $rawItems = $rawCart['items'];
+        }
+
+        // Normalize: productId => positive int quantity
+        $normalized = [];
+        foreach ($rawItems as $pid => $qty) {
+            $pid = (string) $pid;
+            $qty = (int) $qty;
+            if ($pid !== '' && $qty > 0) {
+                $normalized[$pid] = $qty;
+            }
+        }
+
+        $items = [];
+        $total = 0.0;
+
+        foreach ($normalized as $pid => $qty) {
+            $product = $this->productModel->getProductById((int) $pid, true);
+            if (! $product) {
+                continue;
+            }
+
+            $lineTotal = (float) $product['price'] * (int) $qty;
+            $total += $lineTotal;
+
+            $items[] = [
+                'id' => (int) $product['id'],
+                'name' => (string) $product['name'],
+                'price' => (float) $product['price'],
+                'image' => (string) ($product['image'] ?? ''),
+                'quantity' => (int) $qty,
+                'amount' => round($lineTotal, 2),
+                'stock' => (int) $product['stock'],
+            ];
+        }
+
+        return [
+            'raw_items' => $normalized,
+            'items' => $items,
+            'total' => round($total, 2),
+        ];
+    }
+
+    /**
+     * Persist raw cart items (productId => qty) in session.
+     */
+    private function setCustomerCartRawItems(array $items): void
+    {
+        $normalized = [];
+        foreach ($items as $pid => $qty) {
+            $pid = (string) $pid;
+            $qty = (int) $qty;
+            if ($pid !== '' && $qty > 0) {
+                $normalized[$pid] = $qty;
+            }
+        }
+
+        $this->session->set('cart', ['items' => $normalized]);
+    }
+
+    private function clearCustomerCart(): void
+    {
+        $this->session->remove('cart');
+    }
+
+    private function canCustomerPurchase(): bool
+    {
+        $userId = (int) $this->session->get('user_id');
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $user = $this->userModel->find($userId);
+        $legalAgeConfirmed = (int) ($user['legal_age_confirmed'] ?? 0) === 1;
+        $sessionVerified = (int) $this->session->get('age_verified', 0) === 1;
+
+        return $legalAgeConfirmed || $sessionVerified;
+    }
+
+    private function generateReceiptNumber(): string
+    {
+        $datePart = date('Ymd');
+        $randomPart = random_int(1000, 9999);
+        return 'RCPT-' . $datePart . '-' . $randomPart;
     }
 
     /**
@@ -276,7 +886,308 @@ class Dashboard extends BaseController
 
         return view('customer/product_details', $this->getCustomerPageData('Product Details', 'products', [
             'product' => $product,
+            'age_allowed' => $this->canCustomerPurchase(),
         ]));
+    }
+
+    /**
+     * Admin orders page
+     */
+    public function adminOrders()
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        $recordModel = new RecordModel();
+        $userModel = new UserModel();
+        
+        // Get all sales orders
+        $orders = $recordModel
+            ->where('record_type', 'sales')
+            ->orderBy('created_at', 'DESC')
+            ->findAll();
+
+        // Parse order items and get customer info
+        $orderDetails = [];
+        foreach ($orders as $order) {
+            $orderItems = [];
+            $notes = $order['notes'] ?? '';
+            $customerInfo = null;
+            
+            if (!empty($notes)) {
+                $decoded = json_decode($notes, true);
+                if ($decoded && isset($decoded['items'])) {
+                    $orderItems = $decoded['items'];
+                }
+            }
+
+            // Get customer information
+            if (!empty($order['created_by'])) {
+                $customer = $userModel->find($order['created_by']);
+                if ($customer) {
+                    $customerInfo = [
+                        'id' => $customer['id'],
+                        'name' => $customer['name'],
+                        'email' => $customer['email']
+                    ];
+                }
+            }
+            
+            $orderDetails[] = [
+                'id' => $order['id'],
+                'reference_number' => $order['reference_number'],
+                'date' => $order['created_at'],
+                'total_amount' => $order['total_amount'],
+                'payment_method' => $order['payment_method'],
+                'status' => $order['status'],
+                'items' => $orderItems,
+                'customer' => $customerInfo
+            ];
+        }
+
+        $data = [
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => $this->session->get('user_role'),
+            'user_shop_name' => $this->session->get('user_shop_name'),
+            'page_title' => 'Orders Management',
+            'orders' => $orderDetails,
+        ];
+
+        return view('admin/orders/index', $data);
+    }
+
+    /**
+     * Admin checkout for pending orders
+     */
+    public function adminCheckout($orderId = null)
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        if (!$orderId) {
+            return redirect()->to('/orders')->with('error', 'Order ID is required.');
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return redirect()->to('/orders')->with('error', 'Order not found.');
+        }
+
+        if ($order['status'] !== 'pending') {
+            return redirect()->to('/orders')->with('error', 'Order is already processed.');
+        }
+
+        // Parse order items from notes
+        $orderItems = [];
+        $notes = $order['notes'] ?? '';
+        
+        if (!empty($notes)) {
+            $decoded = json_decode($notes, true);
+            if ($decoded && isset($decoded['items'])) {
+                $orderItems = $decoded['items'];
+            }
+        }
+
+        if (empty($orderItems)) {
+            return redirect()->to('/orders')->with('error', 'Order items not found.');
+        }
+
+        // Validate stock availability
+        foreach ($orderItems as $item) {
+            $product = $this->productModel->getProductById((int) $item['id'], true);
+            if (!$product || (int) $product['stock'] < (int) $item['qty']) {
+                return redirect()->to('/orders')->with('error', 'Insufficient stock for item: ' . esc($item['name']));
+            }
+        }
+
+        // Prepare checkout data
+        $data = [
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => $this->session->get('user_role'),
+            'user_shop_name' => $this->session->get('user_shop_name'),
+            'page_title' => 'Order Checkout',
+            'order' => $order,
+            'items' => $orderItems,
+            'total' => (float) $order['total_amount'],
+            'reference_number' => $order['reference_number']
+        ];
+
+        return view('admin/orders/checkout', $data);
+    }
+
+    /**
+     * Admin checkout submit - process the order and update stock
+     */
+    public function adminCheckoutSubmit($orderId = null)
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        if (!$orderId) {
+            return redirect()->to('/orders')->with('error', 'Order ID is required.');
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return redirect()->to('/orders')->with('error', 'Order not found.');
+        }
+
+        if ($order['status'] !== 'pending') {
+            return redirect()->to('/orders')->with('error', 'Order is already processed.');
+        }
+
+        // Parse order items from notes
+        $orderItems = [];
+        $notes = $order['notes'] ?? '';
+        
+        if (!empty($notes)) {
+            $decoded = json_decode($notes, true);
+            if ($decoded && isset($decoded['items'])) {
+                $orderItems = $decoded['items'];
+            }
+        }
+
+        if (empty($orderItems)) {
+            return redirect()->to('/orders')->with('error', 'Order items not found.');
+        }
+
+        // Get cashiering form data
+        $ageVerified = $this->request->getPost('age_verified');
+        $paymentMethod = $this->request->getPost('payment_method');
+        $amountReceived = (float) $this->request->getPost('amount_received');
+
+        // Validate cashiering data
+        if (!$ageVerified) {
+            return redirect()->to('/orders/checkout/' . $orderId)->with('error', 'Age verification is required.');
+        }
+
+        if (!$paymentMethod) {
+            return redirect()->to('/orders/checkout/' . $orderId)->with('error', 'Payment method is required.');
+        }
+
+        if ($amountReceived < (float) $order['total_amount']) {
+            return redirect()->to('/orders/checkout/' . $orderId)->with('error', 'Amount received is insufficient.');
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // Update stock for each item
+            foreach ($orderItems as $item) {
+                $product = $this->productModel->getProductById((int) $item['id'], true);
+                if (!$product || (int) $product['stock'] < (int) $item['qty']) {
+                    throw new \RuntimeException('Insufficient stock for item: ' . $item['name']);
+                }
+
+                // Update stock (decrement)
+                $currentStock = (int) $product['stock'];
+                $newStock = $currentStock - (int) $item['qty'];
+                
+                if ($newStock < 0) {
+                    throw new \RuntimeException('Insufficient stock for item: ' . $item['name'] . ' (Current: ' . $currentStock . ', Required: ' . $item['qty'] . ')');
+                }
+                
+                // Log the stock update attempt
+                log_message('info', 'Updating stock for item: ' . $item['name'] . ' (ID: ' . $item['id'] . ') from ' . $currentStock . ' to ' . $newStock);
+                
+                $ok = $this->productModel->update((int) $item['id'], ['stock' => $newStock]);
+                if (!$ok) {
+                    // Get validation errors if any
+                    $errors = $this->productModel->errors();
+                    $errorMsg = 'Failed to update stock for item: ' . $item['name'];
+                    if (!empty($errors)) {
+                        $errorMsg .= ' Validation errors: ' . implode(', ', $errors);
+                    }
+                    throw new \RuntimeException($errorMsg);
+                }
+                
+                log_message('info', 'Stock updated successfully for item: ' . $item['name']);
+            }
+
+            // Update order status to completed with cashiering data
+            $changeAmount = $amountReceived - (float) $order['total_amount'];
+            $cashieringNotes = [
+                'processed_by' => session()->get('user_name'),
+                'payment_method' => $paymentMethod,
+                'amount_received' => $amountReceived,
+                'change_given' => $changeAmount,
+                'age_verified' => $ageVerified,
+                'processed_at' => date('Y-m-d H:i:s')
+            ];
+
+            $updateOk = $recordModel->update($orderId, [
+                'status' => 'completed',
+                'payment_status' => 'paid',
+                'payment_method' => $paymentMethod,
+                'description' => $order['description'] . ' - Processed by admin',
+                'notes' => json_encode(array_merge(json_decode($order['notes'] ?? '{}', true) ?: [], $cashieringNotes))
+            ]);
+
+            if (!$updateOk) {
+                throw new \RuntimeException('Failed to update order status.');
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Checkout processing failed.');
+            }
+
+            return $this->response->setStatusCode(200)->setJSON([
+                'success' => true,
+                'message' => 'Payment processed successfully! Order completed and stock updated.',
+                'order_id' => $orderId
+            ]);
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
     }
 
     /**

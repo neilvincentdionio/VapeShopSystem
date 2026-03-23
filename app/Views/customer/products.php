@@ -95,6 +95,118 @@
         gap: 1rem;
         margin-bottom: 2rem;
     }
+
+    .products-layout {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .cart-sidebar {
+        position: sticky;
+        top: 110px;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .cart-sidebar h2 {
+        font-size: 1.05rem;
+        font-weight: 900;
+        color: #333333;
+        margin-bottom: .75rem;
+    }
+
+    .cart-sidebar .cart-empty-text {
+        color: #666666;
+        line-height: 1.6;
+        margin-top: .25rem;
+        margin-bottom: 1rem;
+        font-size: .95rem;
+    }
+
+    .cart-mini-items {
+        display: grid;
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+
+    .cart-mini-item {
+        display: grid;
+        grid-template-columns: 54px 1fr;
+        gap: .7rem;
+        align-items: center;
+        padding: .75rem;
+        border: 1px solid #eaeaea;
+        border-radius: 14px;
+        background: #fff;
+    }
+
+    .cart-mini-thumb {
+        width: 54px;
+        height: 44px;
+        border-radius: 12px;
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 18px;
+    }
+
+    .cart-mini-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .cart-mini-title {
+        font-weight: 900;
+        color: #333333;
+        margin-bottom: .25rem;
+        line-height: 1.2;
+    }
+
+    .cart-mini-meta {
+        color: #666666;
+        font-size: .9rem;
+        display: flex;
+        gap: .75rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .cart-sidebar .cart-summary {
+        border-top: 1px solid #eaeaea;
+        padding-top: 1rem;
+        display: grid;
+        gap: .75rem;
+    }
+
+    .cart-sidebar .cart-total {
+        font-size: 1.1rem;
+        font-weight: 1000;
+        color: #333333;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+    }
+
+    .btn-danger {
+        border-color: #dc3545;
+        color: #dc3545;
+        background: transparent;
+    }
+
+    .btn-danger:hover {
+        background: rgba(220, 53, 69, 0.1);
+    }
     
     .product-card {
         background: white;
@@ -271,6 +383,14 @@
         .products-container {
             padding: 1rem;
         }
+
+        .products-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .cart-sidebar {
+            position: static;
+        }
         
         .products-grid {
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -295,6 +415,55 @@
         .products-grid {
             grid-template-columns: 1fr;
         }
+    }
+
+    /* Toast notification styles */
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #333;
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 300px;
+        transform: translateX(400px);
+        transition: transform 0.3s ease;
+    }
+
+    .toast.show {
+        transform: translateX(0);
+    }
+
+    .toast.processing {
+        background: #00bcd4;
+    }
+
+    .toast.success {
+        background: #27c56f;
+    }
+
+    .toast.error {
+        background: #dc3545;
+    }
+
+    .toast-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
 </style>
 
@@ -332,83 +501,492 @@
         </form>
     </div>
     
-    <?php if (isset($products) && !empty($products)): ?>
-        <div class="products-grid">
-            <?php foreach ($products as $product): ?>
-                <div class="product-card">
-                    <div class="product-image">
-                        <?php if ($product['image']): ?>
-                            <img src="<?= base_url('uploads/products/' . $product['image']) ?>" 
-                                 alt="<?= esc($product['name']) ?>">
-                        <?php else: ?>
-                            <i class="fas fa-vape-vape"></i>
-                        <?php endif; ?>
-                        
-                        <?php if ($product['stock'] <= 0): ?>
-                            <span class="product-badge out-of-stock">Out of Stock</span>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="product-content">
-                        <div class="product-category"><?= esc($product['category']) ?></div>
-                        <h3 class="product-name"><?= esc($product['name']) ?></h3>
-                        <p class="product-description">
-                            <?= esc($product['description'] ?? 'Premium quality product for the best vaping experience.') ?>
-                        </p>
-                        <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
-                        <div class="product-stock <?= $product['stock'] <= 10 ? 'low-stock' : '' ?>">
-                            <?php if ($product['stock'] <= 0): ?>
-                                Out of Stock
-                            <?php elseif ($product['stock'] <= 10): ?>
-                                Only <?= $product['stock'] ?> left!
-                            <?php else: ?>
-                                In Stock (<?= $product['stock'] ?> available)
-                            <?php endif; ?>
-                        </div>
-                        
-                        <div class="product-actions">
-                            <a href="<?= site_url('customer/product/' . $product['id']) ?>" 
-                               class="btn btn-outline">
-                                View Details
-                            </a>
-                            <button class="btn btn-primary" 
-                                    onclick="addToCart(<?= $product['id'] ?>)"
-                                    <?= $product['stock'] <= 0 ? 'disabled' : '' ?>>
-                                <?php if ($product['stock'] <= 0): ?>
-                                    Out of Stock
+    <div class="products-layout">
+        <div class="products-main">
+            <?php if (isset($products) && !empty($products)): ?>
+                <div class="products-grid">
+                    <?php foreach ($products as $product): ?>
+                        <div class="product-card" onclick="showProductDescription(<?= htmlspecialchars(json_encode($product)) ?>)">
+                            <div class="product-image">
+                                <?php if ($product['image']): ?>
+                                    <img src="<?= base_url('uploads/products/' . $product['image']) ?>" 
+                                         alt="<?= esc($product['name']) ?>">
                                 <?php else: ?>
-                                    Add to Cart
+                                    <i class="fas fa-vape-vape"></i>
                                 <?php endif; ?>
-                            </button>
+                                
+                                <?php if ($product['stock'] <= 0): ?>
+                                    <span class="product-badge out-of-stock">Out of Stock</span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="product-content">
+                                <div class="product-category"><?= esc($product['category']) ?></div>
+                                <h3 class="product-name"><?= esc($product['name']) ?></h3>
+                                <p class="product-description">
+                                    <?= esc($product['description'] ?? 'Premium quality product for the best vaping experience.') ?>
+                                </p>
+                                <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
+                                <div class="product-stock <?= $product['stock'] <= 10 ? 'low-stock' : '' ?>">
+                                    <?php if ($product['stock'] <= 0): ?>
+                                        Out of Stock
+                                    <?php elseif ($product['stock'] <= 10): ?>
+                                        Only <?= $product['stock'] ?> left!
+                                    <?php else: ?>
+                                        In Stock (<?= $product['stock'] ?> available)
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="product-actions">
+                                    <a href="<?= site_url('customer/product/' . $product['id']) ?>" 
+                                       class="btn btn-outline"
+                                       onclick="event.stopPropagation()">
+                                        View Details
+                                    </a>
+                                    <button class="btn btn-primary" 
+                                            onclick="event.stopPropagation(); addToCart(<?= $product['id'] ?>)"
+                                            <?= ($product['stock'] <= 0 || empty($age_allowed)) ? 'disabled' : '' ?>>
+                                        <?php if ($product['stock'] <= 0): ?>
+                                            Out of Stock
+                                        <?php elseif (empty($age_allowed)): ?>
+                                            18+ Required
+                                        <?php else: ?>
+                                            Add to Cart
+                                        <?php endif; ?>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    <?php endforeach; ?>
                 </div>
-            <?php endforeach; ?>
-        </div>
-    <?php else: ?>
-        <div class="empty-state">
-            <i class="fas fa-box-open"></i>
-            <h3>No products found</h3>
-            <p>
-                <?php if (!empty($search ?? '') || ($selectedCategory ?? 'all') !== 'all'): ?>
-                    Try adjusting your search or filter criteria.
-                <?php else: ?>
-                    Products will be available soon. Check back later!
-                <?php endif; ?>
-            </p>
-            <?php if (!empty($search ?? '') || ($selectedCategory ?? 'all') !== 'all'): ?>
-                <a href="<?= site_url('customer/products') ?>" class="btn btn-primary">
-                    Clear Filters
-                </a>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No products found</h3>
+                    <p>
+                        <?php if (!empty($search ?? '') || ($selectedCategory ?? 'all') !== 'all'): ?>
+                            Try adjusting your search or filter criteria.
+                        <?php else: ?>
+                            Products will be available soon. Check back later!
+                        <?php endif; ?>
+                    </p>
+                    <?php if (!empty($search ?? '') || ($selectedCategory ?? 'all') !== 'all'): ?>
+                        <a href="<?= site_url('customer/products') ?>" class="btn btn-primary">
+                            Clear Filters
+                        </a>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
-    <?php endif; ?>
+
+        <aside class="cart-sidebar">
+            <h2>Cart</h2>
+            <?php if (!empty($cart_items)): ?>
+                <div class="cart-mini-items">
+                    <?php foreach ($cart_items as $item): ?>
+                        <div class="cart-mini-item">
+                            <div class="cart-mini-thumb">
+                                <?php if (!empty($item['image'])): ?>
+                                    <img src="<?= base_url('uploads/products/' . $item['image']) ?>" alt="<?= esc($item['name'] ?? '') ?>">
+                                <?php else: ?>
+                                    🛒
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <div class="cart-mini-title"><?= esc($item['name'] ?? '') ?></div>
+                                <div class="cart-mini-meta">
+                                    <span>Qty: <?= (int) ($item['quantity'] ?? 0) ?></span>
+                                    <span>₱<?= number_format((float) ($item['amount'] ?? 0), 2) ?></span>
+                                </div>
+                                <div style="margin-top:.6rem;">
+                                    <form method="post" action="<?= site_url('customer/cart/remove') ?>">
+                                        <input type="hidden" name="product_id" value="<?= (int) ($item['id'] ?? 0) ?>">
+                                        <button type="submit" class="btn btn-danger" style="padding:.45rem .8rem; width:auto; font-size:.7rem;">
+                                            Remove
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="cart-empty-text">
+                    <div class="cart-icon" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#27c56f,#7ef0b2); color:#fff; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 1rem;">
+                        🛒
+                    </div>
+                    <div class="cart-empty-text">Your cart is empty.</div>
+                    <div class="cart-empty-text">Add items from the list on the left.</div>
+                </div>
+            <?php endif; ?>
+
+            <div class="cart-summary">
+                <div class="cart-total">
+                    <span>Total</span>
+                    <span>₱<?= number_format((float) ($cart_total ?? 0), 2) ?></span>
+                </div>
+
+                <?php if (!empty($age_allowed)): ?>
+                    <button class="btn btn-primary" 
+                            onclick="processDirectOrder()"
+                            <?= empty($cart_items) ? 'disabled' : '' ?>
+                            style="display:inline-flex; width:100%; justify-content:center;">
+                        Order it
+                    </button>
+                <?php else: ?>
+                    <a class="btn btn-outline" href="<?= site_url('customer/age-verification') ?>" style="display:inline-flex; width:100%; justify-content:center; border-width:2px;">
+                        Verify 18+
+                    </a>
+                <?php endif; ?>
+            </div>
+        </aside>
+    </div>
 </div>
 
 <script>
+const addUrl = '<?= site_url('customer/cart/add') ?>';
+const cartUrl = '<?= site_url('customer/cart') ?>';
+const directOrderUrl = '<?= site_url('customer/direct-order') ?>';
+
+function showToast(message, type = 'processing', showSpinner = false) {
+    // Remove existing toast if any
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+
+    // Create new toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    let content = '';
+    if (showSpinner) {
+        content += '<div class="toast-spinner"></div>';
+    }
+    content += `<span>${message}</span>`;
+    
+    toast.innerHTML = content;
+    document.body.appendChild(toast);
+    
+    // Show toast
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Auto hide after 3 seconds for success/error, 5 seconds for processing
+    const hideTime = type === 'processing' ? 5000 : 3000;
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, hideTime);
+}
+
+function processDirectOrder() {
+    // Show processing toast
+    showToast('Processing your Order. Please Wait for Checkout', 'processing', true);
+    
+    // Make AJAX request to process order
+    fetch(directOrderUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: ''
+    })
+    .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        
+        if (res.ok && data && data.success) {
+            // Show success toast
+            showToast('Order processed successfully!', 'success', false);
+            
+            // Redirect to orders page after a short delay
+            setTimeout(() => {
+                window.location.href = data.redirect || '<?= site_url('customer/orders') ?>';
+            }, 1500);
+        } else {
+            // Handle error or age verification redirect
+            if (data && data.redirect) {
+                showToast('Redirecting to age verification...', 'processing', false);
+                setTimeout(() => {
+                    window.location.href = data.redirect;
+                }, 1500);
+            } else {
+                showToast(data?.message || 'Failed to process order. Please try again.', 'error', false);
+            }
+        }
+    })
+    .catch(() => {
+        showToast('Network error. Please try again.', 'error', false);
+    });
+}
+
 function addToCart(productId) {
-    // This will be implemented when we add cart functionality
-    alert('Add to cart functionality will be implemented soon!');
+    const payload = new URLSearchParams({ product_id: productId, quantity: 1 });
+    fetch(addUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: payload
+    })
+        .then(async (res) => {
+            const data = await res.json().catch(() => null);
+            if (res.ok && data && data.success) {
+                // Stay on the products page and refresh so the right-side cart panel updates
+                window.location.reload();
+                return;
+            }
+
+            if (data && data.ageVerificationUrl) {
+                window.location.href = data.ageVerificationUrl;
+                return;
+            }
+
+            alert((data && data.message) ? data.message : 'Failed to add to cart.');
+        })
+        .catch(() => {
+            alert('Network error. Please try again.');
+        });
+}
+
+// Product Description Modal
+function showProductDescription(product) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('productModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'productModal';
+        modal.className = 'product-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeProductModal()">&times;</span>
+                <div class="modal-header">
+                    <div class="modal-image">
+                        <img id="modalProductImage" src="" alt="">
+                    </div>
+                    <div class="modal-info">
+                        <h2 id="modalProductName"></h2>
+                        <p id="modalProductCategory"></p>
+                        <div class="modal-price" id="modalProductPrice"></div>
+                        <div class="modal-stock" id="modalProductStock"></div>
+                    </div>
+                </div>
+                <div class="modal-description">
+                    <h3>Product Description</h3>
+                    <p id="modalProductDescription"></p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" onclick="closeProductModal()">Close</button>
+                    <button class="btn btn-primary" id="modalAddToCartBtn" onclick="addToCartFromModal()">
+                        Add to Cart
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Add modal styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .product-modal {
+                display: none;
+                position: fixed;
+                z-index: 1000;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0,0,0,0.5);
+                animation: fadeIn 0.3s;
+            }
+            
+            .product-modal.show {
+                display: block;
+            }
+            
+            .modal-content {
+                background-color: white;
+                margin: 5% auto;
+                padding: 0;
+                border-radius: 16px;
+                width: 90%;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow-y: auto;
+                animation: slideIn 0.3s;
+            }
+            
+            .close-modal {
+                position: absolute;
+                right: 20px;
+                top: 15px;
+                font-size: 28px;
+                font-weight: bold;
+                cursor: pointer;
+                color: #666;
+                z-index: 10;
+            }
+            
+            .close-modal:hover {
+                color: #333;
+            }
+            
+            .modal-header {
+                display: flex;
+                padding: 2rem;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .modal-image {
+                flex: 0 0 200px;
+                margin-right: 1.5rem;
+            }
+            
+            .modal-image img {
+                width: 100%;
+                height: 200px;
+                object-fit: cover;
+                border-radius: 8px;
+            }
+            
+            .modal-info {
+                flex: 1;
+            }
+            
+            .modal-info h2 {
+                margin: 0 0 0.5rem 0;
+                color: #333;
+                font-size: 1.5rem;
+            }
+            
+            .modal-info p {
+                margin: 0 0 1rem 0;
+                color: #666;
+                font-weight: 600;
+            }
+            
+            .modal-price {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #00bcd4;
+                margin-bottom: 0.5rem;
+            }
+            
+            .modal-stock {
+                font-weight: 600;
+                color: #666;
+            }
+            
+            .modal-description {
+                padding: 2rem;
+            }
+            
+            .modal-description h3 {
+                margin: 0 0 1rem 0;
+                color: #333;
+                font-size: 1.2rem;
+            }
+            
+            .modal-description p {
+                line-height: 1.6;
+                color: #666;
+                margin: 0;
+            }
+            
+            .modal-actions {
+                padding: 1.5rem 2rem;
+                border-top: 1px solid #e0e0e0;
+                display: flex;
+                gap: 1rem;
+                justify-content: flex-end;
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            
+            @keyframes slideIn {
+                from { transform: translateY(-50px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            
+            @media (max-width: 768px) {
+                .modal-header {
+                    flex-direction: column;
+                    text-align: center;
+                }
+                
+                .modal-image {
+                    margin-right: 0;
+                    margin-bottom: 1rem;
+                }
+                
+                .modal-content {
+                    margin: 10% auto;
+                    width: 95%;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(modal);
+    }
+    
+    // Update modal content
+    document.getElementById('modalProductImage').src = product.image ? 
+        '<?= base_url('uploads/products/') ?>' + product.image : '';
+    document.getElementById('modalProductImage').alt = product.name;
+    document.getElementById('modalProductName').textContent = product.name;
+    document.getElementById('modalProductCategory').textContent = product.category;
+    document.getElementById('modalProductPrice').textContent = '₱' + parseFloat(product.price).toFixed(2);
+    
+    // Stock status
+    const stockElement = document.getElementById('modalProductStock');
+    if (product.stock <= 0) {
+        stockElement.textContent = 'Out of Stock';
+        stockElement.style.color = '#dc3545';
+    } else if (product.stock <= 10) {
+        stockElement.textContent = 'Only ' + product.stock + ' left!';
+        stockElement.style.color = '#ff9800';
+    } else {
+        stockElement.textContent = 'In Stock (' + product.stock + ' available)';
+        stockElement.style.color = '#27c56f';
+    }
+    
+    document.getElementById('modalProductDescription').textContent = 
+        product.description || 'Premium quality product for the best vaping experience.';
+    
+    // Update add to cart button
+    const addToCartBtn = document.getElementById('modalAddToCartBtn');
+    if (product.stock <= 0) {
+        addToCartBtn.textContent = 'Out of Stock';
+        addToCartBtn.disabled = true;
+    } else {
+        addToCartBtn.textContent = 'Add to Cart';
+        addToCartBtn.disabled = false;
+        addToCartBtn.onclick = function() {
+            addToCart(product.id);
+            closeProductModal();
+        };
+    }
+    
+    // Show modal
+    modal.classList.add('show');
+}
+
+function closeProductModal() {
+    const modal = document.getElementById('productModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('productModal');
+    if (event.target === modal) {
+        closeProductModal();
+    }
 }
 </script>
 
