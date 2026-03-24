@@ -4,7 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title) ?> - E-Commerce Vape Shop System</title>
-    <style>
+    
+<?php
+// Helper function to get delivery status labels
+if (!function_exists('getDeliveryStatusLabel')) {
+    function getDeliveryStatusLabel($status) {
+        $labels = [
+            'to_pay' => 'To Pay',
+            'to_ship' => 'To Ship',
+            'to_receive' => 'To Receive',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+            'return_refund' => 'Return/Refund'
+        ];
+        
+        return $labels[$status] ?? ucfirst($status);
+    }
+}
+?>
+
+<style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
@@ -275,19 +294,34 @@
             text-transform: uppercase;
         }
         
+        .status-to_pay {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-to_ship {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .status-to_receive {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
         .status-completed {
             background: #e8f5e8;
             color: #2e7d2e;
         }
         
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
         .status-cancelled {
             background: #f8d7da;
             color: #721c24;
+        }
+        
+        .status-return_refund {
+            background: #e2e3e5;
+            color: #383d41;
         }
         
         .payment-method {
@@ -446,6 +480,7 @@
                         <th>Total</th>
                         <th>Payment</th>
                         <th>Status</th>
+                        <th>Delivery Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -502,6 +537,11 @@
                                 </div>
                             </td>
                             <td>
+                                <div class="order-status status-<?= esc(str_replace('_', '-', $order['delivery_status'] ?? 'to_pay')) ?>">
+                                    <?= getDeliveryStatusLabel($order['delivery_status'] ?? 'to_pay') ?>
+                                </div>
+                            </td>
+                            <td>
                                 <?php if ($order['status'] === 'pending'): ?>
                                     <button class="btn-checkout" onclick="processAdminCheckout(<?= $order['id'] ?>)">
                                         <i class="fas fa-cash-register"></i>
@@ -512,6 +552,13 @@
                                         <i class="fas fa-check"></i>
                                         Completed
                                     </span>
+                                <?php endif; ?>
+                                
+                                <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive'])): ?>
+                                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, '<?= $order['delivery_status'] === 'to_ship' ? 'to_receive' : 'completed' ?>')">
+                                        <i class="fas fa-truck"></i>
+                                        <?= $order['delivery_status'] === 'to_ship' ? 'Mark as Shipped' : 'Mark as Delivered' ?>
+                                    </button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -531,6 +578,35 @@
 <script>
 function processAdminCheckout(orderId) {
     window.location.href = '<?= site_url('orders/checkout/') ?>' + orderId;
+}
+
+function updateDeliveryStatus(orderId, newStatus) {
+    if (confirm('Are you sure you want to update the delivery status?')) {
+        fetch('<?= site_url('orders/update-delivery-status') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                order_id: orderId,
+                status: newStatus
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Delivery status updated successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating the status.');
+        });
+    }
 }
 </script>
 

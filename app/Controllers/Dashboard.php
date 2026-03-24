@@ -235,12 +235,19 @@ class Dashboard extends BaseController
         $userId = (int) $this->session->get('user_id');
         $recordModel = new RecordModel();
         
-        // Get customer's orders (sales records)
-        $orders = $recordModel
-            ->where('record_type', 'sales')
-            ->where('created_by', $userId)
-            ->orderBy('created_at', 'DESC')
-            ->findAll();
+        // Get active tab from query parameter
+        $activeTab = $this->request->getGet('tab') ?? 'all';
+        $validTabs = ['all', 'to_pay', 'to_ship', 'to_receive', 'completed', 'cancelled', 'return_refund'];
+        
+        if (!in_array($activeTab, $validTabs)) {
+            $activeTab = 'all';
+        }
+        
+        // Get orders based on active tab
+        $orders = $recordModel->getOrdersByDeliveryStatus($userId, $activeTab === 'all' ? null : $activeTab);
+        
+        // Get status counts for badges
+        $statusCounts = $recordModel->getOrderStatusCounts($userId);
 
         // Parse order items from notes
         $orderDetails = [];
@@ -262,12 +269,18 @@ class Dashboard extends BaseController
                 'total_amount' => $order['total_amount'],
                 'payment_method' => $order['payment_method'],
                 'status' => $order['status'],
+                'delivery_status' => $order['delivery_status'] ?? 'to_pay',
+                'tracking_number' => $order['tracking_number'],
+                'shipping_address' => $order['shipping_address'],
+                'contact_number' => $order['contact_number'],
                 'items' => $orderItems
             ];
         }
 
         return view('customer/orders', $this->getCustomerPageData('Orders', 'orders', [
             'orders' => $orderDetails,
+            'activeTab' => $activeTab,
+            'statusCounts' => $statusCounts,
         ]));
     }
 
@@ -502,6 +515,7 @@ class Dashboard extends BaseController
                 'payment_method' => 'cash',
                 'payment_status' => 'pending',
                 'status' => 'pending',
+                'delivery_status' => 'to_pay',
                 'notes' => $notes,
                 'created_by' => $customerId > 0 ? $customerId : null,
             ]);
@@ -663,6 +677,7 @@ class Dashboard extends BaseController
                 'payment_method' => 'cash',
                 'payment_status' => 'paid',
                 'status' => 'completed',
+                'delivery_status' => 'to_ship',
                 'notes' => $notes,
                 'created_by' => $customerId > 0 ? $customerId : null,
             ]);
@@ -952,6 +967,8 @@ class Dashboard extends BaseController
                 'total_amount' => $order['total_amount'],
                 'payment_method' => $order['payment_method'],
                 'status' => $order['status'],
+                'delivery_status' => $order['delivery_status'] ?? 'to_pay',
+                'tracking_number' => $order['tracking_number'],
                 'items' => $orderItems,
                 'customer' => $customerInfo
             ];
@@ -1162,6 +1179,7 @@ class Dashboard extends BaseController
                 'status' => 'completed',
                 'payment_status' => 'paid',
                 'payment_method' => $paymentMethod,
+                'delivery_status' => 'to_ship',
                 'description' => $order['description'] . ' - Processed by admin',
                 'notes' => json_encode(array_merge(json_decode($order['notes'] ?? '{}', true) ?: [], $cashieringNotes))
             ]);
@@ -1188,6 +1206,150 @@ class Dashboard extends BaseController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Settings page
+     */
+    public function settings()
+    {
+        // Check authentication
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        $userRole = (string) $this->session->get('user_role');
+
+        if ($userRole === 'customer') {
+            // For customers, redirect to profile
+            return redirect()->to('/dashboard/profile');
+        }
+
+        // For admin, show settings page
+        $data = [
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => $userRole,
+            'user_shop_name' => $this->session->get('user_shop_name'),
+            'page_title' => 'Settings'
+        ];
+
+        return view('admin/dashboard/settings', $data);
+    }
+
+    /**
+     * Update delivery status (AJAX endpoint for admin)
+     */
+    public function updateDeliveryStatus()
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Access denied. Admin privileges required.'
+            ]);
+        }
+
+        $orderId = (int) $this->request->getJSON('order_id');
+        $newStatus = $this->request->getJSON('status');
+
+        if (!$orderId || !$newStatus) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'message' => 'Invalid request parameters.'
+            ]);
+        }
+
+        $validStatuses = ['to_ship', 'to_receive', 'completed'];
+        if (!in_array($newStatus, $validStatuses)) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'message' => 'Invalid delivery status.'
+            ]);
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'message' => 'Order not found.'
+            ]);
+        }
+
+        // Generate tracking number if marking as to_ship
+        $additionalData = [];
+        if ($newStatus === 'to_ship' && empty($order['tracking_number'])) {
+            $additionalData['tracking_number'] = $this->generateTrackingNumber();
+        }
+
+        try {
+            // Use direct database query to avoid RecordModel method issues
+            $db = \Config\Database::connect();
+            
+            $updateData = [
+                'delivery_status' => $newStatus
+            ];
+            
+            // Add timestamps based on status
+            if ($newStatus === 'to_ship') {
+                $updateData['shipped_at'] = date('Y-m-d H:i:s');
+            } elseif ($newStatus === 'completed') {
+                $updateData['delivered_at'] = date('Y-m-d H:i:s');
+            }
+            
+            // Add tracking number if marking as to_ship
+            if ($newStatus === 'to_ship' && empty($order['tracking_number'])) {
+                $trackingNumber = $this->generateTrackingNumber();
+                $updateData['tracking_number'] = $trackingNumber;
+            }
+            
+            // Direct database update using query builder
+            $builder = $db->table('records');
+            $result = $builder->where('id', $orderId)->update($updateData);
+            
+            if ($result) {
+                return $this->response->setStatusCode(200)->setJSON([
+                    'success' => true,
+                    'message' => 'Delivery status updated successfully.'
+                ]);
+            } else {
+                return $this->response->setStatusCode(500)->setJSON([
+                    'success' => false,
+                    'message' => 'Failed to update delivery status.'
+                ]);
+            }
+            
+        } catch (\Throwable $e) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    private function generateTrackingNumber(): string
+    {
+        $datePart = date('Ymd');
+        $randomPart = random_int(1000, 9999);
+        return 'TRK-' . $datePart . '-' . $randomPart;
     }
 
     /**
@@ -1228,31 +1390,210 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Settings page (admin only)
+     * Simple test method for order details
      */
-    public function settings()
+    public function testOrderDetails()
     {
-        // Check authentication
-        $authCheck = $this->checkAuth();
-        if ($authCheck !== true) {
-            return $authCheck;
+        // Redirect to the clean standalone page
+        return redirect()->to(base_url('order_details_standalone.html'));
+    }
+
+    /**
+     * Direct order details view (for testing)
+     */
+    public function viewOrderDetailsDirect($orderId)
+    {
+        log_message('info', 'viewOrderDetailsDirect called with orderId: ' . $orderId);
+        
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            log_message('error', 'Order not found for orderId: ' . $orderId);
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
         }
 
-        // Check if user is admin
-        if ($this->session->get('user_role') !== 'admin') {
-            return redirect()->to('/dashboard')
-                           ->with('error', 'Access denied. Admin privileges required.');
+        // Parse order items
+        $notes = $order['notes'] ?? '';
+        $orderItems = [];
+        
+        if (!empty($notes)) {
+            $decoded = json_decode($notes, true);
+            if ($decoded && isset($decoded['items'])) {
+                $orderItems = $decoded['items'];
+            }
         }
 
-        $data = [
-            'user_name' => $this->session->get('user_name'),
-            'user_email' => $this->session->get('user_email'),
-            'user_role' => $this->session->get('user_role'),
-            'user_shop_name' => $this->session->get('user_shop_name'),
-            'page_title' => 'Settings'
-        ];
+        return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
+            'order' => $order,
+            'items' => $orderItems
+        ]));
+    }
 
-        return view('admin/dashboard/settings', $data);
+    /**
+     * Debug method to test routing
+     */
+    public function debugTest($param1 = null, $param2 = null)
+    {
+        echo "Debug Test Method Called!<br>";
+        echo "Param1: " . $param1 . "<br>";
+        echo "Param2: " . $param2 . "<br>";
+        echo "Session User ID: " . $this->session->get('user_id') . "<br>";
+        echo "Session User Role: " . $this->session->get('user_role') . "<br>";
+        echo "Current URL: " . current_url() . "<br>";
+        die();
+    }
+
+    /**
+     * Order action handlers for Shopee-like delivery process
+     */
+    public function customerOrderAction($orderId, $action)
+    {
+        // Debug logging
+        log_message('info', 'customerOrderAction called with orderId: ' . $orderId . ', action: ' . $action);
+        
+        // Check if we're in test mode (no session required)
+        $isTestMode = strpos(current_url(), 'test-order-action') !== false;
+        
+        if (!$isTestMode) {
+            $accessCheck = $this->checkCustomerAccess();
+            if ($accessCheck !== true) {
+                log_message('error', 'Access check failed for customerOrderAction');
+                return $accessCheck;
+            }
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            log_message('error', 'Order not found for orderId: ' . $orderId);
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        // For test mode, skip ownership check
+        if (!$isTestMode && $order['created_by'] != $this->session->get('user_id')) {
+            log_message('error', 'Access denied for orderId: ' . $orderId);
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        log_message('info', 'Processing action: ' . $action . ' for order: ' . $orderId);
+
+        switch ($action) {
+            case 'pay':
+                return $this->processOrderPayment($order);
+            
+            case 'cancel':
+                return $this->cancelOrder($order);
+            
+            case 'confirm':
+                return $this->confirmOrderReceived($order);
+            
+            case 'reorder':
+                return $this->reorderItems($order);
+            
+            case 'review':
+                return $this->reviewOrder($order);
+            
+            case 'view':
+                return $this->viewOrderDetails($order);
+            
+            default:
+                log_message('error', 'Invalid action: ' . $action);
+                return redirect()->to('/customer/orders')->with('error', 'Invalid action.');
+        }
+    }
+
+    private function processOrderPayment($order)
+    {
+        if ($order['delivery_status'] !== 'to_pay') {
+            return redirect()->to('/customer/orders')->with('error', 'Order cannot be paid.');
+        }
+
+        // Update payment status and delivery status
+        $recordModel = new RecordModel();
+        $recordModel->update($order['id'], [
+            'payment_status' => 'paid',
+            'delivery_status' => 'to_ship'
+        ]);
+
+        return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
+    }
+
+    private function cancelOrder($order)
+    {
+        if (!in_array($order['delivery_status'], ['to_pay', 'to_ship'])) {
+            return redirect()->to('/customer/orders')->with('error', 'Order cannot be cancelled.');
+        }
+
+        $recordModel = new RecordModel();
+        $recordModel->update($order['id'], [
+            'delivery_status' => 'cancelled',
+            'status' => 'cancelled'
+        ]);
+
+        return redirect()->to('/customer/orders')->with('success', 'Order cancelled successfully.');
+    }
+
+    private function confirmOrderReceived($order)
+    {
+        if ($order['delivery_status'] !== 'to_receive') {
+            return redirect()->to('/customer/orders')->with('error', 'Order cannot be confirmed.');
+        }
+
+        $recordModel = new RecordModel();
+        $recordModel->update($order['id'], [
+            'delivery_status' => 'completed',
+            'status' => 'completed'
+        ]);
+
+        return redirect()->to('/customer/orders')->with('success', 'Order confirmed as received. Thank you!');
+    }
+
+    private function reorderItems($order)
+    {
+        // Add items back to cart
+        $notes = $order['notes'] ?? '';
+        $cartItems = [];
+        
+        if (!empty($notes)) {
+            $decoded = json_decode($notes, true);
+            if ($decoded && isset($decoded['items'])) {
+                foreach ($decoded['items'] as $item) {
+                    $cartItems[$item['id']] = $item['qty'];
+                }
+            }
+        }
+
+        $this->setCustomerCartRawItems($cartItems);
+
+        return redirect()->to('/customer/cart')->with('success', 'Items added to cart. You can now checkout.');
+    }
+
+    private function reviewOrder($order)
+    {
+        // For now, redirect to orders with a message
+        // In a real implementation, this would go to a review page
+        return redirect()->to('/customer/orders')->with('info', 'Review feature coming soon!');
+    }
+
+    private function viewOrderDetails($order)
+    {
+        // Parse order items
+        $notes = $order['notes'] ?? '';
+        $orderItems = [];
+        
+        if (!empty($notes)) {
+            $decoded = json_decode($notes, true);
+            if ($decoded && isset($decoded['items'])) {
+                $orderItems = $decoded['items'];
+            }
+        }
+
+        return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
+            'order' => $order,
+            'items' => $orderItems
+        ]));
     }
 
     /**
