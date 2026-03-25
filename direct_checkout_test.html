@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Checkout Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-btn { background: #28a745; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 0; }
+        .result { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h2>Direct Checkout Test</h2>
+    <p>This will test the checkout page directly without going through the orders page.</p>
+    
+    <button class="test-btn" onclick="testCheckout()">Test Checkout Page Directly</button>
+    <button class="test-btn" onclick="testOrders()">Test Orders Page</button>
+    
+    <div id="result" class="result" style="display: none;"></div>
+    
+    <script>
+    function testCheckout() {
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('result').innerHTML = 'Testing checkout page...';
+        
+        fetch('http://localhost:8080/orders/checkout/2')
+            .then(response => response.text())
+            .then(html => {
+                if (html.includes('checkout') && html.includes('Order Checkout')) {
+                    document.getElementById('result').innerHTML = '✅ CHECKOUT PAGE WORKS! Page loaded successfully.';
+                    document.getElementById('result').style.background = '#d4edda';
+                } else {
+                    document.getElementById('result').innerHTML = '❌ CHECKOUT PAGE FAILED! Page content: ' + html.substring(0, 200) + '...';
+                    document.getElementById('result').style.background = '#f8d7da';
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').innerHTML = '❌ ERROR: ' + error.message;
+                document.getElementById('result').style.background = '#f8d7da';
+            });
+    }
+    
+    function testOrders() {
+        window.open('http://localhost:8080/orders', '_blank');
+    }
+    </script>
+</body>
+</html>

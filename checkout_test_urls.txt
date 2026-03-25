@@ -1,0 +1,35 @@
+=== Vape Shop System - Test URLs ===
+
+Server: http://localhost:8080
+
+CUSTOMER FLOW:
+1. Login/Register: http://localhost:8080
+2. Customer Home: http://localhost:8080/customer/home
+3. Browse Products: http://localhost:8080/customer/products
+4. View Cart: http://localhost:8080/customer/cart
+5. Checkout: http://localhost:8080/customer/checkout
+6. Age Verification: http://localhost:8080/customer/age-verification
+7. Orders History: http://localhost:8080/customer/orders
+
+ADMIN FLOW:
+1. Admin Login: http://localhost:8080 (admin@vapeshop.com / password)
+2. Admin Dashboard: http://localhost:8080/dashboard
+3. Orders Management: http://localhost:8080/orders
+4. Admin Checkout: http://localhost:8080/orders/checkout/{order_id}
+
+TESTING SEQUENCE:
+1. Register new customer account
+2. Login as customer
+3. Add products to cart
+4. Complete age verification (18+)
+5. Proceed to checkout
+6. Enter cash payment
+7. View receipt
+8. Check order history
+
+ADMIN TESTING:
+1. Login as admin
+2. View pending orders
+3. Process customer checkout
+4. Update stock
+5. Verify order completion
