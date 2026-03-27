@@ -15,7 +15,8 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_receive' => 'To Receive',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund'
+            'return_refund' => 'Return/Refund',
+            'failed_delivery' => 'Failed Delivery'
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -221,9 +222,15 @@ if (!function_exists('getDeliveryStatusLabel')) {
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
         
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
         .table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 1400px;
         }
         
         .table th {
@@ -324,6 +331,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
             color: #383d41;
         }
         
+        .status-failed_delivery {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
         .payment-method {
             display: flex;
             align-items: center;
@@ -363,6 +375,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            margin-bottom: 0.25rem;
         }
         
         .btn-checkout:hover {
@@ -371,17 +384,197 @@ if (!function_exists('getDeliveryStatusLabel')) {
             box-shadow: 0 2px 8px rgba(39, 197, 111, 0.3);
         }
         
-        .btn-completed {
-            background: #e8f5e8;
-            color: #2e7d2e;
+        .btn-transit {
+            background: #2196f3;
+            color: white;
+            border: none;
             padding: 0.5rem 1rem;
             border-radius: 8px;
             font-size: 0.85rem;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            border: 1px solid #c8e6c9;
+            margin-bottom: 0.25rem;
+        }
+        
+        .btn-transit:hover {
+            background: #1976d2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+        }
+        
+        .btn-delivered {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .btn-delivered:hover {
+            background: #388e3c;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+        
+        .btn-delivery {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-delivery:hover {
+            background: #f57c00;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+        }
+        
+        .btn-failed {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .btn-failed:hover {
+            background: #d32f2f;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-dialog {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: auto;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+        
+        .btn-primary {
+            background: #00bcd4;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
         }
         
         @media (max-width: 768px) {
@@ -400,16 +593,28 @@ if (!function_exists('getDeliveryStatusLabel')) {
             }
             
             .table {
-                font-size: 0.8rem;
+                font-size: 0.7rem;
+                min-width: 1200px;
             }
             
             .table th,
             .table td {
-                padding: 0.5rem;
+                padding: 0.3rem;
             }
             
             .order-items-preview {
-                max-width: 150px;
+                max-width: 100px;
+            }
+            
+            .tracking-number, .shipping-address, .contact-number {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 1024px) {
+            .table {
+                font-size: 0.75rem;
+                min-width: 1000px;
             }
         }
     </style>
@@ -470,7 +675,8 @@ if (!function_exists('getDeliveryStatusLabel')) {
         
         <!-- Orders Table -->
         <div class="orders-table">
-            <table class="table">
+            <div class="table-responsive">
+                <table class="table">
                 <thead>
                     <tr>
                         <th>Order ID</th>
@@ -481,6 +687,9 @@ if (!function_exists('getDeliveryStatusLabel')) {
                         <th>Payment</th>
                         <th>Status</th>
                         <th>Delivery Status</th>
+                        <th>Tracking Number</th>
+                        <th>Shipping Address</th>
+                        <th>Contact Number</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -488,7 +697,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <?php foreach ($orders as $order): ?>
                         <tr>
                             <td>
-                                <div class="order-id"><?= esc($order['reference_number']) ?></div>
+                                <div class="order-id">
+                                    <a href="<?= site_url('admin/order-details/' . $order['id']) ?>" style="color: inherit; text-decoration: none;">
+                                        <?= esc($order['reference_number']) ?>
+                                    </a>
+                                </div>
                             </td>
                             <td>
                                 <?= date('M j, Y', strtotime($order['date'])) ?>
@@ -542,22 +755,57 @@ if (!function_exists('getDeliveryStatusLabel')) {
                                 </div>
                             </td>
                             <td>
-                                <?php if ($order['status'] === 'pending'): ?>
-                                    <button class="btn-checkout" onclick="processAdminCheckout(<?= $order['id'] ?>)">
-                                        <i class="fas fa-cash-register"></i>
-                                        Checkout
+                                <span style="font-size: 0.85rem; color: #666;">
+                                    <?= esc($order['tracking_number'] ?: 'No tracking') ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span style="font-size: 0.8rem; color: #666; max-width: 150px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?= esc($order['shipping_address']) ?>">
+                                    <?= esc($order['shipping_address'] ?: 'Not provided') ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span style="font-size: 0.85rem; color: #666;">
+                                    <?= esc($order['contact_number'] ?: 'Not provided') ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($order['delivery_status'] === 'to_pay'): ?>
+                                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                                        <i class="fas fa-box"></i>
+                                        Preparing Package
                                     </button>
-                                <?php elseif ($order['status'] === 'completed'): ?>
-                                    <span class="btn-completed">
-                                        <i class="fas fa-check"></i>
-                                        Completed
-                                    </span>
                                 <?php endif; ?>
                                 
-                                <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive'])): ?>
-                                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, '<?= $order['delivery_status'] === 'to_ship' ? 'to_receive' : 'completed' ?>')">
+                                <?php if ($order['delivery_status'] === 'to_ship'): ?>
+                                    <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
                                         <i class="fas fa-truck"></i>
-                                        <?= $order['delivery_status'] === 'to_ship' ? 'Mark as Shipped' : 'Mark as Delivered' ?>
+                                        Package in Transit
+                                    </button>
+                                <?php endif; ?>
+                                
+                                <?php if ($order['delivery_status'] === 'to_receive'): ?>
+                                    <button class="btn-delivered" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
+                                        <i class="fas fa-check-circle"></i>
+                                        Package Delivered
+                                    </button>
+                                    <button class="btn-failed" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'failed_delivery')">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Failed Delivery
+                                    </button>
+                                <?php endif; ?>
+                                
+                                <?php if ($order['delivery_status'] === 'failed_delivery'): ?>
+                                    <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
+                                        <i class="fas fa-redo"></i>
+                                        Retry Delivery
+                                    </button>
+                                <?php endif; ?>
+                                
+                                <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive', 'failed_delivery'])): ?>
+                                    <button class="btn-delivery" onclick="openDeliveryModal(<?= $order['id'] ?>)">
+                                        <i class="fas fa-shipping-fast"></i>
+                                        Delivery Info
                                     </button>
                                 <?php endif; ?>
                             </td>
@@ -565,6 +813,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         </div>
     <?php else: ?>
         <div class="empty-state">
@@ -575,10 +824,107 @@ if (!function_exists('getDeliveryStatusLabel')) {
     <?php endif; ?>
 </div>
 
+<!-- Delivery Modal -->
+<div id="deliveryModal" class="modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-shipping-fast"></i> Delivery Information</h3>
+                <button class="close" onclick="closeDeliveryModal()">&times;</button>
+            </div>
+            <form id="deliveryForm">
+                <input type="hidden" id="deliveryOrderId" name="order_id">
+                
+                <div class="form-group">
+                    <label for="tracking_number">Tracking Number:</label>
+                    <input type="text" id="tracking_number" name="tracking_number" placeholder="Enter tracking number (optional)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="shipping_address">Shipping Address:</label>
+                    <textarea id="shipping_address" name="shipping_address" placeholder="Enter shipping address" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contact_number">Contact Number:</label>
+                    <input type="text" id="contact_number" name="contact_number" placeholder="Enter contact number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="delivery_notes">Delivery Notes:</label>
+                    <textarea id="delivery_notes" name="delivery_notes" placeholder="Enter delivery notes (optional)"></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeDeliveryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Delivery Info</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-function processAdminCheckout(orderId) {
-    window.location.href = 'http://localhost:8080/checkout/' + orderId;
+function openDeliveryModal(orderId) {
+    document.getElementById('deliveryOrderId').value = orderId;
+    document.getElementById('deliveryModal').style.display = 'block';
+    
+    // Load existing delivery data if available
+    fetch('<?= site_url('orders/get-delivery-info/') ?>' + orderId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('tracking_number').value = data.tracking_number || '';
+                document.getElementById('shipping_address').value = data.shipping_address || '';
+                document.getElementById('contact_number').value = data.contact_number || '';
+            }
+        })
+        .catch(error => console.error('Error loading delivery info:', error));
 }
+
+function closeDeliveryModal() {
+    document.getElementById('deliveryModal').style.display = 'none';
+    document.getElementById('deliveryForm').reset();
+}
+
+// Handle delivery form submission
+document.getElementById('deliveryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const orderId = formData.get('order_id');
+    
+    const deliveryData = {
+        order_id: parseInt(orderId),
+        tracking_number: formData.get('tracking_number'),
+        shipping_address: formData.get('shipping_address'),
+        contact_number: formData.get('contact_number'),
+        delivery_notes: formData.get('delivery_notes')
+    };
+    
+    fetch('<?= site_url('orders/save-delivery-info') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(deliveryData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Delivery information saved successfully!');
+            closeDeliveryModal();
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while saving delivery information.');
+    });
+});
 
 function updateDeliveryStatus(orderId, newStatus) {
     if (confirm('Are you sure you want to update the delivery status?')) {

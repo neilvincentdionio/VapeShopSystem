@@ -687,6 +687,12 @@ class Dashboard extends BaseController
             }
 
             $recordId = (int) $recordModel->getInsertID();
+            
+            // Auto-populate customer info for logged-in customers
+            if ($customerId > 0) {
+                $order = $recordModel->find($recordId);
+                $this->autoPopulateCustomerInfo($recordId, $order);
+            }
 
             $db->transComplete();
 
@@ -955,7 +961,9 @@ class Dashboard extends BaseController
                     $customerInfo = [
                         'id' => $customer['id'],
                         'name' => $customer['name'],
-                        'email' => $customer['email']
+                        'email' => $customer['email'],
+                        'phone' => $customer['phone'] ?? '',
+                        'address' => $customer['address'] ?? ''
                     ];
                 }
             }
@@ -969,6 +977,8 @@ class Dashboard extends BaseController
                 'status' => $order['status'],
                 'delivery_status' => $order['delivery_status'] ?? 'to_pay',
                 'tracking_number' => $order['tracking_number'],
+                'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?: 'Not provided'),
+                'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?: 'Not provided'),
                 'items' => $orderItems,
                 'customer' => $customerInfo
             ];
@@ -1143,6 +1153,9 @@ class Dashboard extends BaseController
             if (!$updateOk) {
                 throw new \RuntimeException('Failed to update order status.');
             }
+            
+            // Auto-populate customer info when order is set to to_ship
+            $this->autoPopulateCustomerInfo($orderId, $order);
 
             $db->transComplete();
 
@@ -1200,6 +1213,51 @@ class Dashboard extends BaseController
     }
 
     /**
+     * Auto-populate customer address and contact number for an order
+     */
+    private function autoPopulateCustomerInfo($orderId, $order)
+    {
+        if (!empty($order['created_by'])) {
+            $userModel = new UserModel();
+            $customer = $userModel->find($order['created_by']);
+            
+            if ($customer) {
+                $updateData = [];
+                
+                // Build full address from customer profile
+                $addressParts = [];
+                if (!empty($customer['address_line'])) {
+                    $addressParts[] = $customer['address_line'];
+                }
+                if (!empty($customer['city'])) {
+                    $addressParts[] = $customer['city'];
+                }
+                if (!empty($customer['province'])) {
+                    $addressParts[] = $customer['province'];
+                }
+                if (!empty($customer['postal_code'])) {
+                    $addressParts[] = $customer['postal_code'];
+                }
+                
+                // Only update if order doesn't already have this info
+                if (empty($order['shipping_address']) && !empty($addressParts)) {
+                    $updateData['shipping_address'] = implode(', ', $addressParts);
+                }
+                
+                if (empty($order['contact_number']) && !empty($customer['phone_number'])) {
+                    $updateData['contact_number'] = $customer['phone_number'];
+                }
+                
+                // Update the order if there's data to update
+                if (!empty($updateData)) {
+                    $recordModel = new RecordModel();
+                    $recordModel->update($orderId, $updateData);
+                }
+            }
+        }
+    }
+
+    /**
      * Update delivery status (AJAX endpoint for admin)
      */
     public function updateDeliveryStatus()
@@ -1222,21 +1280,22 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $orderId = (int) $this->request->getJSON('order_id');
-        $newStatus = $this->request->getJSON('status');
+        $input = $this->request->getJSON();
+        $orderId = (int) ($input->order_id ?? 0);
+        $newStatus = $input->status ?? '';
 
         if (!$orderId || !$newStatus) {
             return $this->response->setStatusCode(400)->setJSON([
                 'success' => false,
-                'message' => 'Invalid request parameters.'
+                'message' => 'Invalid request parameters. Order ID: ' . $orderId . ', Status: ' . $newStatus
             ]);
         }
 
-        $validStatuses = ['to_ship', 'to_receive', 'completed'];
+        $validStatuses = ['to_pay', 'to_ship', 'to_receive', 'completed', 'failed_delivery'];
         if (!in_array($newStatus, $validStatuses)) {
             return $this->response->setStatusCode(400)->setJSON([
                 'success' => false,
-                'message' => 'Invalid delivery status.'
+                'message' => 'Invalid delivery status: ' . $newStatus . '. Valid statuses are: ' . implode(', ', $validStatuses)
             ]);
         }
 
@@ -1249,6 +1308,14 @@ class Dashboard extends BaseController
                 'message' => 'Order not found.'
             ]);
         }
+
+        // Debug: Log current status
+        $currentStatus = $order['delivery_status'] ?? 'to_pay';
+        log_message('debug', 'Current delivery status: ' . $currentStatus);
+        log_message('debug', 'Requested new status: ' . $newStatus);
+
+        // Allow any valid status transition for now (simplified logic)
+        // This allows the button to work regardless of current status
 
         // Generate tracking number if marking as to_ship
         $additionalData = [];
@@ -1281,6 +1348,11 @@ class Dashboard extends BaseController
             $builder = $db->table('records');
             $result = $builder->where('id', $orderId)->update($updateData);
             
+            // Auto-populate customer info when order is in process (to_ship)
+            if ($result && $newStatus === 'to_ship') {
+                $this->autoPopulateCustomerInfo($orderId, $order);
+            }
+            
             if ($result) {
                 return $this->response->setStatusCode(200)->setJSON([
                     'success' => true,
@@ -1294,11 +1366,218 @@ class Dashboard extends BaseController
             }
             
         } catch (\Throwable $e) {
+            log_message('error', 'Delivery status update error: ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'An error occurred while updating the delivery status.'
             ]);
         }
+    }
+
+    /**
+     * Get delivery information for an order
+     */
+    public function getDeliveryInfo($orderId)
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Access denied. Admin privileges required.'
+            ]);
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'message' => 'Order not found.'
+            ]);
+        }
+
+        // Get customer profile information for defaults
+        $customerPhone = '';
+        $customerAddress = '';
+        if (!empty($order['created_by'])) {
+            $customer = $this->userModel->find($order['created_by']);
+            if ($customer) {
+                $customerPhone = $customer['phone'] ?? '';
+                $customerAddress = $customer['address'] ?? '';
+            }
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'tracking_number' => $order['tracking_number'] ?? '',
+            'shipping_address' => $order['shipping_address'] ?: $customerAddress,
+            'contact_number' => $order['contact_number'] ?: $customerPhone
+        ]);
+    }
+
+    /**
+     * Save delivery information for an order
+     */
+    public function saveDeliveryInfo()
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Access denied. Admin privileges required.'
+            ]);
+        }
+
+        $input = $this->request->getJSON();
+        $orderId = (int) ($input->order_id ?? 0);
+
+        if (!$orderId) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'message' => 'Invalid order ID.'
+            ]);
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'message' => 'Order not found.'
+            ]);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+            
+            $updateData = [];
+            
+            // Update delivery information if provided
+            if (!empty($input->tracking_number)) {
+                $updateData['tracking_number'] = $input->tracking_number;
+            }
+            
+            if (!empty($input->shipping_address)) {
+                $updateData['shipping_address'] = $input->shipping_address;
+            }
+            
+            if (!empty($input->contact_number)) {
+                $updateData['contact_number'] = $input->contact_number;
+            }
+            
+            // If no tracking number exists and order is ready to ship, generate one
+            if (empty($order['tracking_number']) && !empty($input->tracking_number)) {
+                $updateData['delivery_status'] = 'to_ship';
+                $updateData['shipped_at'] = date('Y-m-d H:i:s');
+            }
+            
+            // Update delivery notes in order notes
+            if (!empty($input->delivery_notes)) {
+                $currentNotes = $order['notes'] ?? '';
+                $deliveryNotes = "\n\n--- DELIVERY NOTES ---\n" . $input->delivery_notes . "\nAdded: " . date('Y-m-d H:i:s');
+                $updateData['notes'] = $currentNotes . $deliveryNotes;
+            }
+            
+            if (!empty($updateData)) {
+                $builder = $db->table('records');
+                $result = $builder->where('id', $orderId)->update($updateData);
+                
+                if ($result) {
+                    return $this->response->setJSON([
+                        'success' => true,
+                        'message' => 'Delivery information saved successfully.'
+                    ]);
+                } else {
+                    return $this->response->setStatusCode(500)->setJSON([
+                        'success' => false,
+                        'message' => 'Failed to save delivery information.'
+                    ]);
+                }
+            } else {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'No changes to save.'
+                ]);
+            }
+            
+        } catch (\Throwable $e) {
+            log_message('error', 'Save delivery info error: ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'An error occurred while saving delivery information.'
+            ]);
+        }
+    }
+
+    /**
+     * Admin order details view with delivery management
+     */
+    public function viewAdminOrderDetails($orderId)
+    {
+        // Check authentication and admin access
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            return redirect()->to('/orders')->with('error', 'Order not found.');
+        }
+
+        // Parse order items from notes
+        $orderItems = [];
+        $notes = $order['notes'] ?? '';
+        if (!empty($notes)) {
+            $lines = explode("\n", $notes);
+            foreach ($lines as $line) {
+                if (strpos($line, '|') !== false) {
+                    $parts = explode('|', $line);
+                    if (count($parts) >= 3) {
+                        $orderItems[] = [
+                            'name' => trim($parts[0]),
+                            'qty' => trim($parts[1]),
+                            'unit_price' => trim($parts[2])
+                        ];
+                    }
+                }
+            }
+        }
+
+        $data = [
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => $this->session->get('user_role'),
+            'user_shop_name' => $this->session->get('user_shop_name'),
+            'page_title' => 'Order Details - Admin',
+            'order' => $order,
+            'items' => $orderItems
+        ];
+
+        return view('admin/orders/order_details', $data);
     }
 
     private function generateTrackingNumber(): string
@@ -1452,7 +1731,7 @@ class Dashboard extends BaseController
                 return $this->reviewOrder($order);
             
             case 'view':
-                return $this->viewOrderDetails($order);
+                return $this->viewOrderDetailsPrivate($order);
             
             default:
                 log_message('error', 'Invalid action: ' . $action);
@@ -1472,6 +1751,9 @@ class Dashboard extends BaseController
             'payment_status' => 'paid',
             'delivery_status' => 'to_ship'
         ]);
+        
+        // Auto-populate customer info when order is set to to_ship
+        $this->autoPopulateCustomerInfo($order['id'], $order);
 
         return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
     }
@@ -1533,7 +1815,33 @@ class Dashboard extends BaseController
         return redirect()->to('/customer/orders')->with('info', 'Review feature coming soon!');
     }
 
-    private function viewOrderDetails($order)
+    /**
+     * Public method for viewing order details
+     */
+    public function viewOrderDetails($orderId)
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $recordModel = new RecordModel();
+        $order = $recordModel->find($orderId);
+
+        if (!$order || $order['record_type'] !== 'sales') {
+            log_message('error', 'Order not found for orderId: ' . $orderId);
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        if ($order['created_by'] != $this->session->get('user_id')) {
+            log_message('error', 'Access denied for orderId: ' . $orderId);
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        return $this->viewOrderDetailsPrivate($order);
+    }
+
+    private function viewOrderDetailsPrivate($order)
     {
         // Parse order items
         $notes = $order['notes'] ?? '';
@@ -1546,9 +1854,26 @@ class Dashboard extends BaseController
             }
         }
 
+        // Add tracking information for to_ship orders
+        $trackingInfo = [];
+        if ($order['delivery_status'] === 'to_ship') {
+            $trackingInfo = [
+                'status' => 'Preparing for shipment',
+                'estimated_date' => date('F j, Y', strtotime('+3 days')),
+                'message' => 'Your order is being prepared and will be shipped soon.'
+            ];
+        } elseif ($order['delivery_status'] === 'to_receive') {
+            $trackingInfo = [
+                'status' => 'Out for delivery',
+                'estimated_date' => date('F j, Y', strtotime('+1 day')),
+                'message' => 'Your order is out for delivery.'
+            ];
+        }
+
         return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
             'order' => $order,
-            'items' => $orderItems
+            'items' => $orderItems,
+            'tracking_info' => $trackingInfo
         ]));
     }
 

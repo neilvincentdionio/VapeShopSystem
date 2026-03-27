@@ -1,11 +1,10 @@
-<?= $this->include('customer/partials/header') ?>
+<?= $this->include('admin/partials/header') ?>
 
 <?php
 // Helper function to get delivery status labels
 if (!function_exists('getDeliveryStatusLabel')) {
     function getDeliveryStatusLabel($status) {
         $labels = [
-            'all' => 'All Orders',
             'to_pay' => 'To Pay',
             'to_ship' => 'To Ship',
             'to_receive' => 'To Receive',
@@ -21,11 +20,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
 
 <div class="orders-container">
     <div class="orders-header">
-        <a href="<?= site_url('customer/orders') ?>" class="back-link">
+        <a href="<?= site_url('orders') ?>" class="back-link">
             <i class="fas fa-arrow-left"></i> Back to Orders
         </a>
-        <h1>Order Details</h1>
-        <p>View complete information about your order</p>
+        <h1>Order Details - Admin</h1>
+        <p>Manage order delivery status</p>
     </div>
 
     <?php if (!empty($order)): ?>
@@ -106,15 +105,6 @@ if (!function_exists('getDeliveryStatusLabel')) {
                         <?php endforeach; ?>
                     </div>
                 </div>
-                
-                <?php if (!empty($tracking_info) && $order['delivery_status'] === 'to_ship'): ?>
-                    <div class="tracking-details">
-                        <p class="estimated-delivery">
-                            <strong>Estimated Delivery:</strong> <?= esc($tracking_info['estimated_date']) ?>
-                        </p>
-                        <p class="tracking-message"><?= esc($tracking_info['message']) ?></p>
-                    </div>
-                <?php endif; ?>
             </div>
 
             <?php if (!empty($order['shipping_address']) || !empty($order['contact_number'])): ?>
@@ -163,23 +153,36 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 </div>
             </div>
 
-            <div class="order-actions">
+            <!-- ADMIN DELIVERY MANAGEMENT BUTTONS -->
+            <div class="admin-delivery-actions">
+                <h3><i class="fas fa-cog"></i> Delivery Management</h3>
+                
                 <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
+                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                        <i class="fas fa-truck"></i>
+                        Mark as Shipped
+                    </button>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_ship'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/view') ?>" class="btn">Track Order</a>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
+                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
+                        <i class="fas fa-truck"></i>
+                        Mark as In Transit
+                    </button>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
+                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
+                        <i class="fas fa-home"></i>
+                        Mark as Delivered
+                    </button>
                 <?php endif; ?>
                 
-                <?php if (in_array($order['delivery_status'], ['completed', 'cancelled'])): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
+                <?php if ($order['delivery_status'] === 'completed'): ?>
+                    <div class="completed-notice">
+                        <i class="fas fa-check-circle"></i>
+                        Order has been delivered
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -187,222 +190,145 @@ if (!function_exists('getDeliveryStatusLabel')) {
         <div class="empty-state">
             <i class="fas fa-exclamation-triangle"></i>
             <h3>Order Not Found</h3>
-            <p>The order you're looking for doesn't exist or you don't have permission to view it.</p>
-            <a href="<?= site_url('customer/orders') ?>" class="btn">Back to Orders</a>
+            <p>The order you're looking for doesn't exist.</p>
+            <a href="<?= site_url('orders') ?>" class="btn">Back to Orders</a>
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+function updateDeliveryStatus(orderId, newStatus) {
+    if (confirm('Are you sure you want to update the delivery status?')) {
+        fetch('<?= site_url('orders/update-delivery-status') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                order_id: orderId,
+                status: newStatus
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Delivery status updated successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating the status.');
+        });
+    }
+}
+</script>
 
 <style>
     .orders-container {
         max-width: 800px;
         margin: 0 auto;
-        padding: 2rem 1.5rem;
-    }
-    
-    .orders-header {
-        margin-bottom: 2rem;
+        padding: 2rem;
     }
     
     .back-link {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        color: var(--text-muted);
+        color: #00bcd4;
         text-decoration: none;
         margin-bottom: 1rem;
-        transition: color 0.3s ease;
+        font-weight: 500;
     }
     
     .back-link:hover {
-        color: var(--accent);
+        color: #0097a7;
     }
     
     .orders-header h1 {
         font-size: 2rem;
         font-weight: 700;
-        color: var(--text-main);
-        margin-bottom: 0.5rem;
+        color: #333;
+        margin: 0 0 0.5rem 0;
     }
     
     .orders-header p {
-        color: var(--text-muted);
-        font-size: 1.1rem;
+        color: #666;
+        margin: 0;
     }
     
     .order-detail-card {
-        background: var(--surface);
+        background: white;
         border-radius: 16px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        padding: 2rem;
-        margin-bottom: 2rem;
-        border: 1px solid var(--border);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
     }
     
     .order-header {
+        padding: 2rem;
+        border-bottom: 1px solid #e0e0e0;
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-        gap: 1rem;
     }
     
     .order-info h2 {
         font-size: 1.5rem;
         font-weight: 700;
-        color: var(--text-main);
-        margin-bottom: 0.5rem;
+        color: #00bcd4;
+        margin: 0 0 0.5rem 0;
     }
     
     .order-info p {
-        color: var(--text-muted);
-        margin-bottom: 1rem;
+        color: #666;
+        margin: 0 0 1rem 0;
     }
     
     .order-status {
         display: inline-block;
         padding: 0.5rem 1rem;
-        border-radius: 8px;
-        font-size: 0.9rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
         font-weight: 600;
         text-transform: uppercase;
     }
     
-    .status-to_pay { 
-        background: rgba(255, 193, 7, 0.1); 
-        color: #856404; 
-        border: 1px solid rgba(255, 193, 7, 0.3);
-    }
-    .status-to_ship { 
-        background: rgba(0, 123, 255, 0.1); 
-        color: #004085; 
-        border: 1px solid rgba(0, 123, 255, 0.3);
-    }
-    .status-to_receive { 
-        background: rgba(23, 162, 184, 0.1); 
-        color: #0c5460; 
-        border: 1px solid rgba(23, 162, 184, 0.3);
-    }
-    .status-completed { 
-        background: rgba(40, 167, 69, 0.1); 
-        color: #2e7d2e; 
-        border: 1px solid rgba(40, 167, 69, 0.3);
-    }
-    .status-cancelled { 
-        background: rgba(220, 53, 69, 0.1); 
-        color: #721c24; 
-        border: 1px solid rgba(220, 53, 69, 0.3);
-    }
-    .status-return_refund { 
-        background: var(--surface-soft); 
-        color: var(--text-muted); 
-        border: 1px solid var(--border);
-    }
+    .status-to_pay { background: #fff3cd; color: #856404; }
+    .status-to_ship { background: #cce5ff; color: #004085; }
+    .status-to_receive { background: #d1ecf1; color: #0c5460; }
+    .status-completed { background: #e8f5e8; color: #2e7d2e; }
+    .status-cancelled { background: #f8d7da; color: #721c24; }
     
     .order-total {
         text-align: right;
     }
     
     .order-total h3 {
-        font-size: 1rem;
-        color: var(--text-muted);
-        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+        color: #666;
+        margin: 0 0 0.5rem 0;
     }
     
     .total-amount {
         font-size: 1.8rem;
         font-weight: 700;
-        color: var(--accent);
+        color: #333;
+        margin: 0;
     }
     
-    .tracking-info,
-    .shipping-info,
-    .order-items,
-    .order-summary {
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: var(--surface-soft);
-        border-radius: 8px;
-        border: 1px solid var(--border);
+    .tracking-info, .shipping-info, .delivery-tracker, .order-items, .order-summary, .admin-delivery-actions {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid #e0e0e0;
     }
     
-    .tracking-info h3,
-    .shipping-info h3,
-    .order-items h3 {
+    .tracking-info h3, .shipping-info h3, .delivery-tracker h3, .order-items h3, .order-summary h3, .admin-delivery-actions h3 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: var(--text-main);
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .tracking-info p,
-    .shipping-info p {
-        margin-bottom: 0.5rem;
-    }
-    
-    .tracking-status {
-        margin: 1rem 0;
-    }
-    
-    .status-item {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid var(--border);
-        color: var(--text-muted);
-    }
-    
-    .status-item:last-child {
-        border-bottom: none;
-    }
-    
-    .status-item.active {
-        color: var(--accent);
-        font-weight: 600;
-    }
-    
-    .status-item.completed {
-        color: rgba(40, 167, 69, 0.8);
-    }
-    
-    .status-item i {
-        font-size: 1.2rem;
-    }
-    
-    .estimated-delivery {
-        background: rgba(39, 197, 111, 0.1);
-        padding: 0.75rem;
-        border-radius: 6px;
-        margin-top: 1rem;
-        color: var(--accent);
-        border: 1px solid rgba(39, 197, 111, 0.3);
-    }
-    
-    .tracking-message {
-        margin-top: 0.5rem;
-        font-style: italic;
-        color: var(--text-muted);
-    }
-    
-    /* Delivery Tracker Styles */
-    .delivery-tracker {
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: var(--surface-soft);
-        border-radius: 8px;
-        border: 1px solid var(--border);
-    }
-    
-    .delivery-tracker h3 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-main);
-        margin-bottom: 1.5rem;
+        color: #333;
+        margin: 0 0 1rem 0;
         display: flex;
         align-items: center;
         gap: 0.5rem;
@@ -412,43 +338,37 @@ if (!function_exists('getDeliveryStatusLabel')) {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        position: relative;
-        margin: 2rem 0;
+        margin: 1rem 0;
     }
     
     .tracker-step {
         display: flex;
         flex-direction: column;
         align-items: center;
-        text-align: center;
         flex: 1;
         position: relative;
-        z-index: 2;
     }
     
     .tracker-icon {
-        width: 60px;
-        height: 60px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
+        background: #f0f0f0;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
         position: relative;
-        transition: all 0.3s ease;
+        margin-bottom: 0.5rem;
     }
     
     .tracker-step.completed .tracker-icon {
-        background: rgba(39, 197, 111, 0.1);
-        color: var(--accent);
-        border: 2px solid var(--accent);
+        background: #e8f5e8;
+        color: #2e7d2e;
     }
     
     .tracker-step.pending .tracker-icon {
-        background: var(--surface);
-        color: var(--text-muted);
-        border: 2px solid var(--border);
+        background: #f0f0f0;
+        color: #999;
     }
     
     .check-mark {
@@ -457,90 +377,43 @@ if (!function_exists('getDeliveryStatusLabel')) {
         right: -5px;
         width: 20px;
         height: 20px;
-        background: var(--accent);
-        color: white;
+        background: #27c56f;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
+        color: white;
         font-size: 0.7rem;
-        border: 2px solid white;
-    }
-    
-    .tracker-label {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-    
-    .stage-name {
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: var(--text-main);
-    }
-    
-    .tracker-step.completed .stage-name {
-        color: var(--accent);
-    }
-    
-    .tracker-step.pending .stage-name {
-        color: var(--text-muted);
-    }
-    
-    .stage-description {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        max-width: 100px;
-        line-height: 1.2;
     }
     
     .tracker-line {
         flex: 1;
         height: 2px;
+        background: #f0f0f0;
         margin: 0 0.5rem;
-        position: relative;
-        top: -30px;
-        z-index: 1;
+        margin-bottom: 2rem;
     }
     
     .tracker-line.completed {
-        background: var(--accent);
+        background: #27c56f;
     }
     
-    .tracker-line.pending {
-        background: var(--border);
+    .tracker-label {
+        text-align: center;
     }
     
-    .tracking-details {
-        margin-top: 1.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border);
+    .stage-name {
+        display: block;
+        font-weight: 600;
+        color: #333;
+        font-size: 0.9rem;
     }
     
-    @media (max-width: 768px) {
-        .tracker-container {
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
-        .tracker-step {
-            flex-direction: row;
-            text-align: left;
-            width: 100%;
-        }
-        
-        .tracker-icon {
-            margin-bottom: 0;
-            margin-right: 1rem;
-        }
-        
-        .tracker-line {
-            display: none;
-        }
-        
-        .stage-description {
-            max-width: none;
-        }
+    .stage-description {
+        display: block;
+        color: #666;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
     }
     
     .order-item {
@@ -548,7 +421,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
         justify-content: space-between;
         align-items: center;
         padding: 1rem 0;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid #f0f0f0;
     }
     
     .order-item:last-child {
@@ -557,111 +430,89 @@ if (!function_exists('getDeliveryStatusLabel')) {
     
     .item-name {
         font-weight: 600;
-        color: var(--text-main);
+        color: #333;
         margin-bottom: 0.25rem;
     }
     
     .item-details {
-        color: var(--text-muted);
+        color: #666;
         font-size: 0.9rem;
     }
     
     .item-price {
         font-weight: 700;
-        color: var(--text-main);
+        color: #333;
         font-size: 1.1rem;
     }
     
     .summary-row {
         display: flex;
         justify-content: space-between;
-        align-items: center;
         padding: 0.5rem 0;
     }
     
     .summary-row.total {
-        border-top: 2px solid var(--border);
-        padding-top: 1rem;
-        margin-top: 0.5rem;
+        border-top: 2px solid #e0e0e0;
         font-weight: 700;
         font-size: 1.1rem;
+        padding-top: 1rem;
+        margin-top: 0.5rem;
     }
     
-    .order-actions {
-        display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
+    .admin-delivery-actions {
+        background: #f8f9fa;
     }
     
-    .btn {
+    .btn-checkout {
+        background: #27c56f;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-right: 1rem;
+    }
+    
+    .btn-checkout:hover {
+        background: #219653;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(39, 197, 111, 0.3);
+    }
+    
+    .completed-notice {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
         padding: 0.75rem 1.5rem;
-        background: var(--accent);
-        color: white;
-        text-decoration: none;
+        background: #e8f5e8;
+        color: #2e7d2e;
         border-radius: 8px;
         font-weight: 600;
-        transition: all 0.3s ease;
-        border: 1px solid var(--accent);
-        cursor: pointer;
-    }
-    
-    .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(39, 197, 111, 0.2);
-    }
-    
-    .btn-secondary {
-        background: transparent;
-        color: var(--text-muted);
-        border-color: var(--text-muted);
-    }
-    
-    .btn-secondary:hover {
-        background: var(--text-muted);
-        color: white;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(102, 102, 102, 0.2);
     }
     
     .empty-state {
         text-align: center;
         padding: 4rem 2rem;
-        color: var(--text-muted);
+        color: #666;
     }
     
     .empty-state i {
-        font-size: 4rem;
+        font-size: 64px;
         margin-bottom: 1rem;
-        color: #ddd;
+        color: #ccc;
     }
     
     .empty-state h3 {
         font-size: 1.5rem;
-        margin-bottom: 1rem;
-        color: var(--text-main);
-    }
-    
-    @media (max-width: 768px) {
-        .order-header {
-            flex-direction: column;
-        }
-        
-        .order-total {
-            text-align: left;
-        }
-        
-        .order-actions {
-            flex-direction: column;
-        }
-        
-        .btn {
-            width: 100%;
-            justify-content: center;
-        }
+        margin-bottom: 0.5rem;
+        color: #333;
     }
 </style>
 
-<?= $this->include('customer/partials/footer') ?>
+<?= $this->include('admin/partials/footer') ?>

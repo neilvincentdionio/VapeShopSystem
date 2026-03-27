@@ -122,6 +122,9 @@ $routes->post('/customer/age-verification', 'Dashboard::customerAgeVerificationS
 // Customer order actions (Shopee-like delivery process)
 $routes->get('/customer/orders/(:num)/(:alpha)', 'Dashboard::customerOrderAction/$1/$2', ['filter' => 'auth']);
 
+// Customer order details page
+$routes->get('/customer/order-details/(:num)', 'Dashboard::viewOrderDetails/$1', ['filter' => 'auth']);
+
 // Debug route for testing (without auth filter for testing)
 $routes->get('/test-order-action/(:num)/(:alpha)', 'Dashboard::customerOrderAction/$1/$2');
 $routes->get('/debug-test/(:num)/(:alpha)', 'Dashboard::debugTest/$1/$2');
@@ -135,3 +138,10 @@ $routes->get('/test-details', 'Dashboard::testOrderDetails');
 
 // Admin delivery status update (AJAX)
 $routes->post('/orders/update-delivery-status', 'Dashboard::updateDeliveryStatus', ['filter' => 'auth:admin']);
+
+// Admin delivery information endpoints
+$routes->get('/orders/get-delivery-info/(:num)', 'Dashboard::getDeliveryInfo/$1', ['filter' => 'auth:admin']);
+$routes->post('/orders/save-delivery-info', 'Dashboard::saveDeliveryInfo', ['filter' => 'auth:admin']);
+
+// Admin order details page
+$routes->get('/admin/order-details/(:num)', 'Dashboard::viewAdminOrderDetails/$1', ['filter' => 'auth:admin']);

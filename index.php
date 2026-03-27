@@ -5,4 +5,3 @@ require_once $pathsConfig;
 
 $app = new CodeIgniter\CodeIgniter();
 $app->run();
-PHP
