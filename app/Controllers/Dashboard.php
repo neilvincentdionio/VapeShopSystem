@@ -1666,20 +1666,6 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Debug method to test routing
-     */
-    public function debugTest($param1 = null, $param2 = null)
-    {
-        echo "Debug Test Method Called!<br>";
-        echo "Param1: " . $param1 . "<br>";
-        echo "Param2: " . $param2 . "<br>";
-        echo "Session User ID: " . $this->session->get('user_id') . "<br>";
-        echo "Session User Role: " . $this->session->get('user_role') . "<br>";
-        echo "Current URL: " . current_url() . "<br>";
-        die();
-    }
-
-    /**
      * Order action handlers for Shopee-like delivery process
      */
     public function customerOrderAction($orderId, $action)

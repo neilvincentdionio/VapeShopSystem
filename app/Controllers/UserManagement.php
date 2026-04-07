@@ -72,9 +72,6 @@ class UserManagement extends BaseController
         }
 
         $users = $this->userModel->findAll();
-        
-        // Debug: Log the users found
-        log_message('info', 'Users found in index: ' . print_r($users, true));
 
         $data = [
             'users' => $users,
@@ -239,9 +236,6 @@ class UserManagement extends BaseController
         try {
             $result = $this->userModel->createUser($data);
             
-            // Log the result for debugging
-            log_message('info', 'User creation result: ' . print_r($result, true));
-            
             if ($result) {
                 return redirect()->to('/user-management')
                                ->with('success', 'User created successfully.');
@@ -283,8 +277,6 @@ class UserManagement extends BaseController
                            ->with('error', 'User not found.');
         }
 
-        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Edit method called for user ID: " . $id . "\n", FILE_APPEND);
-        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - User data loaded: " . print_r($user, true) . "\n", FILE_APPEND);
 
         $data = [
             'user' => $user,
@@ -324,10 +316,7 @@ class UserManagement extends BaseController
                            ->with('error', 'User not found.');
         }
 
-        // Debug: Log the posted data
         $postData = $request->getPost();
-        file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Update request data: " . print_r($postData, true) . "\n", FILE_APPEND);
-        log_message('info', 'Update request data: ' . print_r($postData, true));
 
         // Validate input data
         $rules = [
@@ -342,8 +331,6 @@ class UserManagement extends BaseController
 
         if (!$this->validate($rules)) {
             $errors = $this->validator->getErrors();
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Update validation failed: " . print_r($errors, true) . "\n", FILE_APPEND);
-            log_message('error', 'Update validation failed: ' . print_r($errors, true));
             return redirect()->back()
                            ->withInput()
                            ->with('errors', $errors);
@@ -372,33 +359,22 @@ class UserManagement extends BaseController
             // Try the direct update method first
             $result = $this->userModel->updateUserDirectly($id, $data);
             
-            // Debug: Log the update result
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - User update result: " . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Update data: " . print_r($data, true) . "\n", FILE_APPEND);
-            log_message('info', 'User update result: ' . print_r($result, true));
-            log_message('info', 'Update data: ' . print_r($data, true));
-            
-            // Check if the data was actually updated by verifying the database
-            $updatedUser = $this->userModel->find($id);
-            $nameUpdated = $updatedUser && $updatedUser['name'] === $data['name'];
-            $emailUpdated = $updatedUser && $updatedUser['email'] === $data['email'];
-            $roleUpdated = $updatedUser && $updatedUser['role'] === $data['role'];
-            
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Verification - Name updated: " . ($nameUpdated ? 'YES' : 'NO') . "\n", FILE_APPEND);
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Verification - Email updated: " . ($emailUpdated ? 'YES' : 'NO') . "\n", FILE_APPEND);
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Verification - Role updated: " . ($roleUpdated ? 'YES' : 'NO') . "\n", FILE_APPEND);
+            if ($result) {
+                $updatedUser = $this->userModel->find($id);
+                $nameUpdated = $updatedUser && $updatedUser['name'] === $data['name'];
+                $emailUpdated = $updatedUser && $updatedUser['email'] === $data['email'];
+                $roleUpdated = $updatedUser && $updatedUser['role'] === $data['role'];
+            }
             
             // Consider it successful if the data matches what we tried to update
             if ($result || ($nameUpdated && $emailUpdated && $roleUpdated)) {
                 return redirect()->to('/user-management')
                                ->with('success', 'User updated successfully.');
             } else {
-                file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Update failed - no changes detected\n", FILE_APPEND);
                 return redirect()->back()
                                ->with('error', 'Failed to update user. No changes made or database error.');
             }
         } catch (\Exception $e) {
-            file_put_contents(WRITEPATH . 'debug_update.log', date('Y-m-d H:i:s') . " - Update exception: " . $e->getMessage() . "\n", FILE_APPEND);
             log_message('error', 'User update error: ' . $e->getMessage());
             return redirect()->back()
                            ->with('error', 'Failed to update user: ' . $e->getMessage());
