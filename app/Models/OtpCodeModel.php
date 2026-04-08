@@ -12,12 +12,10 @@ class OtpCodeModel extends Model
 
     protected $allowedFields = [
         'user_id',
-        'email',
         'otp_code',
-        'expires_at',
-        'is_used',
+        'expiry_time',
+        'attempts',
         'created_at',
-        'updated_at',
     ];
 
     public function createForUser(int $userId, string $email, string $otpCode, string $expiresAt): bool
@@ -27,31 +25,35 @@ class OtpCodeModel extends Model
 
         return (bool) $this->insert([
             'user_id'     => $userId,
-            'email'       => $email,
             'otp_code'    => $otpCode,
-            'expires_at'  => $expiresAt,
-            'is_used'     => 0,
+            'expiry_time' => $expiresAt,
+            'attempts'    => 0,
             'created_at'  => date('Y-m-d H:i:s'),
-            'updated_at'  => date('Y-m-d H:i:s'),
         ]);
     }
 
     public function getActiveForUser(int $userId): ?array
     {
         $row = $this->where('user_id', $userId)
-            ->where('is_used', 0)
             ->orderBy('id', 'DESC')
             ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        // Normalize legacy column names expected by the auth flow.
+        $row['expires_at'] = $row['expiry_time'] ?? null;
+        $row['is_used'] = 0;
 
         return $row ?: null;
     }
 
     public function markUsed(int $id): void
     {
-        $this->update($id, [
-            'is_used'    => 1,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ]);
+        // The current table schema does not track used OTPs,
+        // so removing the code is the safest equivalent behavior.
+        $this->delete($id);
     }
 
     public function deleteForUser(int $userId): void

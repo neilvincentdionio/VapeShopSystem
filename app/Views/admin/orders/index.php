@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title) ?> - E-Commerce Vape Shop System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
 <?php
 // Helper function to get delivery status labels
@@ -22,6 +23,19 @@ if (!function_exists('getDeliveryStatusLabel')) {
         return $labels[$status] ?? ucfirst($status);
     }
 }
+
+$ordersList = is_array($orders ?? null) ? $orders : [];
+$hasOrders = ! empty($ordersList);
+$totalOrders = count($ordersList);
+$totalRevenue = array_sum(array_map(static fn ($order) => (float) ($order['total_amount'] ?? 0), $ordersList));
+$completedOrders = count(array_filter(
+    $ordersList,
+    static fn ($order) => ($order['status'] ?? '') === 'completed'
+));
+$activeDeliveries = count(array_filter(
+    $ordersList,
+    static fn ($order) => in_array(($order['delivery_status'] ?? 'to_pay'), ['to_ship', 'to_receive'], true)
+));
 ?>
 
 <style>
@@ -168,88 +182,218 @@ if (!function_exists('getDeliveryStatusLabel')) {
         }
 
         .orders-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
+            width: 100%;
         }
-        
-        .orders-header {
+
+        .page-header {
+            background: linear-gradient(135deg, #f8f9fa, #ffffff);
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .page-header-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
+            gap: 1rem;
         }
-        
-        .orders-header h1 {
+
+        .page-title h1 {
             font-size: 2rem;
             font-weight: 700;
-            color: #333;
-            margin: 0;
+            color: #333333;
+            margin-bottom: 0.5rem;
         }
-        
-        .orders-stats {
+
+        .page-title p {
+            color: #666666;
+            font-size: 1rem;
+        }
+
+        .dashboard-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
-        
+
         .stat-card {
             background: white;
             border: 1px solid #e0e0e0;
-            border-radius: 16px;
+            border-radius: 12px;
             padding: 1.5rem;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        
-        .stat-label {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            background: rgba(39, 197, 111, 0.1);
+            color: #27c56f;
+            flex: 0 0 auto;
         }
-        
-        .stat-value {
+
+        .stat-icon.success {
+            background: rgba(39, 197, 111, 0.1);
+            color: #27c56f;
+        }
+
+        .stat-icon.warning {
+            background: rgba(255, 152, 0, 0.1);
+            color: #ff9800;
+        }
+
+        .stat-icon.info {
+            background: rgba(0, 188, 212, 0.1);
+            color: #00bcd4;
+        }
+
+        .stat-content h3 {
             font-size: 1.8rem;
             font-weight: 700;
-            color: #333;
+            color: #333333;
+            margin-bottom: 0.25rem;
         }
-        
-        .orders-table {
+
+        .stat-content p {
+            color: #666666;
+            font-size: 0.9rem;
+        }
+
+        .data-card {
             background: white;
             border: 1px solid #e0e0e0;
-            border-radius: 16px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        
+
+        .data-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .data-card-header h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333333;
+        }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #e0e0e0;
+            color: #666666;
+        }
+
+        .btn-outline:hover {
+            background: #f8f9fa;
+            border-color: #27c56f;
+            color: #27c56f;
+            transform: translateY(-1px);
+        }
+
         .table-responsive {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }
-        
-        .table {
+
+        .data-table {
             width: 100%;
             border-collapse: collapse;
             min-width: 1400px;
         }
-        
-        .table th {
+
+        .data-table th {
             background: #f8f9fa;
             padding: 1rem;
             text-align: left;
-            font-weight: 700;
-            color: #333;
-            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            color: #333333;
+            border-bottom: 1px solid #e0e0e0;
         }
-        
-        .table td {
+
+        .data-table td {
             padding: 1rem;
             border-bottom: 1px solid #f0f0f0;
             vertical-align: top;
         }
-        
-        .table tr:hover {
+
+        .data-table tr:hover {
             background: #f8f9fa;
+        }
+
+        .order-link {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .order-link:hover {
+            text-decoration: underline;
+        }
+
+        .meta-text,
+        .muted-text,
+        .detail-text,
+        .shipping-text {
+            color: #666666;
+            font-size: 0.85rem;
+        }
+
+        .shipping-text {
+            max-width: 150px;
+            display: inline-block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.5rem;
+            min-width: 170px;
         }
         
         .order-id {
@@ -470,6 +614,16 @@ if (!function_exists('getDeliveryStatusLabel')) {
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
         }
+
+        .btn-checkout,
+        .btn-transit,
+        .btn-delivered,
+        .btn-delivery,
+        .btn-failed {
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 0;
+        }
         
         .modal {
             display: none;
@@ -578,105 +732,109 @@ if (!function_exists('getDeliveryStatusLabel')) {
         }
         
         @media (max-width: 768px) {
-            .orders-container {
-                padding: 1rem;
-            }
-            
-            .orders-header {
+            .page-header-content,
+            .data-card-header {
                 flex-direction: column;
-                gap: 1rem;
                 align-items: flex-start;
             }
             
-            .orders-stats {
+            .dashboard-stats {
                 grid-template-columns: 1fr;
             }
+
+            .action-buttons {
+                min-width: 150px;
+            }
             
-            .table {
-                font-size: 0.7rem;
+            .data-table {
+                font-size: 0.72rem;
                 min-width: 1200px;
             }
             
-            .table th,
-            .table td {
-                padding: 0.3rem;
+            .data-table th,
+            .data-table td {
+                padding: 0.65rem;
             }
             
             .order-items-preview {
                 max-width: 100px;
             }
-            
-            .tracking-number, .shipping-address, .contact-number {
-                display: none;
-            }
         }
         
         @media (max-width: 1024px) {
-            .table {
-                font-size: 0.75rem;
-                min-width: 1000px;
+            .data-table {
+                font-size: 0.78rem;
+                min-width: 1280px;
             }
         }
-    </style>
+</style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
+    <?= $this->include('admin/partials/sidebar') ?>
 
-            <div class="navbar-center">
-                <div class="navbar-menu">
-                    <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
-                    <a href="<?= site_url('products') ?>" class="nav-link">Products</a>
-                    <a href="<?= site_url('orders') ?>" class="nav-link active">Orders</a>
-                    <a href="<?= site_url('records') ?>" class="nav-link">Records</a>
-                    <a href="<?= site_url('user-management') ?>" class="nav-link">User Management</a>
-                    <a href="<?= site_url('dashboard/settings') ?>" class="nav-link">Settings</a>
+    <div class="container">
+        <div class="orders-container">
+            <div class="page-header">
+                <div class="page-header-content">
+                    <div class="page-title">
+                        <h1>Orders Management</h1>
+                        <p>Manage customer orders, payments, and delivery progress.</p>
+                    </div>
                 </div>
             </div>
-
-            <div class="nav-right">
-                <div class="user-info">
-                    <div class="user-avatar"><?= strtoupper(substr(session()->get('user_name') ?? 'A', 0, 1)) ?></div>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link">
-                        <?= esc(session()->get('user_name') ?? 'Administrator') ?>
-                    </a>
-                    <span class="badge"><?= esc(strtoupper(session()->get('user_role') ?? 'admin')) ?></span>
-                    <?php if (!empty(session()->get('user_shop_name'))): ?>
-                        <span class="badge"><?= esc(session()->get('user_shop_name')) ?></span>
-                    <?php endif; ?>
-                </div>
-                <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
-            </div>
-        </div>
-    </nav>
-
-<div class="orders-container">
-    <div class="orders-header">
-        <h1>Orders Management</h1>
-    </div>
     
-    <?php if (isset($orders) && !empty($orders)): ?>
-        <!-- Statistics -->
-        <div class="orders-stats">
+    <?php if ($hasOrders): ?>
+        <div class="dashboard-stats">
             <div class="stat-card">
-                <div class="stat-label">Total Orders</div>
-                <div class="stat-value"><?= count($orders) ?></div>
+                <div class="stat-icon">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <div class="stat-content">
+                    <h3><?= $totalOrders ?></h3>
+                    <p>Total Orders</p>
+                </div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Revenue</div>
-                <div class="stat-value">₱<?= number_format(array_sum(array_column($orders, 'total_amount')), 2) ?></div>
+                <div class="stat-icon success">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>&#8369;<?= number_format((float) $totalRevenue, 2) ?></h3>
+                    <p>Total Revenue</p>
+                </div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Completed Orders</div>
-                <div class="stat-value"><?= count(array_filter($orders, fn($o) => $o['status'] === 'completed')) ?></div>
+                <div class="stat-icon warning">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-content">
+                    <h3><?= $completedOrders ?></h3>
+                    <p>Completed Orders</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon info">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div class="stat-content">
+                    <h3><?= $activeDeliveries ?></h3>
+                    <p>Active Deliveries</p>
+                </div>
             </div>
         </div>
         
-        <!-- Orders Table -->
-        <div class="orders-table">
+        <div class="data-card">
+            <div class="data-card-header">
+                <h3>Orders List</h3>
+                <div class="card-actions">
+                    <button class="btn btn-sm btn-outline" onclick="window.location.reload()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
             <div class="table-responsive">
-                <table class="table">
+                <table class="data-table">
                 <thead>
                     <tr>
                         <th>Order ID</th>
@@ -694,11 +852,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($orders as $order): ?>
+                    <?php foreach ($ordersList as $order): ?>
                         <tr>
                             <td>
                                 <div class="order-id">
-                                    <a href="<?= site_url('admin/order-details/' . $order['id']) ?>" style="color: inherit; text-decoration: none;">
+                                    <a href="<?= site_url('admin/order-details/' . $order['id']) ?>" class="order-link">
                                         <?= esc($order['reference_number']) ?>
                                     </a>
                                 </div>
@@ -706,7 +864,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
                             <td>
                                 <?= date('M j, Y', strtotime($order['date'])) ?>
                                 <br>
-                                <small style="color: #666;"><?= date('g:i A', strtotime($order['date'])) ?></small>
+                                <small class="meta-text"><?= date('g:i A', strtotime($order['date'])) ?></small>
                             </td>
                             <td>
                                 <?php if ($order['customer']): ?>
@@ -715,7 +873,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
                                         <div class="customer-email"><?= esc($order['customer']['email']) ?></div>
                                     </div>
                                 <?php else: ?>
-                                    <span style="color: #999;">Guest</span>
+                                    <span class="muted-text">Guest</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -724,19 +882,19 @@ if (!function_exists('getDeliveryStatusLabel')) {
                                         <?php $itemCount = count($order['items']); ?>
                                         <?php for ($i = 0; $i < min(2, $itemCount); $i++): ?>
                                             <div class="item-preview">
-                                                <?= esc($order['items'][$i]['name']) ?> × <?= (int) $order['items'][$i]['qty'] ?>
+                                                <?= esc($order['items'][$i]['name']) ?> &times; <?= (int) $order['items'][$i]['qty'] ?>
                                             </div>
                                         <?php endfor; ?>
                                         <?php if ($itemCount > 2): ?>
                                             <div class="more-items">+<?= $itemCount - 2 ?> more items</div>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <span style="color: #999;">No items</span>
+                                        <span class="muted-text">No items</span>
                                     <?php endif; ?>
                                 </div>
                             </td>
                             <td>
-                                <div class="order-total">₱<?= number_format((float) $order['total_amount'], 2) ?></div>
+                                <div class="order-total">&#8369;<?= number_format((float) $order['total_amount'], 2) ?></div>
                             </td>
                             <td>
                                 <div class="payment-method">
@@ -750,64 +908,66 @@ if (!function_exists('getDeliveryStatusLabel')) {
                                 </div>
                             </td>
                             <td>
-                                <div class="order-status status-<?= esc(str_replace('_', '-', $order['delivery_status'] ?? 'to_pay')) ?>">
+                                <div class="order-status status-<?= esc($order['delivery_status'] ?? 'to_pay') ?>">
                                     <?= getDeliveryStatusLabel($order['delivery_status'] ?? 'to_pay') ?>
                                 </div>
                             </td>
                             <td>
-                                <span style="font-size: 0.85rem; color: #666;">
+                                <span class="detail-text">
                                     <?= esc($order['tracking_number'] ?: 'No tracking') ?>
                                 </span>
                             </td>
                             <td>
-                                <span style="font-size: 0.8rem; color: #666; max-width: 150px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?= esc($order['shipping_address']) ?>">
+                                <span class="shipping-text" title="<?= esc($order['shipping_address']) ?>">
                                     <?= esc($order['shipping_address'] ?: 'Not provided') ?>
                                 </span>
                             </td>
                             <td>
-                                <span style="font-size: 0.85rem; color: #666;">
+                                <span class="detail-text">
                                     <?= esc($order['contact_number'] ?: 'Not provided') ?>
                                 </span>
                             </td>
                             <td>
-                                <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
-                                        <i class="fas fa-box"></i>
-                                        Preparing Package
-                                    </button>
-                                <?php endif; ?>
-                                
-                                <?php if ($order['delivery_status'] === 'to_ship'): ?>
-                                    <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
-                                        <i class="fas fa-truck"></i>
-                                        Package in Transit
-                                    </button>
-                                <?php endif; ?>
-                                
-                                <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                                    <button class="btn-delivered" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
-                                        <i class="fas fa-check-circle"></i>
-                                        Package Delivered
-                                    </button>
-                                    <button class="btn-failed" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'failed_delivery')">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        Failed Delivery
-                                    </button>
-                                <?php endif; ?>
-                                
-                                <?php if ($order['delivery_status'] === 'failed_delivery'): ?>
-                                    <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
-                                        <i class="fas fa-redo"></i>
-                                        Retry Delivery
-                                    </button>
-                                <?php endif; ?>
-                                
-                                <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive', 'failed_delivery'])): ?>
-                                    <button class="btn-delivery" onclick="openDeliveryModal(<?= $order['id'] ?>)">
-                                        <i class="fas fa-shipping-fast"></i>
-                                        Delivery Info
-                                    </button>
-                                <?php endif; ?>
+                                <div class="action-buttons">
+                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_pay'): ?>
+                                        <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                                            <i class="fas fa-box"></i>
+                                            Preparing Package
+                                        </button>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_ship'): ?>
+                                        <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
+                                            <i class="fas fa-truck"></i>
+                                            Package in Transit
+                                        </button>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_receive'): ?>
+                                        <button class="btn-delivered" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
+                                            <i class="fas fa-check-circle"></i>
+                                            Package Delivered
+                                        </button>
+                                        <button class="btn-failed" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'failed_delivery')">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            Failed Delivery
+                                        </button>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'failed_delivery'): ?>
+                                        <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
+                                            <i class="fas fa-redo"></i>
+                                            Retry Delivery
+                                        </button>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive', 'failed_delivery'])): ?>
+                                        <button class="btn-delivery" onclick="openDeliveryModal(<?= $order['id'] ?>)">
+                                            <i class="fas fa-shipping-fast"></i>
+                                            Delivery Info
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -815,14 +975,17 @@ if (!function_exists('getDeliveryStatusLabel')) {
             </table>
             </div>
         </div>
-    <?php else: ?>
-        <div class="empty-state">
-            <i class="fas fa-shopping-bag"></i>
-            <h3>No Orders Found</h3>
-            <p>There are no orders in the system yet.</p>
+            <?php else: ?>
+                <div class="data-card">
+                    <div class="empty-state">
+                        <i class="fas fa-shopping-bag"></i>
+                        <h3>No Orders Found</h3>
+                        <p>There are no orders in the system yet.</p>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
-    <?php endif; ?>
-</div>
+    </div>
 
 <!-- Delivery Modal -->
 <div id="deliveryModal" class="modal">

@@ -275,6 +275,66 @@
             color: #ff9800;
         }
 
+        .alert.alert-warning {
+            display: block;
+            padding: 1.15rem 1.4rem;
+            border-radius: 14px;
+            border: 1px solid #ffd8a8;
+            border-left: 4px solid #ff9800;
+            background: linear-gradient(135deg, #fff8ef, #fff3df);
+            color: #9a5a00;
+            box-shadow: 0 2px 10px rgba(255, 152, 0, 0.08);
+        }
+
+        .alert.alert-warning > i {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.75rem;
+            vertical-align: middle;
+            background: rgba(255, 152, 0, 0.12);
+            color: #ff9800;
+        }
+
+        .alert.alert-warning > strong {
+            color: #cc6b00;
+            font-weight: 700;
+        }
+
+        .alert.alert-warning ul {
+            list-style: none;
+            margin: 1rem 0 0 3.3rem !important;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .alert.alert-warning li {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 152, 0, 0.16);
+            color: #5c3b00;
+            font-weight: 600;
+            line-height: 1.45;
+        }
+
+        .alert.alert-warning li::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff9800;
+            flex: 0 0 auto;
+        }
+
         .data-card {
             background: white;
             border: 1px solid #e0e0e0;
@@ -479,6 +539,19 @@
             .page-header-content {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+            .alert.alert-warning {
+                padding: 1rem;
+                line-height: 1.6;
+            }
+            .alert.alert-warning > i {
+                width: 34px;
+                height: 34px;
+                margin-right: 0.6rem;
+            }
+            .alert.alert-warning ul {
+                grid-template-columns: 1fr;
+                margin-left: 0 !important;
             }
         }
     </style>

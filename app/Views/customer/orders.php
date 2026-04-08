@@ -20,9 +20,17 @@ if (!function_exists('getDeliveryStatusLabel')) {
 ?>
 
 <style>
+    .orders-container {
+        display: grid;
+        gap: 1.5rem;
+    }
+
     .orders-header {
-        text-align: center;
-        margin-bottom: 2rem;
+        background: linear-gradient(135deg, #f8f9fa, #ffffff);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
     }
     
     .orders-header h1 {
@@ -34,46 +42,73 @@ if (!function_exists('getDeliveryStatusLabel')) {
     
     .orders-header p {
         color: var(--text-muted);
-        font-size: 1.1rem;
+        font-size: 1rem;
+        max-width: 620px;
+        line-height: 1.6;
+    }
+
+    .orders-tabs-panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 0.75rem;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
+        overflow: hidden;
+        position: relative;
     }
     
     .shopee-tabs {
         display: flex;
-        border-bottom: 2px solid var(--border);
-        margin-bottom: 2rem;
+        align-items: center;
         overflow-x: auto;
+        overflow-y: hidden;
         gap: 1rem;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        padding: 0.15rem;
+        margin: -0.15rem;
+    }
+
+    .shopee-tabs::-webkit-scrollbar {
+        display: none;
     }
     
     .shopee-tab {
-        padding: 1rem 1.5rem;
-        background: none;
-        border: none;
+        padding: 0.9rem 1.2rem;
+        background: var(--surface-soft);
+        border: 1px solid transparent;
+        border-radius: 14px;
         color: var(--text-muted);
         font-weight: 600;
         cursor: pointer;
         position: relative;
         white-space: nowrap;
-        transition: color 0.3s ease;
+        transition: all 0.2s ease;
         text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
     
     .shopee-tab:hover {
         color: var(--accent);
+        border-color: rgba(39, 197, 111, 0.22);
+        background: rgba(39, 197, 111, 0.08);
+        transform: translateY(-1px);
     }
     
     .shopee-tab.active {
         color: var(--accent);
+        background: rgba(39, 197, 111, 0.12);
+        border-color: rgba(39, 197, 111, 0.3);
+        box-shadow: inset 0 0 0 1px rgba(39, 197, 111, 0.1);
     }
     
     .shopee-tab.active::after {
-        content: '';
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: var(--accent);
+        display: none;
     }
     
     .tab-badge {
@@ -96,29 +131,32 @@ if (!function_exists('getDeliveryStatusLabel')) {
     .order-card {
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 1.5rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        transition: box-shadow 0.2s ease;
-        margin-bottom: 1rem;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 0;
     }
     
     .order-card:hover {
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
     }
     
     .order-card-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
         padding-bottom: 1rem;
         border-bottom: 1px solid var(--border);
     }
     
     .order-reference {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
+        flex-wrap: wrap;
         gap: 0.5rem;
     }
     
@@ -146,15 +184,20 @@ if (!function_exists('getDeliveryStatusLabel')) {
     .order-date {
         color: var(--text-muted);
         font-size: 0.8rem;
-        margin-top: 0.25rem;
+        width: 100%;
+        margin-top: 0.15rem;
     }
     
     .order-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         padding: 0.4rem 0.8rem;
-        border-radius: 8px;
+        border-radius: 999px;
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
+        white-space: nowrap;
     }
     
     .status-to_pay {
@@ -194,19 +237,24 @@ if (!function_exists('getDeliveryStatusLabel')) {
     }
     
     .order-items {
-        margin-bottom: 1rem;
+        margin-bottom: 1.2rem;
+        display: grid;
+        gap: 0.5rem;
     }
     
     .order-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid var(--border);
+        gap: 1rem;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fcfcfc;
     }
     
     .order-item:last-child {
-        border-bottom: none;
+        border-bottom: 1px solid var(--border);
     }
     
     .item-info {
@@ -223,19 +271,21 @@ if (!function_exists('getDeliveryStatusLabel')) {
     .item-details {
         color: var(--text-muted);
         font-size: 0.8rem;
+        line-height: 1.5;
     }
     
     .item-price {
         font-weight: 700;
         color: var(--text-main);
         font-size: 0.9rem;
+        white-space: nowrap;
     }
     
     .order-total {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding-top: 1rem;
+        padding: 1rem 0 0;
         border-top: 2px solid var(--border);
         font-size: 1rem;
         font-weight: 700;
@@ -244,11 +294,14 @@ if (!function_exists('getDeliveryStatusLabel')) {
     
     .tracking-info {
         margin-top: 1rem;
-        padding: 0.75rem;
+        padding: 1rem;
         background: var(--surface-soft);
-        border-radius: 8px;
+        border-radius: 14px;
         font-size: 0.85rem;
         border: 1px solid var(--border);
+        display: grid;
+        gap: 0.45rem;
+        line-height: 1.5;
     }
     
     .tracking-info strong {
@@ -314,8 +367,12 @@ if (!function_exists('getDeliveryStatusLabel')) {
     
     .empty-state {
         text-align: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 20px;
         padding: 4rem 2rem;
         color: var(--text-muted);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
     }
     
     .empty-state i {
@@ -360,6 +417,10 @@ if (!function_exists('getDeliveryStatusLabel')) {
             font-size: 0.85rem;
         }
         
+        .orders-header {
+            padding: 1.4rem;
+        }
+
         .order-card {
             padding: 1rem;
         }
@@ -367,12 +428,20 @@ if (!function_exists('getDeliveryStatusLabel')) {
         .order-card-header {
             flex-direction: column;
             align-items: flex-start;
-            gap: 0.5rem;
+            gap: 0.75rem;
         }
         
         .order-reference {
+            width: 100%;
+        }
+
+        .order-item {
             flex-direction: column;
             align-items: flex-start;
+        }
+
+        .item-price {
+            align-self: flex-end;
         }
     }
 </style>
@@ -498,40 +567,42 @@ window.addEventListener('beforeunload', function() {
         <p>Track your orders and manage your purchases</p>
     </div>
     
-    <div class="shopee-tabs">
-        <a href="<?= site_url('customer/orders?tab=all') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'all' ? 'active' : '' ?>">
-            All
-            <?php if (isset($statusCounts['all']) && $statusCounts['all'] > 0): ?>
-                <span class="tab-badge"><?= $statusCounts['all'] ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="<?= site_url('customer/orders?tab=to_pay') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_pay' ? 'active' : '' ?>">
-            To Pay
-            <?php if (isset($statusCounts['to_pay']) && $statusCounts['to_pay'] > 0): ?>
-                <span class="tab-badge"><?= $statusCounts['to_pay'] ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="<?= site_url('customer/orders?tab=to_ship') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_ship' ? 'active' : '' ?>">
-            To Ship
-            <?php if (isset($statusCounts['to_ship']) && $statusCounts['to_ship'] > 0): ?>
-                <span class="tab-badge"><?= $statusCounts['to_ship'] ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="<?= site_url('customer/orders?tab=to_receive') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_receive' ? 'active' : '' ?>">
-            To Receive
-            <?php if (isset($statusCounts['to_receive']) && $statusCounts['to_receive'] > 0): ?>
-                <span class="tab-badge"><?= $statusCounts['to_receive'] ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="<?= site_url('customer/orders?tab=completed') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'completed' ? 'active' : '' ?>">
-            Completed
-        </a>
-        <a href="<?= site_url('customer/orders?tab=cancelled') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'cancelled' ? 'active' : '' ?>">
-            Cancelled
-        </a>
-        <a href="<?= site_url('customer/orders?tab=return_refund') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'return_refund' ? 'active' : '' ?>">
-            Return/Refund
-        </a>
+    <div class="orders-tabs-panel">
+        <div class="shopee-tabs">
+            <a href="<?= site_url('customer/orders?tab=all') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'all' ? 'active' : '' ?>">
+                All
+                <?php if (isset($statusCounts['all']) && $statusCounts['all'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['all'] ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="<?= site_url('customer/orders?tab=to_pay') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_pay' ? 'active' : '' ?>">
+                To Pay
+                <?php if (isset($statusCounts['to_pay']) && $statusCounts['to_pay'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['to_pay'] ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="<?= site_url('customer/orders?tab=to_ship') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_ship' ? 'active' : '' ?>">
+                To Ship
+                <?php if (isset($statusCounts['to_ship']) && $statusCounts['to_ship'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['to_ship'] ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="<?= site_url('customer/orders?tab=to_receive') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_receive' ? 'active' : '' ?>">
+                To Receive
+                <?php if (isset($statusCounts['to_receive']) && $statusCounts['to_receive'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['to_receive'] ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="<?= site_url('customer/orders?tab=completed') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'completed' ? 'active' : '' ?>">
+                Completed
+            </a>
+            <a href="<?= site_url('customer/orders?tab=cancelled') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'cancelled' ? 'active' : '' ?>">
+                Cancelled
+            </a>
+            <a href="<?= site_url('customer/orders?tab=return_refund') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'return_refund' ? 'active' : '' ?>">
+                Return/Refund
+            </a>
+        </div>
     </div>
     
     <?php if (isset($orders) && !empty($orders)): ?>
@@ -557,10 +628,10 @@ window.addEventListener('beforeunload', function() {
                                 <div class="order-item">
                                     <div class="item-info">
                                         <div class="item-name"><?= esc($item['name']) ?></div>
-                                        <div class="item-details">Qty: <?= (int) $item['qty'] ?> × ₱<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                        <div class="item-details">Qty: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
                                     </div>
                                     <div class="item-price">
-                                        ₱<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?>
+                                        &#8369;<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -576,7 +647,7 @@ window.addEventListener('beforeunload', function() {
                     
                     <div class="order-total">
                         <span>Total</span>
-                        <span>₱<?= number_format((float) $order['total_amount'], 2) ?></span>
+                        <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                     </div>
                     
                     <?php if (!empty($order['tracking_number']) || !empty($order['shipping_address'])): ?>
