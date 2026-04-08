@@ -1,7 +1,6 @@
 <?php
-// Ensure this points to the public directory
-$pathsConfig = __DIR__ . "/app/Config/Paths.php";
-require_once $pathsConfig;
-
-$app = new CodeIgniter\CodeIgniter();
-$app->run();
+// Front controller wrapper.
+//
+// In XAMPP setups the DocumentRoot is often the project root (not `public/`).
+// Delegate all requests to the real front controller in `public/index.php`.
+require __DIR__ . '/public/index.php';
