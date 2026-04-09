@@ -148,3 +148,18 @@ $routes->post('/orders/save-delivery-info', 'Dashboard::saveDeliveryInfo', ['fil
 
 // Admin order details page
 $routes->get('/admin/order-details/(:num)', 'Dashboard::viewAdminOrderDetails/$1', ['filter' => 'auth:admin']);
+
+// Backup Management routes (Admin only)
+$routes->get('/backup', 'BackupController::index', ['filter' => 'auth:admin']);
+$routes->post('/backup/create', 'BackupController::create', ['filter' => 'auth:admin']);
+$routes->post('/backup/restore', 'BackupController::restore', ['filter' => 'auth:admin']);
+$routes->post('/backup/delete', 'BackupController::delete', ['filter' => 'auth:admin']);
+$routes->get('/backup/download/(:any)', 'BackupController::download/$1', ['filter' => 'auth:admin']);
+$routes->post('/backup/cleanup', 'BackupController::cleanup', ['filter' => 'auth:admin']);
+$routes->get('/backup/stats', 'BackupController::stats', ['filter' => 'auth:admin']);
+
+// API Authentication routes (JWT)
+$routes->post('/api/auth/login', 'ApiAuth::login');
+$routes->post('/api/auth/refresh', 'ApiAuth::refresh');
+$routes->post('/api/auth/logout', 'ApiAuth::logout');
+$routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => 'jwtauth']);
