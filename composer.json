@@ -12,7 +12,6 @@
     "require": {
         "php": "^8.2",
         "codeigniter4/framework": "^4.7",
-        "firebase/php-jwt": "^7.0",
         "phpmailer/phpmailer": "^7.0"
     },
     "require-dev": {
