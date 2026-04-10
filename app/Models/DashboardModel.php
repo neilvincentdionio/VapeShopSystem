@@ -10,19 +10,12 @@ class DashboardModel extends Model
     protected $primaryKey = 'id';
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
-    private ?bool $hasAnalyticsRecordSchema = null;
 
-    /**
-     * Get total number of users
-     */
     public function getTotalUsers()
     {
         return $this->where('is_active', 1)->countAllResults();
     }
 
-    /**
-     * Get total number of admin users
-     */
     public function getAdminUsers()
     {
         return $this->where('role', 'admin')->where('is_active', 1)->countAllResults();
@@ -33,45 +26,33 @@ class DashboardModel extends Model
         return $this->where('role', 'customer')->where('is_active', 1)->countAllResults();
     }
 
-    /**
-     * Get recent user registrations (last 7 days)
-     */
     public function getRecentRegistrations()
     {
         $sevenDaysAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
         return $this->where('created_at >=', $sevenDaysAgo)
-                   ->where('is_active', 1)
-                   ->countAllResults();
+            ->where('is_active', 1)
+            ->countAllResults();
     }
 
-    /**
-     * Get user activity statistics
-     */
     public function getUserActivityStats()
     {
         $data = [];
-        
-        // Users by role
+
         $data['by_role'] = [
             'admin' => $this->getAdminUsers(),
             'customer' => $this->getCustomerUsers(),
         ];
 
-        // Recent registrations
         $data['recent_registrations'] = $this->getRecentRegistrations();
 
-        // Active users (logged in within last 24 hours)
         $yesterday = date('Y-m-d H:i:s', strtotime('-24 hours'));
-        $data['active_today'] = $this->where('last_login >=', $yesterday)
-                                     ->where('is_active', 1)
-                                     ->countAllResults();
+        $data['active_today'] = $this->db->table('user_profiles')
+            ->where('last_login >=', $yesterday)
+            ->countAllResults();
 
         return $data;
     }
 
-    /**
-     * Get system performance metrics
-     */
     public function getSystemMetrics()
     {
         $cache = cache();
@@ -85,7 +66,6 @@ class DashboardModel extends Model
         $tables = $db->listTables();
         $totalSize = 0;
 
-        // `SHOW TABLE STATUS` is expensive, run it only once per cache TTL.
         $result = $db->query('SHOW TABLE STATUS')->getResultArray();
         foreach ($result as $table) {
             $totalSize += ((int) $table['Data_length']) + ((int) $table['Index_length']);
@@ -103,107 +83,84 @@ class DashboardModel extends Model
         return $metrics;
     }
 
-    /**
-     * Format bytes to human readable format
-     */
     private function formatBytes($bytes, $precision = 2)
     {
-        $units = array('B', 'KB', 'MB', 'GB', 'TB');
-        
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
+
         return round($bytes, $precision) . ' ' . $units[$i];
     }
 
-    /**
-     * Get system uptime (simulated)
-     */
     private function getSystemUptime()
     {
-        // Avoid fake values; return a neutral metric if no system probe is configured.
         return 'N/A';
     }
 
-    /**
-     * Get dashboard analytics for different time periods
-     */
     public function getAnalytics($period = 'today', $userRole = 'admin', $shopName = null)
     {
         switch ($period) {
             case 'today':
-                return $this->getTodayStats($userRole, $shopName);
+                return $this->getTodayStats();
             case 'week':
-                return $this->getWeekStats($userRole, $shopName);
+                return $this->getWeekStats();
             case 'month':
-                return $this->getMonthStats($userRole, $shopName);
+                return $this->getMonthStats();
             default:
-                return $this->getTodayStats($userRole, $shopName);
+                return $this->getTodayStats();
         }
     }
 
-    /**
-     * Get today's statistics
-     */
-    private function getTodayStats($userRole, $shopName)
+    private function getTodayStats()
     {
         $today = date('Y-m-d 00:00:00');
         $tomorrow = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
         return [
-            'orders' => $this->countSalesRecords($today, $tomorrow, $userRole, $shopName),
-            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($today, $tomorrow, $userRole, $shopName), 2),
-            'new_users' => $userRole === 'admin' ? $this->countNewUsers($today, $tomorrow) : 0,
+            'orders' => $this->countOrders($today, $tomorrow),
+            'revenue' => '&#8369;' . number_format($this->sumRevenue($today, $tomorrow), 2),
+            'new_users' => $this->countNewUsers($today, $tomorrow),
             'active_sessions' => $this->countActiveUsers(),
         ];
     }
 
-    /**
-     * Get week's statistics
-     */
-    private function getWeekStats($userRole, $shopName)
+    private function getWeekStats()
     {
         $weekStart = date('Y-m-d 00:00:00', strtotime('monday this week'));
         $nextDay = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
         return [
-            'orders' => $this->countSalesRecords($weekStart, $nextDay, $userRole, $shopName),
-            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($weekStart, $nextDay, $userRole, $shopName), 2),
-            'new_users' => $userRole === 'admin' ? $this->where('created_at >=', $weekStart)->countAllResults() : 0,
+            'orders' => $this->countOrders($weekStart, $nextDay),
+            'revenue' => '&#8369;' . number_format($this->sumRevenue($weekStart, $nextDay), 2),
+            'new_users' => $this->countNewUsers($weekStart, $nextDay),
             'active_sessions' => $this->countActiveUsers(),
         ];
     }
 
-    /**
-     * Get month's statistics
-     */
-    private function getMonthStats($userRole, $shopName)
+    private function getMonthStats()
     {
         $monthStart = date('Y-m-01 00:00:00');
         $nextDay = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
         return [
-            'orders' => $this->countSalesRecords($monthStart, $nextDay, $userRole, $shopName),
-            'revenue' => '&#8369;' . number_format($this->sumSalesRevenue($monthStart, $nextDay, $userRole, $shopName), 2),
-            'new_users' => $userRole === 'admin' ? $this->where('created_at >=', $monthStart)->countAllResults() : 0,
+            'orders' => $this->countOrders($monthStart, $nextDay),
+            'revenue' => '&#8369;' . number_format($this->sumRevenue($monthStart, $nextDay), 2),
+            'new_users' => $this->countNewUsers($monthStart, $nextDay),
             'active_sessions' => $this->countActiveUsers(),
         ];
     }
 
     public function getGrowthRate($userRole = 'admin', $shopName = null)
     {
-        if (! $this->hasAnalyticsRecordSchema()) {
-            return '0%';
-        }
-
         $currentStart = date('Y-m-01 00:00:00');
         $currentEnd = date('Y-m-d 00:00:00', strtotime('+1 day'));
         $previousStart = date('Y-m-01 00:00:00', strtotime('-1 month'));
         $previousEnd = date('Y-m-01 00:00:00');
 
-        $current = $this->sumSalesRevenue($currentStart, $currentEnd, $userRole, $shopName);
-        $previous = $this->sumSalesRevenue($previousStart, $previousEnd, $userRole, $shopName);
+        $current = $this->sumRevenue($currentStart, $currentEnd);
+        $previous = $this->sumRevenue($previousStart, $previousEnd);
 
         if ($previous <= 0) {
             return $current > 0 ? '+100%' : '0%';
@@ -217,97 +174,46 @@ class DashboardModel extends Model
 
     public function getTotalProducts($userRole = 'admin', $shopName = null)
     {
-        if (! $this->hasAnalyticsRecordSchema()) {
-            return 0;
-        }
-
-        $builder = $this->db->table('records')
-            ->where('record_type', 'inventory')
-            ->where('status !=', 'cancelled');
-
-        $this->applyShopScope($builder, $userRole, $shopName);
-
-        return (int) $builder->countAllResults();
+        return (int) $this->db->table('products')->countAllResults();
     }
 
-    private function countSalesRecords($start, $end, $userRole, $shopName)
+    private function countOrders(string $start, string $end): int
     {
-        if (! $this->hasAnalyticsRecordSchema()) {
-            return 0;
-        }
-
-        $builder = $this->db->table('records')
-            ->where('record_type', 'sales')
-            ->where('record_date >=', $start)
-            ->where('record_date <', $end)
-            ->where('status !=', 'cancelled');
-
-        $this->applyShopScope($builder, $userRole, $shopName);
-
-        return (int) $builder->countAllResults();
+        return (int) $this->db->table('orders')
+            ->where('created_at >=', $start)
+            ->where('created_at <', $end)
+            ->where('status !=', 'cancelled')
+            ->countAllResults();
     }
 
-    private function sumSalesRevenue($start, $end, $userRole, $shopName)
+    private function sumRevenue(string $start, string $end): float
     {
-        if (! $this->hasAnalyticsRecordSchema()) {
-            return 0.0;
-        }
-
-        $builder = $this->db->table('records')
-            ->selectSum('total_amount', 'amount')
-            ->where('record_type', 'sales')
-            ->where('record_date >=', $start)
-            ->where('record_date <', $end)
-            ->where('status', 'completed');
-
-        $this->applyShopScope($builder, $userRole, $shopName);
-
-        $row = $builder->get()->getRowArray();
+        $row = $this->db->table('order_payments op')
+            ->selectSum('op.amount', 'amount')
+            ->join('orders o', 'o.id = op.order_id', 'inner')
+            ->where('op.status', 'paid')
+            ->where('op.paid_at >=', $start)
+            ->where('op.paid_at <', $end)
+            ->where('o.status !=', 'cancelled')
+            ->get()
+            ->getRowArray();
 
         return isset($row['amount']) ? (float) $row['amount'] : 0.0;
     }
 
-    private function countActiveUsers()
+    private function countActiveUsers(): int
     {
         $yesterday = date('Y-m-d H:i:s', strtotime('-24 hours'));
 
-        return (int) $this->where('last_login >=', $yesterday)
-            ->where('is_active', 1)
+        return (int) $this->db->table('user_profiles')
+            ->where('last_login >=', $yesterday)
             ->countAllResults();
     }
 
-    private function countNewUsers($start, $end)
+    private function countNewUsers(string $start, string $end): int
     {
         return (int) $this->where('created_at >=', $start)
             ->where('created_at <', $end)
             ->countAllResults();
-    }
-
-    private function applyShopScope($builder, $userRole, $shopName)
-    {
-        // Role-based shop scoping removed: analytics are now based only on admin/customer roles.
-    }
-
-    private function hasAnalyticsRecordSchema(): bool
-    {
-        if ($this->hasAnalyticsRecordSchema !== null) {
-            return $this->hasAnalyticsRecordSchema;
-        }
-
-        if (! $this->db->tableExists('records')) {
-            $this->hasAnalyticsRecordSchema = false;
-            return false;
-        }
-
-        $requiredFields = ['record_type', 'record_date', 'status', 'total_amount'];
-        foreach ($requiredFields as $field) {
-            if (! $this->db->fieldExists($field, 'records')) {
-                $this->hasAnalyticsRecordSchema = false;
-                return false;
-            }
-        }
-
-        $this->hasAnalyticsRecordSchema = true;
-        return true;
     }
 }

@@ -9,7 +9,7 @@ class Records extends BaseController
     protected $recordModel;
     protected $session;
     private const ALLOWED_ROLES = ['admin'];
-    private const RECORD_TYPES = ['sales', 'purchase', 'inventory', 'expense'];
+    private const RECORD_TYPES = ['purchase', 'inventory', 'expense'];
     private const RECORD_STATUSES = ['pending', 'completed', 'cancelled'];
     private const PAYMENT_METHODS = ['cash', 'card', 'gcash', 'bank_transfer'];
     private const PAYMENT_STATUSES = ['paid', 'partial', 'unpaid'];
@@ -23,13 +23,12 @@ class Records extends BaseController
 
     private function checkAuth()
     {
-        if (!$this->session->get('logged_in')) {
+        if (! $this->session->get('logged_in')) {
             return redirect()->to('/login');
         }
 
-        if (!in_array((string) $this->session->get('user_role'), self::ALLOWED_ROLES, true)) {
-            return redirect()->to('/dashboard')
-                ->with('error', 'Access denied.');
+        if (! in_array((string) $this->session->get('user_role'), self::ALLOWED_ROLES, true)) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied.');
         }
 
         return true;
@@ -43,7 +42,7 @@ class Records extends BaseController
 
         return redirect()->to('/dashboard')->with(
             'error',
-            'Records module schema is outdated. Run `php spark migrate` then `php spark db:seed RecordSeeder`.'
+            'Records module schema is outdated. Run `php spark migrate`.'
         );
     }
 
@@ -61,15 +60,13 @@ class Records extends BaseController
 
         $requiredFields = [
             'record_type',
-            'date',
+            'record_date',
             'reference_number',
             'title',
             'quantity',
             'unit_price',
-            'total_amount',
             'payment_method',
             'payment_status',
-            'record_date',
             'status',
             'created_by',
         ];
@@ -83,12 +80,6 @@ class Records extends BaseController
 
         $this->hasExpectedSchema = true;
         return true;
-    }
-
-    private function hasRecordsField(string $field): bool
-    {
-        $db = \Config\Database::connect();
-        return $db->tableExists('records') && $db->fieldExists($field, 'records');
     }
 
     public function index()
@@ -147,22 +138,22 @@ class Records extends BaseController
         }
 
         if ($fromDate !== '') {
-            $query = $query->where('date >=', $fromDate);
+            $query = $query->where('record_date >=', $fromDate);
         }
         if ($toDate !== '') {
-            $query = $query->where('date <=', $toDate);
+            $query = $query->where('record_date <=', $toDate);
         }
 
         $records = $query
-            ->orderBy('date', strtoupper($dateSort))
+            ->orderBy('record_date', strtoupper($dateSort))
             ->orderBy('id', $dateSort === 'asc' ? 'ASC' : 'DESC')
             ->paginate(10);
         $pager = $recordsModel->pager;
-        $recordTypes = (new RecordModel())
-            ->select('record_type')
-            ->groupBy('record_type')
-            ->orderBy('record_type', 'ASC')
-            ->findAll();
+
+        $recordTypes = array_map(
+            static fn ($type) => ['record_type' => $type],
+            self::RECORD_TYPES
+        );
 
         $sortParams = array_filter([
             'q' => $search,
@@ -219,40 +210,32 @@ class Records extends BaseController
     public function show($id)
     {
         if (! $this->session->get('logged_in')) {
-            return $this->response
-                ->setStatusCode(401)
-                ->setJSON([
-                    'success' => false,
-                    'message' => 'Please login first.',
-                ]);
+            return $this->response->setStatusCode(401)->setJSON([
+                'success' => false,
+                'message' => 'Please login first.',
+            ]);
         }
 
         if (! in_array((string) $this->session->get('user_role'), self::ALLOWED_ROLES, true)) {
-            return $this->response
-                ->setStatusCode(403)
-                ->setJSON([
-                    'success' => false,
-                    'message' => 'Access denied.',
-                ]);
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Access denied.',
+            ]);
         }
 
         if (! $this->hasExpectedRecordsSchema()) {
-            return $this->response
-                ->setStatusCode(500)
-                ->setJSON([
-                    'success' => false,
-                    'message' => 'Records schema is outdated.',
-                ]);
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'Records schema is outdated.',
+            ]);
         }
 
         $record = $this->recordModel->find((int) $id);
         if (! $record) {
-            return $this->response
-                ->setStatusCode(404)
-                ->setJSON([
-                    'success' => false,
-                    'message' => 'Record not found.',
-                ]);
+            return $this->response->setStatusCode(404)->setJSON([
+                'success' => false,
+                'message' => 'Record not found.',
+            ]);
         }
 
         return $this->response->setJSON([
@@ -274,12 +257,8 @@ class Records extends BaseController
 
         $data = $this->sanitizePayload();
         $data['created_by'] = (int) $this->session->get('user_id');
-        $shopName = trim((string) $this->session->get('user_shop_name'));
-        if ($shopName !== '' && $this->hasRecordsField('shop_name')) {
-            $data['shop_name'] = $shopName;
-        }
 
-        if (!$this->recordModel->insert($data)) {
+        if (! $this->recordModel->insert($data)) {
             return redirect()->back()->withInput()->with('errors', $this->recordModel->errors());
         }
 
@@ -298,7 +277,7 @@ class Records extends BaseController
         }
 
         $record = $this->recordModel->find((int) $id);
-        if (!$record) {
+        if (! $record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
         }
 
@@ -327,17 +306,12 @@ class Records extends BaseController
 
         $recordId = (int) $id;
         $record = $this->recordModel->find($recordId);
-        if (!$record) {
+        if (! $record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
         }
 
         $data = $this->sanitizePayload();
-        $shopName = trim((string) $this->session->get('user_shop_name'));
-        if ($shopName !== '' && $this->hasRecordsField('shop_name')) {
-            $data['shop_name'] = $shopName;
-        }
-
-        if (!$this->recordModel->update($recordId, $data)) {
+        if (! $this->recordModel->update($recordId, $data)) {
             return redirect()->back()->withInput()->with('errors', $this->recordModel->errors());
         }
 
@@ -356,7 +330,7 @@ class Records extends BaseController
         }
 
         $record = $this->recordModel->find((int) $id);
-        if (!$record) {
+        if (! $record) {
             return redirect()->to('/records')->with('error', 'Record not found.');
         }
 
@@ -365,17 +339,12 @@ class Records extends BaseController
         return redirect()->to('/records')->with('success', 'Record deleted successfully.');
     }
 
-    private function sanitizePayload()
+    private function sanitizePayload(): array
     {
-        $dateInput = trim(strip_tags((string) $this->request->getPost('date')));
-        if ($dateInput === '') {
-            $dateInput = trim(strip_tags((string) $this->request->getPost('record_date')));
-        }
-        $date = $this->normalizeRecordDate($dateInput);
-
+        $recordDate = $this->normalizeRecordDate(trim(strip_tags((string) $this->request->getPost('date'))));
         $recordType = strtolower(trim(strip_tags((string) $this->request->getPost('record_type'))));
         if (! in_array($recordType, self::RECORD_TYPES, true)) {
-            $recordType = 'sales';
+            $recordType = 'expense';
         }
 
         $quantityValue = str_replace(',', '', trim(strip_tags((string) $this->request->getPost('quantity'))));
@@ -408,16 +377,14 @@ class Records extends BaseController
 
         return [
             'record_type' => $recordType,
-            'date' => $date,
+            'record_date' => $recordDate,
             'reference_number' => trim(strip_tags((string) $this->request->getPost('reference_number'))),
             'title' => trim(strip_tags((string) $this->request->getPost('title'))),
             'description' => trim(strip_tags((string) $this->request->getPost('description'))),
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
-            'total_amount' => round($quantity * $unitPrice, 2),
             'payment_method' => $paymentMethod,
             'payment_status' => $paymentStatus,
-            'record_date' => $date,
             'status' => $status,
             'notes' => trim(strip_tags((string) $this->request->getPost('notes'))),
         ];
@@ -456,5 +423,4 @@ class Records extends BaseController
 
         return ($date && $date->format('Y-m-d') === $normalized) ? $normalized : '';
     }
-
 }

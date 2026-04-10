@@ -431,7 +431,7 @@
 <body>
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
+            <a href="<?= site_url('dashboard') ?>" class="navbar-brand">Quick Puff Vape Shop</a>
 
             <div class="navbar-center">
                 <div class="navbar-menu">
@@ -571,7 +571,7 @@
             <!-- Receipt Preview -->
             <div class="receipt-preview" id="receiptPreview">
                 <div class="receipt-header">
-                    E-COMMERCE VAPE SHOP
+                    QUICK PUFF VAPE SHOP
                     <br>Official Receipt
                 </div>
                 <div>

@@ -2,12 +2,15 @@
 
 namespace App\Database\Seeds;
 
+use App\Models\ProductModel;
 use CodeIgniter\Database\Seeder;
 
 class ProductSeeder extends Seeder
 {
     public function run()
     {
+        $productModel = new ProductModel();
+
         $products = [
             [
                 'name' => 'VapeHub X Pod Kit',
@@ -16,8 +19,6 @@ class ProductSeeder extends Seeder
                 'price' => 1250.00,
                 'stock' => 25,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Salt Mint E-Liquid',
@@ -26,8 +27,6 @@ class ProductSeeder extends Seeder
                 'price' => 320.00,
                 'stock' => 50,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Replacement Coil Pack',
@@ -36,8 +35,6 @@ class ProductSeeder extends Seeder
                 'price' => 450.00,
                 'stock' => 8,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Portable Charger Case',
@@ -46,8 +43,6 @@ class ProductSeeder extends Seeder
                 'price' => 680.00,
                 'stock' => 15,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Mango Tango E-Liquid',
@@ -56,8 +51,6 @@ class ProductSeeder extends Seeder
                 'price' => 350.00,
                 'stock' => 30,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Pro Vapor Mod',
@@ -66,18 +59,14 @@ class ProductSeeder extends Seeder
                 'price' => 2800.00,
                 'stock' => 5,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Menthol Chill Disposable',
                 'category' => 'Disposable',
                 'description' => 'Ice-cold menthol disposable vape with smooth draw and long-lasting flavor.',
                 'price' => 450.00,
-                'stock' => 0,
+                'stock' => 12,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Ceramic Tank',
@@ -86,8 +75,6 @@ class ProductSeeder extends Seeder
                 'price' => 550.00,
                 'stock' => 12,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => '18650 Battery Pack',
@@ -96,8 +83,6 @@ class ProductSeeder extends Seeder
                 'price' => 750.00,
                 'stock' => 20,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'name' => 'Berry Blast E-Liquid',
@@ -106,11 +91,22 @@ class ProductSeeder extends Seeder
                 'price' => 330.00,
                 'stock' => 18,
                 'status' => 'active',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
             ],
         ];
 
-        $this->db->table('products')->insertBatch($products);
+        foreach ($products as $row) {
+            $existing = $this->db->table('products')
+                ->select('id')
+                ->where('name', $row['name'])
+                ->get()
+                ->getRowArray();
+
+            if ($existing) {
+                $productModel->update((int) $existing['id'], $row);
+                continue;
+            }
+
+            $productModel->insert($row);
+        }
     }
 }

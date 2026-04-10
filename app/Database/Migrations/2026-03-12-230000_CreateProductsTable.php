@@ -17,12 +17,44 @@ class CreateProductsTable extends Migration
             ],
             'name' => [
                 'type'       => 'VARCHAR',
-                'constraint' => '255',
+                'constraint' => 100,
                 'null'       => false,
             ],
-            'category' => [
+            'slug' => [
                 'type'       => 'VARCHAR',
-                'constraint' => '100',
+                'constraint' => 120,
+                'null'       => false,
+                'unique'     => true,
+            ],
+            'created_at' => [
+                'type' => 'DATETIME',
+                'null' => false,
+            ],
+            'updated_at' => [
+                'type' => 'DATETIME',
+                'null' => false,
+            ],
+        ]);
+
+        $this->forge->addKey('id', true);
+        $this->forge->createTable('product_categories');
+
+        $this->forge->addField([
+            'id' => [
+                'type'           => 'INT',
+                'constraint'     => 11,
+                'unsigned'       => true,
+                'auto_increment' => true,
+            ],
+            'category_id' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
+                'null'       => false,
+            ],
+            'name' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
                 'null'       => false,
             ],
             'description' => [
@@ -35,20 +67,14 @@ class CreateProductsTable extends Migration
                 'null'       => false,
                 'default'    => 0.00,
             ],
-            'stock' => [
-                'type'       => 'INT',
-                'constraint' => 11,
-                'null'       => false,
-                'default'    => 0,
-            ],
             'image' => [
                 'type'       => 'VARCHAR',
-                'constraint' => '255',
+                'constraint' => 255,
                 'null'       => true,
             ],
             'status' => [
-                'type'       => 'ENUM',
-                'constraint' => ['active', 'inactive'],
+                'type'       => "ENUM('active','inactive')",
+                'null'       => false,
                 'default'    => 'active',
             ],
             'created_at' => [
@@ -62,13 +88,79 @@ class CreateProductsTable extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('category');
+        $this->forge->addKey('category_id');
         $this->forge->addKey('status');
+        $this->forge->addForeignKey('category_id', 'product_categories', 'id', 'RESTRICT', 'CASCADE');
         $this->forge->createTable('products');
+
+        $this->forge->addField([
+            'id' => [
+                'type'           => 'INT',
+                'constraint'     => 11,
+                'unsigned'       => true,
+                'auto_increment' => true,
+            ],
+            'product_id' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
+                'null'       => false,
+            ],
+            'movement_type' => [
+                'type'       => "ENUM('initial','adjustment','purchase','sale','return','inventory')",
+                'null'       => false,
+                'default'    => 'adjustment',
+            ],
+            'quantity' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'null'       => false,
+            ],
+            'unit_cost' => [
+                'type'       => 'DECIMAL',
+                'constraint' => '10,2',
+                'null'       => true,
+            ],
+            'reference_type' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 50,
+                'null'       => true,
+            ],
+            'reference_id' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
+                'null'       => true,
+            ],
+            'notes' => [
+                'type' => 'TEXT',
+                'null' => true,
+            ],
+            'created_by' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
+                'null'       => true,
+            ],
+            'created_at' => [
+                'type' => 'DATETIME',
+                'null' => false,
+            ],
+        ]);
+
+        $this->forge->addKey('id', true);
+        $this->forge->addKey('product_id');
+        $this->forge->addKey('movement_type');
+        $this->forge->addKey('created_at');
+        $this->forge->addForeignKey('product_id', 'products', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('created_by', 'users', 'id', 'SET NULL', 'CASCADE');
+        $this->forge->createTable('inventory_movements');
     }
 
     public function down()
     {
-        $this->forge->dropTable('products');
+        $this->forge->dropTable('inventory_movements', true);
+        $this->forge->dropTable('products', true);
+        $this->forge->dropTable('product_categories', true);
     }
 }

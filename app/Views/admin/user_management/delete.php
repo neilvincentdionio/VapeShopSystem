@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete User - E-Commerce Vape Shop</title>
+    <title>Delete User - Quick Puff Vape Shop</title>
     <style>
         * {
             margin: 0;

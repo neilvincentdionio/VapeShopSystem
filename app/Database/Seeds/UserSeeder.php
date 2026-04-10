@@ -2,79 +2,67 @@
 
 namespace App\Database\Seeds;
 
+use App\Models\UserModel;
 use CodeIgniter\Database\Seeder;
 
 class UserSeeder extends Seeder
 {
     public function run()
     {
-        $now = date('Y-m-d H:i:s');
+        $userModel = new UserModel();
 
-        $data = [
+        $users = [
             [
-                'name'       => 'Administrator',
-                'email'      => 'admin@vapeshop.com',
-                'password'   => password_hash('password', PASSWORD_DEFAULT),
-                'role'       => 'admin',
+                'name' => 'Administrator',
+                'email' => 'admin@vapeshop.com',
+                'password' => 'password',
+                'role' => 'admin',
+                'shop_name' => 'Quick Puff Vape Shop',
                 'phone_number' => '+63 900 000 0001',
                 'address_line' => '101 Cloud Mint Avenue',
+                'barangay' => 'San Isidro',
                 'city' => 'Manila',
                 'province' => 'Metro Manila',
                 'postal_code' => '1000',
+                'country' => 'Philippines',
                 'legal_age_confirmed' => 1,
                 'approval_status' => 'approved',
                 'verification_id_path' => null,
-                'is_active'  => 1,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'is_active' => 1,
             ],
             [
-                'name'       => 'Customer',
-                'email'      => 'customer@vapeshop.com',
-                'password'   => password_hash('password', PASSWORD_DEFAULT),
-                'role'       => 'customer',
+                'name' => 'Customer',
+                'email' => 'customer@vapeshop.com',
+                'password' => 'password',
+                'role' => 'customer',
                 'phone_number' => '+63 900 000 0002',
                 'address_line' => '22 Vapor Street',
+                'barangay' => 'Bagong Pag-asa',
                 'city' => 'Quezon City',
                 'province' => 'Metro Manila',
                 'postal_code' => '1100',
+                'country' => 'Philippines',
                 'legal_age_confirmed' => 1,
                 'approval_status' => 'approved',
                 'verification_id_path' => null,
-                'is_active'  => 1,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'is_active' => 1,
             ],
         ];
 
-        foreach ($data as $row) {
-            $existing = $this->db->table('users')->where('email', $row['email'])->get()->getRowArray();
+        foreach ($users as $row) {
+            $existing = $userModel->findUserByEmail($row['email']);
 
             if ($existing) {
-                $this->db->table('users')->where('email', $row['email'])->update([
-                    'name' => $row['name'],
-                    'role' => $row['role'],
-                    'phone_number' => $row['phone_number'],
-                    'address_line' => $row['address_line'],
-                    'city' => $row['city'],
-                    'province' => $row['province'],
-                    'postal_code' => $row['postal_code'],
-                    'legal_age_confirmed' => $row['legal_age_confirmed'],
-                    'approval_status' => $row['approval_status'],
-                    'is_active' => $row['is_active'],
-                    'updated_at' => $now,
-                ]);
+                $updateData = $row;
+                $updateData['password'] = password_hash((string) $row['password'], PASSWORD_DEFAULT);
+                $userModel->update((int) $existing['id'], $updateData);
                 continue;
             }
 
-            $this->db->table('users')->insert($row);
+            $userModel->createUser($row);
         }
 
-        // Fix user roles - moved from FixUserRolesSeeder
-        // Update users with empty or null roles to 'customer'
         $this->db->query("UPDATE users SET role = 'customer' WHERE role = '' OR role IS NULL");
-        
-        // Update any existing 'staff' roles to 'customer'
         $this->db->query("UPDATE users SET role = 'customer' WHERE role = 'staff'");
     }
 }

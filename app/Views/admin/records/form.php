@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title) ?> - E-Commerce Vape Shop System</title>
+    <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -177,9 +177,8 @@
                 </div>
                 <div class="field">
                     <label>Record Type</label>
-                    <?php $currentType = old('record_type', $record['record_type'] ?? 'sales'); ?>
+                    <?php $currentType = old('record_type', $record['record_type'] ?? 'purchase'); ?>
                     <select name="record_type" required>
-                        <option value="sales" <?= $currentType === 'sales' ? 'selected' : '' ?>>Sales</option>
                         <option value="purchase" <?= $currentType === 'purchase' ? 'selected' : '' ?>>Purchase</option>
                         <option value="inventory" <?= $currentType === 'inventory' ? 'selected' : '' ?>>Inventory</option>
                         <option value="expense" <?= $currentType === 'expense' ? 'selected' : '' ?>>Expense</option>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title) ?> - E-Commerce Vape Shop System</title>
+    <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
 <?php
@@ -930,10 +930,10 @@ $activeDeliveries = count(array_filter(
                             <td>
                                 <div class="action-buttons">
                                     <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_pay'): ?>
-                                        <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
-                                            <i class="fas fa-box"></i>
-                                            Preparing Package
-                                        </button>
+                                        <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
+                                            <i class="fas fa-cash-register"></i>
+                                            Checkout Order
+                                        </a>
                                     <?php endif; ?>
                                     
                                     <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_ship'): ?>

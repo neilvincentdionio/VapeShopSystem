@@ -11,7 +11,8 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_receive' => 'To Receive',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund'
+            'return_refund' => 'Return/Refund',
+            'failed_delivery' => 'Failed Delivery',
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -602,6 +603,12 @@ window.addEventListener('beforeunload', function() {
             <a href="<?= site_url('customer/orders?tab=return_refund') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'return_refund' ? 'active' : '' ?>">
                 Return/Refund
             </a>
+            <a href="<?= site_url('customer/orders?tab=failed_delivery') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'failed_delivery' ? 'active' : '' ?>">
+                Failed Delivery
+                <?php if (isset($statusCounts['failed_delivery']) && $statusCounts['failed_delivery'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['failed_delivery'] ?></span>
+                <?php endif; ?>
+            </a>
         </div>
     </div>
     
@@ -666,27 +673,27 @@ window.addEventListener('beforeunload', function() {
                     
                     <div class="action-buttons">
                         <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                         <?php endif; ?>
                         
                         <?php if ($order['delivery_status'] === 'to_ship'): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn">Track Order</a>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                         <?php endif; ?>
                         
                         <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
-                            <a href="<?= base_url('order_details_standalone.html') ?>" class="btn btn-secondary">View Details</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
+                            <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                         
                         <?php if (in_array($order['delivery_status'], ['completed', 'cancelled'])): ?>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
-                            <a href="<?= site_url('test-order-action/' . $order['id'] . '/review') ?>" class="btn btn-secondary">Review</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/review') ?>" class="btn btn-secondary">Review</a>
                         <?php endif; ?>
                         
                         <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship'])): ?>
-                            <a href="<?= base_url('order_details_standalone.html') ?>" class="btn btn-secondary">View Details</a>
+                            <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -707,6 +714,8 @@ window.addEventListener('beforeunload', function() {
                     <i class="fas fa-check-circle"></i>
                 <?php elseif (($activeTab ?? 'all') === 'cancelled'): ?>
                     <i class="fas fa-times-circle"></i>
+                <?php elseif (($activeTab ?? 'all') === 'failed_delivery'): ?>
+                    <i class="fas fa-exclamation-triangle"></i>
                 <?php else: ?>
                     <i class="fas fa-undo"></i>
                 <?php endif; ?>
@@ -725,6 +734,8 @@ window.addEventListener('beforeunload', function() {
                     You don't have any completed orders yet.
                 <?php elseif (($activeTab ?? 'all') === 'cancelled'): ?>
                     You don't have any cancelled orders.
+                <?php elseif (($activeTab ?? 'all') === 'failed_delivery'): ?>
+                    You don't have any failed deliveries right now.
                 <?php else: ?>
                     You don't have any return/refund orders.
                 <?php endif; ?>

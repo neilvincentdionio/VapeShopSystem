@@ -11,7 +11,8 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_receive' => 'To Receive',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund'
+            'return_refund' => 'Return/Refund',
+            'failed_delivery' => 'Failed Delivery',
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -165,21 +166,21 @@ if (!function_exists('getDeliveryStatusLabel')) {
 
             <div class="order-actions">
                 <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_ship'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/view') ?>" class="btn">Track Order</a>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
+                    <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn">Track Order</a>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
                 <?php endif; ?>
                 
                 <?php if (in_array($order['delivery_status'], ['completed', 'cancelled'])): ?>
-                    <a href="<?= site_url('test-order-action/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
                 <?php endif; ?>
             </div>
         </div>

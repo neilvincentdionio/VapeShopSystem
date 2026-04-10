@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($page_title) ?> - E-Commerce Vape Shop System</title>
+    <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -185,7 +185,7 @@
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/dashboard" class="nav-brand">Vape Shop Admin</a>
+            <a href="/dashboard" class="nav-brand">Quick Puff Vape Shop</a>
             <div class="nav-links">
                 <a href="/dashboard" class="nav-link">Dashboard</a>
                 <a href="/orders" class="nav-link">Orders</a>

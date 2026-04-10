@@ -11,7 +11,7 @@ $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
 ?>
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
-        <a href="<?= site_url('dashboard') ?>" class="navbar-brand">E-Commerce Vape Shop</a>
+        <a href="<?= site_url('dashboard') ?>" class="navbar-brand">Quick Puff Vape Shop</a>
 
         <div class="navbar-center">
             <div class="navbar-menu">

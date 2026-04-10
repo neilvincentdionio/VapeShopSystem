@@ -158,10 +158,10 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <h3><i class="fas fa-cog"></i> Delivery Management</h3>
                 
                 <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
-                        <i class="fas fa-truck"></i>
-                        Mark as Shipped
-                    </button>
+                    <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
+                        <i class="fas fa-cash-register"></i>
+                        Open Checkout
+                    </a>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_ship'): ?>

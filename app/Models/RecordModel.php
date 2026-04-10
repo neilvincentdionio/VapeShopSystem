@@ -13,24 +13,15 @@ class RecordModel extends Model
     protected $protectFields = true;
     protected $allowedFields = [
         'record_type',
-        'shop_name',
-        'date',
+        'record_date',
         'reference_number',
         'title',
         'description',
         'quantity',
         'unit_price',
-        'total_amount',
         'payment_method',
         'payment_status',
-        'record_date',
         'status',
-        'delivery_status',
-        'tracking_number',
-        'shipped_at',
-        'delivered_at',
-        'shipping_address',
-        'contact_number',
         'notes',
         'created_by',
     ];
@@ -40,95 +31,54 @@ class RecordModel extends Model
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
 
+    protected $afterFind = ['decorateRecords'];
+
     protected $validationRules = [
-        'record_type' => 'required|in_list[sales,purchase,inventory,expense]',
-        'date' => 'required|valid_date[Y-m-d]',
+        'record_type' => 'required|in_list[purchase,inventory,expense]',
+        'record_date' => 'required|valid_date[Y-m-d]',
         'reference_number' => 'required|min_length[3]|max_length[100]',
         'title' => 'required|min_length[3]|max_length[255]',
         'description' => 'permit_empty|max_length[1000]',
         'quantity' => 'required|integer|greater_than_equal_to[0]',
         'unit_price' => 'required|decimal|greater_than_equal_to[0]',
-        'total_amount' => 'required|decimal|greater_than_equal_to[0]',
         'payment_method' => 'permit_empty|in_list[cash,card,gcash,bank_transfer]',
-        'payment_status' => 'permit_empty|in_list[paid,partial,unpaid,pending]',
-        'record_date' => 'required|valid_date[Y-m-d]',
+        'payment_status' => 'permit_empty|in_list[paid,partial,unpaid]',
         'status' => 'required|in_list[pending,completed,cancelled]',
-        'delivery_status' => 'permit_empty|in_list[to_pay,to_ship,to_receive,completed,cancelled,return_refund]',
-        'tracking_number' => 'permit_empty|max_length[100]',
-        'shipping_address' => 'permit_empty|max_length[500]',
-        'contact_number' => 'permit_empty|max_length[20]',
         'notes' => 'permit_empty|max_length[1000]',
     ];
-    
-    /**
-     * Get orders by delivery status for a specific customer
-     */
-    public function getOrdersByDeliveryStatus($userId, $deliveryStatus = null)
+
+    protected function decorateRecords(array $data): array
     {
-        $builder = $this->where('record_type', 'sales')
-                        ->where('created_by', $userId)
-                        ->orderBy('created_at', 'DESC');
-        
-        if ($deliveryStatus && $deliveryStatus !== 'all') {
-            $builder->where('delivery_status', $deliveryStatus);
+        if (! isset($data['data']) || $data['data'] === null) {
+            return $data;
         }
-        
-        return $builder->findAll();
-    }
-    
-    /**
-     * Update delivery status
-     */
-    public function updateDeliveryStatus($orderId, $status, $additionalData = [])
-    {
-        $updateData = ['delivery_status' => $status];
-        
-        // Add timestamps based on status
-        switch ($status) {
-            case 'to_ship':
-                $updateData['shipped_at'] = date('Y-m-d H:i:s');
-                break;
-            case 'completed':
-                $updateData['delivered_at'] = date('Y-m-d H:i:s');
-                break;
+
+        if ($this->isSingleRow($data['data'])) {
+            $data['data'] = $this->decorateRecordRow($data['data']);
+            return $data;
         }
-        
-        // Merge additional data
-        $updateData = array_merge($updateData, $additionalData);
-        
-        return $this->update($orderId, $updateData);
-    }
-    
-    /**
-     * Get order counts by status for dashboard
-     */
-    public function getOrderStatusCounts($userId)
-    {
-        $builder = $this->select('delivery_status, COUNT(*) as count')
-                        ->where('record_type', 'sales')
-                        ->where('created_by', $userId)
-                        ->groupBy('delivery_status');
-        
-        $results = $builder->findAll();
-        
-        $counts = [
-            'all' => 0,
-            'to_pay' => 0,
-            'to_ship' => 0,
-            'to_receive' => 0,
-            'completed' => 0,
-            'cancelled' => 0,
-            'return_refund' => 0
-        ];
-        
-        foreach ($results as $result) {
-            $status = $result['delivery_status'];
-            if (isset($counts[$status])) {
-                $counts[$status] = (int) $result['count'];
+
+        if (is_array($data['data'])) {
+            foreach ($data['data'] as &$row) {
+                if (is_array($row)) {
+                    $row = $this->decorateRecordRow($row);
+                }
             }
-            $counts['all'] += (int) $result['count'];
+            unset($row);
         }
-        
-        return $counts;
+
+        return $data;
+    }
+
+    private function isSingleRow($data): bool
+    {
+        return is_array($data) && ! isset($data[0]) && array_key_exists('id', $data);
+    }
+
+    private function decorateRecordRow(array $row): array
+    {
+        $row['date'] = $row['record_date'] ?? null;
+        $row['total_amount'] = round(((float) ($row['quantity'] ?? 0)) * ((float) ($row['unit_price'] ?? 0)), 2);
+        return $row;
     }
 }

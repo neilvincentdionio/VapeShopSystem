@@ -5,9 +5,7 @@ namespace App\Controllers;
 use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
-use App\Models\RecordModel;
-use CodeIgniter\HTTP\ResponseInterface;
-use CodeIgniter\Database\BaseConnection;
+use App\Models\OrderModel;
 
 class Dashboard extends BaseController
 {
@@ -15,6 +13,7 @@ class Dashboard extends BaseController
     protected $dashboardModel;
     protected $userModel;
     protected $productModel;
+    protected $orderModel;
 
     public function __construct()
     {
@@ -22,6 +21,7 @@ class Dashboard extends BaseController
         $this->dashboardModel = new DashboardModel();
         $this->userModel = new UserModel();
         $this->productModel = new ProductModel();
+        $this->orderModel = new OrderModel();
     }
 
     /**
@@ -233,52 +233,19 @@ class Dashboard extends BaseController
         }
 
         $userId = (int) $this->session->get('user_id');
-        $recordModel = new RecordModel();
-        
-        // Get active tab from query parameter
+
         $activeTab = $this->request->getGet('tab') ?? 'all';
-        $validTabs = ['all', 'to_pay', 'to_ship', 'to_receive', 'completed', 'cancelled', 'return_refund'];
-        
-        if (!in_array($activeTab, $validTabs)) {
+        $validTabs = ['all', 'to_pay', 'to_ship', 'to_receive', 'completed', 'cancelled', 'return_refund', 'failed_delivery'];
+
+        if (!in_array($activeTab, $validTabs, true)) {
             $activeTab = 'all';
         }
-        
-        // Get orders based on active tab
-        $orders = $recordModel->getOrdersByDeliveryStatus($userId, $activeTab === 'all' ? null : $activeTab);
-        
-        // Get status counts for badges
-        $statusCounts = $recordModel->getOrderStatusCounts($userId);
 
-        // Parse order items from notes
-        $orderDetails = [];
-        foreach ($orders as $order) {
-            $orderItems = [];
-            $notes = $order['notes'] ?? '';
-            
-            if (!empty($notes)) {
-                $decoded = json_decode($notes, true);
-                if ($decoded && isset($decoded['items'])) {
-                    $orderItems = $decoded['items'];
-                }
-            }
-            
-            $orderDetails[] = [
-                'id' => $order['id'],
-                'reference_number' => $order['reference_number'],
-                'date' => $order['created_at'],
-                'total_amount' => $order['total_amount'],
-                'payment_method' => $order['payment_method'],
-                'status' => $order['status'],
-                'delivery_status' => $order['delivery_status'] ?? 'to_pay',
-                'tracking_number' => $order['tracking_number'],
-                'shipping_address' => $order['shipping_address'],
-                'contact_number' => $order['contact_number'],
-                'items' => $orderItems
-            ];
-        }
+        $orders = $this->orderModel->getCustomerOrders($userId, $activeTab === 'all' ? null : $activeTab);
+        $statusCounts = $this->orderModel->getCustomerStatusCounts($userId);
 
         return view('customer/orders', $this->getCustomerPageData('Orders', 'orders', [
-            'orders' => $orderDetails,
+            'orders' => $orders,
             'activeTab' => $activeTab,
             'statusCounts' => $statusCounts,
         ]));
@@ -465,91 +432,60 @@ class Dashboard extends BaseController
 
         $customer = $this->userModel->find((int) $this->session->get('user_id'));
         $customerId = (int) ($customer['id'] ?? 0);
+        if ($customerId <= 0) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'success' => false,
+                'message' => 'Customer account not found.',
+            ]);
+        }
 
         $referenceNumber = $this->generateReceiptNumber();
+        $orderItems = $this->mapCartItemsToOrderItems($cartItems);
 
-        $receiptItems = array_map(static function (array $item): array {
-            return [
-                'id' => (int) $item['id'],
-                'qty' => (int) $item['quantity'],
-                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
-                'unit_price' => (float) $item['price'],
-            ];
-        }, $cartItems);
-
-        $notesPayload = [
-            'items' => $receiptItems,
-            'total' => round($total, 2),
-            'direct_order' => true,
-        ];
-
-        // Ensure RecordModel's notes max_length[1000] validation won't fail.
-        $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if ($notes === false) {
-            $notes = '';
-        }
-        if (strlen($notes) > 950) {
-            $notesPayload['items'] = array_slice($receiptItems, 0, 10);
-            $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        foreach ($cartItems as $item) {
+            $product = $this->productModel->getProductById((int) $item['id'], true);
+            if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
+                return $this->response->setStatusCode(409)->setJSON([
+                    'success' => false,
+                    'message' => 'Insufficient stock for one of the items.',
+                ]);
+            }
         }
 
-        $recordModel = new RecordModel();
-        $db = \Config\Database::connect();
-
-        $db->transStart();
-
-        try {
-            $totalQty = (int) array_sum(array_column($cartItems, 'quantity'));
-            $unitPrice = $totalQty > 0 ? round($total / $totalQty, 2) : 0.00;
-
-            $insertOk = $recordModel->insert([
-                'record_type' => 'sales',
-                'date' => date('Y-m-d'),
-                'record_date' => date('Y-m-d'),
+        $orderId = $this->orderModel->createOrder(
+            [
+                'customer_id' => $customerId,
                 'reference_number' => $referenceNumber,
                 'title' => 'Direct Order',
                 'description' => 'Customer direct order purchase.',
-                'quantity' => $totalQty,
-                'unit_price' => $unitPrice,
-                'total_amount' => round($total, 2),
-                'payment_method' => 'cash',
-                'payment_status' => 'pending',
+                'order_date' => date('Y-m-d'),
                 'status' => 'pending',
-                'delivery_status' => 'to_pay',
-                'notes' => $notes,
-                'created_by' => $customerId > 0 ? $customerId : null,
-            ]);
+            ],
+            $orderItems,
+            [
+                'method' => 'cash',
+                'status' => 'pending',
+                'amount' => round($total, 2),
+            ],
+            $this->buildCustomerShipmentData($customer, [
+                'status' => 'to_pay',
+            ])
+        );
 
-            if (! $insertOk) {
-                // Get validation errors if any
-                $errors = $recordModel->errors();
-                $errorMsg = 'Failed to create order.';
-                if (!empty($errors)) {
-                    $errorMsg .= ' Validation errors: ' . implode(', ', $errors);
-                }
-                throw new \RuntimeException($errorMsg);
-            }
-
-            $db->transComplete();
-
-            if ($db->transStatus() === false) {
-                throw new \RuntimeException('Order processing failed.');
-            }
-
-            $this->clearCustomerCart();
-
-            return $this->response->setStatusCode(200)->setJSON([
-                'success' => true,
-                'message' => 'Order processed successfully!',
-                'redirect' => site_url('customer/orders'),
-            ]);
-        } catch (\Throwable $e) {
-            $db->transRollback();
+        if (! $orderId) {
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Failed to create order.',
             ]);
         }
+
+        $this->clearCustomerCart();
+
+        return $this->response->setStatusCode(200)->setJSON([
+            'success' => true,
+            'message' => 'Order processed successfully!',
+            'redirect' => site_url('customer/orders'),
+        ]);
     }
 
     /**
@@ -578,7 +514,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Customer: Checkout submit (cash only) with change calculation + receipt.
+     * Customer: Checkout submit with payment method selection.
      */
     public function customerCheckoutSubmit()
     {
@@ -591,9 +527,9 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/age-verification')->with('error', 'Age verification required (18+).');
         }
 
-        $cashGiven = (float) ($this->request->getPost('cash_given') ?? 0);
-        if ($cashGiven <= 0) {
-            return redirect()->to('/customer/checkout')->with('error', 'Please enter a valid cash amount.');
+        $paymentMethod = $this->request->getPost('payment_method');
+        if (! $paymentMethod || ! in_array($paymentMethod, ['cash_on_delivery', 'gcash'])) {
+            return redirect()->to('/customer/checkout')->with('error', 'Please select a valid payment method.');
         }
 
         $cart = $this->getCustomerCart();
@@ -604,94 +540,97 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/products')->with('error', 'Your cart is empty.');
         }
 
-        if ($cashGiven < $total) {
-            return redirect()->to('/customer/checkout')->with('error', 'Cash amount is not enough. Please provide sufficient cash.');
-        }
-
-        $change = $cashGiven - $total;
-
         $customer = $this->userModel->find((int) $this->session->get('user_id'));
         $customerId = (int) ($customer['id'] ?? 0);
+        if ($customerId <= 0) {
+            return redirect()->to('/customer/checkout')->with('error', 'Customer account not found.');
+        }
 
         $referenceNumber = $this->generateReceiptNumber();
+        $orderItems = $this->mapCartItemsToOrderItems($cartItems);
+        $db = \Config\Database::connect();
 
-        $receiptItems = array_map(static function (array $item): array {
-            return [
-                'id' => (int) $item['id'],
-                'qty' => (int) $item['quantity'],
-                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
-                'unit_price' => (float) $item['price'],
-            ];
-        }, $cartItems);
-
-        $notesPayload = [
-            'items' => $receiptItems,
-            'cash_given' => round($cashGiven, 2),
-            'change' => round($change, 2),
-            'total' => round($total, 2),
+        // Prepare payment data based on method
+        $paymentData = [];
+        $orderData = [
+            'customer_id' => $customerId,
+            'reference_number' => $referenceNumber,
+            'order_date' => date('Y-m-d'),
         ];
 
-        // Ensure RecordModel's notes max_length[1000] validation won't fail.
-        $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if ($notes === false) {
-            $notes = '';
-        }
-        if (strlen($notes) > 950) {
-            $notesPayload['items'] = array_slice($receiptItems, 0, 10);
-            $notes = json_encode($notesPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
+        if ($paymentMethod === 'cash_on_delivery') {
+            $cashGiven = (float) ($this->request->getPost('cash_given') ?? 0);
+            if ($cashGiven <= 0) {
+                return redirect()->to('/customer/checkout')->with('error', 'Please enter a valid cash amount.');
+            }
 
-        $recordModel = new RecordModel();
-        $db = \Config\Database::connect();
+            if ($cashGiven < $total) {
+                return redirect()->to('/customer/checkout')->with('error', 'Cash amount is not enough. Please provide sufficient cash.');
+            }
+
+            $change = $cashGiven - $total;
+
+            $orderData['title'] = 'Cash on Delivery Order';
+            $orderData['description'] = 'Customer order with Cash on Delivery payment.';
+            $orderData['status'] = 'pending';
+
+            $paymentData = [
+                'method' => 'cash',
+                'status' => 'unpaid',
+                'amount' => round($total, 2),
+                'amount_received' => round($cashGiven, 2),
+                'change_amount' => round($change, 2),
+            ];
+
+            $shipmentData = $this->buildCustomerShipmentData($customer, [
+                'status' => 'to_pay',
+            ]);
+        } elseif ($paymentMethod === 'gcash') {
+            $gcashReference = $this->request->getPost('gcash_reference');
+            if (! $gcashReference || trim($gcashReference) === '') {
+                return redirect()->to('/customer/checkout')->with('error', 'Please enter your GCash reference number.');
+            }
+
+            if (strlen(trim($gcashReference)) < 6) {
+                return redirect()->to('/customer/checkout')->with('error', 'GCash reference number appears to be invalid.');
+            }
+
+            $orderData['title'] = 'GCash Payment Order';
+            $orderData['description'] = "Customer order with GCash payment. Ref: " . trim($gcashReference);
+            $orderData['status'] = 'pending';
+
+            $paymentData = [
+                'method' => 'gcash',
+                'status' => 'pending',
+                'amount' => round($total, 2),
+                'gcash_reference' => trim($gcashReference),
+            ];
+
+            $shipmentData = $this->buildCustomerShipmentData($customer, [
+                'status' => 'to_pay',
+            ]);
+        }
 
         $db->transStart();
 
         try {
-            // Re-validate stock at checkout time.
-            foreach ($cartItems as $item) {
-                $product = $this->productModel->getProductById((int) $item['id'], true);
-                if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
-                    throw new \RuntimeException('Insufficient stock for one of the items.');
-                }
-
-                // updateStock uses: stock = stock + $quantity, so pass negative to decrement.
-                $ok = $this->productModel->updateStock((int) $item['id'], -((int) $item['quantity']));
-                if (! $ok) {
-                    throw new \RuntimeException('Failed to update stock.');
-                }
+            // For COD, we don't deduct stock yet. For GCash, we deduct after payment confirmation
+            if ($paymentMethod === 'cash_on_delivery') {
+                // Don't deduct stock for COD until payment is received
+            } else {
+                // For GCash, we could deduct stock here if you want to reserve items
+                // For now, we'll wait for admin confirmation
             }
 
-            $totalQty = (int) array_sum(array_column($cartItems, 'quantity'));
-            $unitPrice = $totalQty > 0 ? round($total / $totalQty, 2) : 0.00;
+            $orderId = $this->orderModel->createOrder(
+                $orderData,
+                $orderItems,
+                $paymentData,
+                $shipmentData
+            );
 
-            $insertOk = $recordModel->insert([
-                'record_type' => 'sales',
-                'date' => date('Y-m-d'),
-                'record_date' => date('Y-m-d'),
-                'reference_number' => $referenceNumber,
-                'title' => 'Cash Sale',
-                'description' => 'Customer checkout purchase.',
-                'quantity' => $totalQty,
-                'unit_price' => $unitPrice,
-                'total_amount' => round($total, 2),
-                'payment_method' => 'cash',
-                'payment_status' => 'paid',
-                'status' => 'completed',
-                'delivery_status' => 'to_ship',
-                'notes' => $notes,
-                'created_by' => $customerId > 0 ? $customerId : null,
-            ]);
-
-            if (! $insertOk) {
-                throw new \RuntimeException('Failed to create sales record.');
-            }
-
-            $recordId = (int) $recordModel->getInsertID();
-            
-            // Auto-populate customer info for logged-in customers
-            if ($customerId > 0) {
-                $order = $recordModel->find($recordId);
-                $this->autoPopulateCustomerInfo($recordId, $order);
+            if (! $orderId) {
+                throw new \RuntimeException('Failed to create order.');
             }
 
             $db->transComplete();
@@ -702,7 +641,7 @@ class Dashboard extends BaseController
 
             $this->clearCustomerCart();
 
-            return redirect()->to(site_url('customer/receipt/' . $recordId));
+            return redirect()->to(site_url('customer/receipt/' . $orderId));
         } catch (\Throwable $e) {
             $db->transRollback();
             return redirect()->to('/customer/checkout')->with('error', $e->getMessage());
@@ -719,20 +658,19 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $recordId = (int) $id;
-        if ($recordId <= 0) {
+        $orderId = (int) $id;
+        if ($orderId <= 0) {
             return redirect()->to('/customer/products')->with('error', 'Invalid receipt.');
         }
 
-        $recordModel = new RecordModel();
-        $record = $recordModel->find($recordId);
+        $order = $this->orderModel->getOrder($orderId);
 
-        if (! $record || ($record['record_type'] ?? '') !== 'sales') {
+        if (! $order || (int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
             return redirect()->to('/customer/products')->with('error', 'Receipt not found.');
         }
 
         return view('customer/receipt', $this->getCustomerPageData('Receipt', 'cart', [
-            'receipt' => $record,
+            'receipt' => $order,
         ]));
     }
 
@@ -882,6 +820,97 @@ class Dashboard extends BaseController
         return $legalAgeConfirmed || $sessionVerified;
     }
 
+    /**
+     * Convert cart rows into normalized order item payloads.
+     *
+     * @param array<int, array<string, mixed>> $cartItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapCartItemsToOrderItems(array $cartItems): array
+    {
+        return array_map(static function (array $item): array {
+            return [
+                'id' => (int) ($item['id'] ?? 0),
+                'qty' => (int) ($item['quantity'] ?? $item['qty'] ?? 0),
+                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
+                'unit_price' => (float) ($item['price'] ?? $item['unit_price'] ?? 0),
+            ];
+        }, $cartItems);
+    }
+
+    /**
+     * Build a readable shipping address from the normalized user fields.
+     */
+    private function buildCustomerAddressString(array $customer): string
+    {
+        $parts = [];
+        foreach (['address_line', 'barangay', 'city', 'province', 'postal_code', 'country'] as $field) {
+            $value = trim((string) ($customer[$field] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * Return normalized customer info used by the order pages.
+     */
+    private function getOrderCustomerInfo(?int $customerId): ?array
+    {
+        if (($customerId ?? 0) <= 0) {
+            return null;
+        }
+
+        $customer = $this->userModel->find((int) $customerId);
+        if (! $customer) {
+            return null;
+        }
+
+        $address = $this->buildCustomerAddressString($customer);
+
+        return [
+            'id' => (int) $customer['id'],
+            'name' => (string) ($customer['name'] ?? ''),
+            'email' => (string) ($customer['email'] ?? ''),
+            'phone' => (string) ($customer['phone_number'] ?? $customer['phone'] ?? ''),
+            'address' => $address !== '' ? $address : (string) ($customer['address'] ?? ''),
+        ];
+    }
+
+    /**
+     * Prepare shipment data using the customer's saved contact details.
+     *
+     * @param array<string, mixed>|null $customer
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function buildCustomerShipmentData(?array $customer, array $overrides = []): array
+    {
+        $shipmentData = [];
+
+        if ($customer !== null) {
+            $address = $this->buildCustomerAddressString($customer);
+            if ($address !== '') {
+                $shipmentData['shipping_address'] = $address;
+            }
+
+            $phoneNumber = trim((string) ($customer['phone_number'] ?? $customer['phone'] ?? ''));
+            if ($phoneNumber !== '') {
+                $shipmentData['contact_number'] = $phoneNumber;
+            }
+        }
+
+        foreach ($overrides as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $shipmentData[$key] = $value;
+            }
+        }
+
+        return $shipmentData;
+    }
+
     private function generateReceiptNumber(): string
     {
         $datePart = date('Ymd');
@@ -931,56 +960,25 @@ class Dashboard extends BaseController
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
-        $recordModel = new RecordModel();
-        $userModel = new UserModel();
-        
-        // Get all sales orders
-        $orders = $recordModel
-            ->where('record_type', 'sales')
-            ->orderBy('created_at', 'DESC')
-            ->findAll();
-
-        // Parse order items and get customer info
+        $orders = $this->orderModel->getAdminOrders();
         $orderDetails = [];
-        foreach ($orders as $order) {
-            $orderItems = [];
-            $notes = $order['notes'] ?? '';
-            $customerInfo = null;
-            
-            if (!empty($notes)) {
-                $decoded = json_decode($notes, true);
-                if ($decoded && isset($decoded['items'])) {
-                    $orderItems = $decoded['items'];
-                }
-            }
 
-            // Get customer information
-            if (!empty($order['created_by'])) {
-                $customer = $userModel->find($order['created_by']);
-                if ($customer) {
-                    $customerInfo = [
-                        'id' => $customer['id'],
-                        'name' => $customer['name'],
-                        'email' => $customer['email'],
-                        'phone' => $customer['phone'] ?? '',
-                        'address' => $customer['address'] ?? ''
-                    ];
-                }
-            }
-            
+        foreach ($orders as $order) {
+            $customerInfo = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+
             $orderDetails[] = [
                 'id' => $order['id'],
                 'reference_number' => $order['reference_number'],
-                'date' => $order['created_at'],
+                'date' => $order['date'],
                 'total_amount' => $order['total_amount'],
                 'payment_method' => $order['payment_method'],
                 'status' => $order['status'],
                 'delivery_status' => $order['delivery_status'] ?? 'to_pay',
                 'tracking_number' => $order['tracking_number'],
-                'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?: 'Not provided'),
-                'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?: 'Not provided'),
-                'items' => $orderItems,
-                'customer' => $customerInfo
+                'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?? 'Not provided'),
+                'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?? 'Not provided'),
+                'items' => $order['items'] ?? [],
+                'customer' => $customerInfo,
             ];
         }
 
@@ -1001,38 +999,31 @@ class Dashboard extends BaseController
      */
     public function adminCheckout($orderId = null)
     {
-        // Get order directly from database
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
-        
-        if (!$order || $order['record_type'] !== 'sales' || $order['status'] !== 'pending') {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ($this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        $order = $this->orderModel->getOrder((int) $orderId);
+
+        if (! $order || ($order['delivery_status'] ?? 'to_pay') !== 'to_pay') {
             return redirect()->to('/orders')->with('error', 'Order not found or already processed.');
         }
 
-        // Create order items from database or use defaults
-        $orderItems = [];
-        $notes = $order['notes'] ?? '';
-        
-        if (!empty($notes)) {
-            $decoded = json_decode($notes, true);
-            if ($decoded && isset($decoded['items'])) {
-                $orderItems = $decoded['items'];
-            }
-        }
-        
-        // If no items in notes, create from order data
-        if (empty($orderItems)) {
-            $orderItems = [
-                [
-                    'id' => 1,
-                    'name' => 'Fruity Cereal',
-                    'qty' => 1,
-                    'price' => 62.50
-                ]
-            ];
+        $orderItems = $order['items'] ?? [];
+        if ($orderItems === []) {
+            return redirect()->to('/orders')->with('error', 'Order items not found.');
         }
 
-        // Prepare checkout data
         $data = [
             'user_name' => $this->session->get('user_name') ?? 'Admin',
             'user_email' => $this->session->get('user_email') ?? 'admin@vapeshop.com',
@@ -1042,7 +1033,7 @@ class Dashboard extends BaseController
             'order' => $order,
             'items' => $orderItems,
             'total' => (float) $order['total_amount'],
-            'reference_number' => $order['reference_number']
+            'reference_number' => $order['reference_number'],
         ];
 
         return view('admin/orders/checkout', $data);
@@ -1072,43 +1063,30 @@ class Dashboard extends BaseController
             return redirect()->to('/orders')->with('error', 'Order ID is required.');
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder((int) $orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             return redirect()->to('/orders')->with('error', 'Order not found.');
         }
 
-        if ($order['status'] !== 'pending') {
+        if (($order['delivery_status'] ?? 'to_pay') !== 'to_pay') {
             return redirect()->to('/orders')->with('error', 'Order is already processed.');
         }
 
-        // Parse order items from notes
-        $orderItems = [];
-        $notes = $order['notes'] ?? '';
-        
-        if (!empty($notes)) {
-            $decoded = json_decode($notes, true);
-            if ($decoded && isset($decoded['items'])) {
-                $orderItems = $decoded['items'];
-            }
-        }
-
+        $orderItems = $order['items'] ?? [];
         if (empty($orderItems)) {
             return redirect()->to('/orders')->with('error', 'Order items not found.');
         }
 
-        // Get cashiering form data
         $ageVerified = $this->request->getPost('age_verified');
         $paymentMethod = $this->request->getPost('payment_method');
         $amountReceived = (float) $this->request->getPost('amount_received');
 
-        // Validate cashiering data
-        if (!$ageVerified) {
+        if (! $ageVerified) {
             return redirect()->to('/orders/checkout/' . $orderId)->with('error', 'Age verification is required.');
         }
 
-        if (!$paymentMethod) {
+        if (! $paymentMethod) {
             return redirect()->to('/orders/checkout/' . $orderId)->with('error', 'Payment method is required.');
         }
 
@@ -1120,42 +1098,46 @@ class Dashboard extends BaseController
         $db->transStart();
 
         try {
-            // Update stock for each item
             foreach ($orderItems as $item) {
                 $product = $this->productModel->getProductById((int) $item['id'], true);
-                if (!$product || (int) $product['stock'] < (int) $item['qty']) {
+                if (! $product || (int) $product['stock'] < (int) $item['qty']) {
                     throw new \RuntimeException('Insufficient stock for item: ' . $item['name']);
                 }
 
-                // Update stock (decrement)
-                $currentStock = (int) $product['stock'];
-                $newStock = $currentStock - (int) $item['qty'];
-                
-                if ($newStock < 0) {
-                    throw new \RuntimeException('Insufficient stock for item: ' . $item['name'] . ' (Current: ' . $currentStock . ', Required: ' . $item['qty'] . ')');
+                if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['qty']))) {
+                    throw new \RuntimeException('Failed to update stock for item: ' . $item['name']);
                 }
-                
-                $this->productModel->update($item['id'], ['stock' => $newStock]);
             }
 
-            // Update order status
-            $updateData = [
-                'status' => 'completed',
-                'payment_status' => 'paid',
-                'payment_method' => $paymentMethod,
-                'delivery_status' => 'to_ship',
-                'description' => $order['description'] . ' - Processed by admin',
-                'notes' => json_encode(array_merge(json_decode($order['notes'] ?? '{}', true) ?: [], []))
-            ];
+            $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
+            $description = trim((string) ($order['description'] ?? ''));
+            if ($description !== '') {
+                $description .= ' - Processed by admin';
+            } else {
+                $description = 'Processed by admin';
+            }
+            $updateOk = $this->orderModel->updateOrder(
+                (int) $orderId,
+                [
+                    'status' => 'completed',
+                    'description' => $description,
+                ],
+                [
+                    'method' => $paymentMethod,
+                    'status' => 'paid',
+                    'amount' => round((float) $order['total_amount'], 2),
+                    'amount_received' => round($amountReceived, 2),
+                    'change_amount' => round($amountReceived - (float) $order['total_amount'], 2),
+                    'paid_at' => date('Y-m-d H:i:s'),
+                ],
+                $this->buildCustomerShipmentData($customer, [
+                    'status' => 'to_ship',
+                ])
+            );
 
-            $updateOk = $recordModel->update($orderId, $updateData);
-
-            if (!$updateOk) {
+            if (! $updateOk) {
                 throw new \RuntimeException('Failed to update order status.');
             }
-            
-            // Auto-populate customer info when order is set to to_ship
-            $this->autoPopulateCustomerInfo($orderId, $order);
 
             $db->transComplete();
 
@@ -1166,13 +1148,13 @@ class Dashboard extends BaseController
             return $this->response->setStatusCode(200)->setJSON([
                 'success' => true,
                 'message' => 'Payment processed successfully! Order completed and stock updated.',
-                'order_id' => $orderId
+                'order_id' => (int) $orderId,
             ]);
         } catch (\Throwable $e) {
             $db->transRollback();
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ]);
         }
     }
@@ -1210,57 +1192,6 @@ class Dashboard extends BaseController
         ];
 
         return view('admin/dashboard/settings', $data);
-    }
-
-    /**
-     * Auto-populate customer address and contact number for an order
-     */
-    private function autoPopulateCustomerInfo($orderId, $order)
-    {
-        if (!empty($order['created_by'])) {
-            $userModel = new UserModel();
-            $customer = $userModel->find($order['created_by']);
-            
-            if ($customer) {
-                $updateData = [];
-                
-                // Build full address from customer profile
-                $addressParts = [];
-                if (!empty($customer['address_line'])) {
-                    $addressParts[] = $customer['address_line'];
-                }
-                if (!empty($customer['city'])) {
-                    $addressParts[] = $customer['city'];
-                }
-                if (!empty($customer['barangay'])) {
-                    $addressParts[] = $customer['barangay'];
-                }
-                if (!empty($customer['country'])) {
-                    $addressParts[] = $customer['country'];
-                }
-                if (!empty($customer['province'])) {
-                    $addressParts[] = $customer['province'];
-                }
-                if (!empty($customer['postal_code'])) {
-                    $addressParts[] = $customer['postal_code'];
-                }
-                
-                // Only update if order doesn't already have this info
-                if (empty($order['shipping_address']) && !empty($addressParts)) {
-                    $updateData['shipping_address'] = implode(', ', $addressParts);
-                }
-                
-                if (empty($order['contact_number']) && !empty($customer['phone_number'])) {
-                    $updateData['contact_number'] = $customer['phone_number'];
-                }
-                
-                // Update the order if there's data to update
-                if (!empty($updateData)) {
-                    $recordModel = new RecordModel();
-                    $recordModel->update($orderId, $updateData);
-                }
-            }
-        }
     }
 
     /**
@@ -1305,74 +1236,47 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder($orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             return $this->response->setStatusCode(404)->setJSON([
                 'success' => false,
-                'message' => 'Order not found.'
+                'message' => 'Order not found.',
             ]);
         }
 
-        $currentStatus = $order['delivery_status'] ?? 'to_pay';
+        if (($order['delivery_status'] ?? 'to_pay') === 'to_pay' && $newStatus === 'to_ship' && ($order['payment_status'] ?? 'unpaid') !== 'paid') {
+            return $this->response->setStatusCode(422)->setJSON([
+                'success' => false,
+                'message' => 'Process checkout first before shipping this order.',
+            ]);
+        }
 
-        // Allow any valid status transition for now (simplified logic)
-        // This allows the button to work regardless of current status
-
-        // Generate tracking number if marking as to_ship
-        $additionalData = [];
+        $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
+        $shipmentData = $this->buildCustomerShipmentData($customer, []);
         if ($newStatus === 'to_ship' && empty($order['tracking_number'])) {
-            $additionalData['tracking_number'] = $this->generateTrackingNumber();
+            $shipmentData['tracking_number'] = $this->generateTrackingNumber();
         }
 
         try {
-            // Use direct database query to avoid RecordModel method issues
-            $db = \Config\Database::connect();
-            
-            $updateData = [
-                'delivery_status' => $newStatus
-            ];
-            
-            // Add timestamps based on status
-            if ($newStatus === 'to_ship') {
-                $updateData['shipped_at'] = date('Y-m-d H:i:s');
-            } elseif ($newStatus === 'completed') {
-                $updateData['delivered_at'] = date('Y-m-d H:i:s');
-            }
-            
-            // Add tracking number if marking as to_ship
-            if ($newStatus === 'to_ship' && empty($order['tracking_number'])) {
-                $trackingNumber = $this->generateTrackingNumber();
-                $updateData['tracking_number'] = $trackingNumber;
-            }
-            
-            // Direct database update using query builder
-            $builder = $db->table('records');
-            $result = $builder->where('id', $orderId)->update($updateData);
-            
-            // Auto-populate customer info when order is in process (to_ship)
-            if ($result && $newStatus === 'to_ship') {
-                $this->autoPopulateCustomerInfo($orderId, $order);
-            }
-            
+            $result = $this->orderModel->updateDeliveryStatus($orderId, $newStatus, $shipmentData);
+
             if ($result) {
                 return $this->response->setStatusCode(200)->setJSON([
                     'success' => true,
-                    'message' => 'Delivery status updated successfully.'
-                ]);
-            } else {
-                return $this->response->setStatusCode(500)->setJSON([
-                    'success' => false,
-                    'message' => 'Failed to update delivery status.'
+                    'message' => 'Delivery status updated successfully.',
                 ]);
             }
-            
+
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'Failed to update delivery status.',
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Delivery status update error: ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => 'An error occurred while updating the delivery status.'
+                'message' => 'An error occurred while updating the delivery status.',
             ]);
         }
     }
@@ -1395,24 +1299,22 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder((int) $orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             return $this->response->setStatusCode(404)->setJSON([
                 'success' => false,
-                'message' => 'Order not found.'
+                'message' => 'Order not found.',
             ]);
         }
 
-        // Get customer profile information for defaults
         $customerPhone = '';
         $customerAddress = '';
-        if (!empty($order['created_by'])) {
+        if (! empty($order['created_by'])) {
             $customer = $this->userModel->find($order['created_by']);
-            if ($customer) {
-                $customerPhone = $customer['phone'] ?? '';
-                $customerAddress = $customer['address'] ?? '';
+            if ($customer !== null) {
+                $customerPhone = $customer['phone_number'] ?? $customer['phone'] ?? '';
+                $customerAddress = $this->buildCustomerAddressString($customer);
             }
         }
 
@@ -1420,7 +1322,7 @@ class Dashboard extends BaseController
             'success' => true,
             'tracking_number' => $order['tracking_number'] ?? '',
             'shipping_address' => $order['shipping_address'] ?: $customerAddress,
-            'contact_number' => $order['contact_number'] ?: $customerPhone
+            'contact_number' => $order['contact_number'] ?: $customerPhone,
         ]);
     }
 
@@ -1452,74 +1354,69 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder($orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             return $this->response->setStatusCode(404)->setJSON([
                 'success' => false,
-                'message' => 'Order not found.'
+                'message' => 'Order not found.',
             ]);
         }
 
         try {
-            $db = \Config\Database::connect();
-            
-            $updateData = [];
-            
-            // Update delivery information if provided
-            if (!empty($input->tracking_number)) {
-                $updateData['tracking_number'] = $input->tracking_number;
+            $shipmentData = [];
+
+            if (! empty($input->tracking_number)) {
+                $shipmentData['tracking_number'] = trim((string) $input->tracking_number);
             }
-            
-            if (!empty($input->shipping_address)) {
-                $updateData['shipping_address'] = $input->shipping_address;
+
+            if (! empty($input->shipping_address)) {
+                $shipmentData['shipping_address'] = trim((string) $input->shipping_address);
             }
-            
-            if (!empty($input->contact_number)) {
-                $updateData['contact_number'] = $input->contact_number;
+
+            if (! empty($input->contact_number)) {
+                $shipmentData['contact_number'] = trim((string) $input->contact_number);
             }
-            
-            // If no tracking number exists and order is ready to ship, generate one
-            if (empty($order['tracking_number']) && !empty($input->tracking_number)) {
-                $updateData['delivery_status'] = 'to_ship';
-                $updateData['shipped_at'] = date('Y-m-d H:i:s');
+
+            if (! empty($input->delivery_notes)) {
+                $currentNotes = trim((string) ($order['shipment_notes'] ?? $order['notes'] ?? ''));
+                $newNote = trim((string) $input->delivery_notes);
+                $shipmentData['notes'] = $currentNotes === ''
+                    ? $newNote
+                    : $currentNotes . PHP_EOL . '[' . date('Y-m-d H:i:s') . '] ' . $newNote;
             }
-            
-            // Update delivery notes in order notes
-            if (!empty($input->delivery_notes)) {
-                $currentNotes = $order['notes'] ?? '';
-                $deliveryNotes = "\n\n--- DELIVERY NOTES ---\n" . $input->delivery_notes . "\nAdded: " . date('Y-m-d H:i:s');
-                $updateData['notes'] = $currentNotes . $deliveryNotes;
+
+            if (! empty($shipmentData['tracking_number']) && ($order['delivery_status'] ?? 'to_pay') === 'to_pay') {
+                $shipmentData['status'] = 'to_ship';
             }
-            
-            if (!empty($updateData)) {
-                $builder = $db->table('records');
-                $result = $builder->where('id', $orderId)->update($updateData);
-                
-                if ($result) {
-                    return $this->response->setJSON([
-                        'success' => true,
-                        'message' => 'Delivery information saved successfully.'
-                    ]);
-                } else {
-                    return $this->response->setStatusCode(500)->setJSON([
-                        'success' => false,
-                        'message' => 'Failed to save delivery information.'
-                    ]);
-                }
-            } else {
+
+            if ($shipmentData === []) {
                 return $this->response->setJSON([
                     'success' => true,
-                    'message' => 'No changes to save.'
+                    'message' => 'No changes to save.',
                 ]);
             }
-            
+
+            $result = isset($shipmentData['status'])
+                ? $this->orderModel->updateDeliveryStatus($orderId, (string) $shipmentData['status'], $shipmentData)
+                : $this->orderModel->updateOrder($orderId, [], [], $shipmentData);
+
+            if ($result) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Delivery information saved successfully.',
+                ]);
+            }
+
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'Failed to save delivery information.',
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Save delivery info error: ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => 'An error occurred while saving delivery information.'
+                'message' => 'An error occurred while saving delivery information.',
             ]);
         }
     }
@@ -1544,30 +1441,10 @@ class Dashboard extends BaseController
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder((int) $orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             return redirect()->to('/orders')->with('error', 'Order not found.');
-        }
-
-        // Parse order items from notes
-        $orderItems = [];
-        $notes = $order['notes'] ?? '';
-        if (!empty($notes)) {
-            $lines = explode("\n", $notes);
-            foreach ($lines as $line) {
-                if (strpos($line, '|') !== false) {
-                    $parts = explode('|', $line);
-                    if (count($parts) >= 3) {
-                        $orderItems[] = [
-                            'name' => trim($parts[0]),
-                            'qty' => trim($parts[1]),
-                            'unit_price' => trim($parts[2])
-                        ];
-                    }
-                }
-            }
         }
 
         $data = [
@@ -1577,7 +1454,7 @@ class Dashboard extends BaseController
             'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Order Details - Admin',
             'order' => $order,
-            'items' => $orderItems
+            'items' => $order['items'] ?? [],
         ];
 
         return view('admin/orders/order_details', $data);
@@ -1732,26 +1609,19 @@ class Dashboard extends BaseController
      */
     public function customerOrderAction($orderId, $action)
     {
-        // Check if we're in test mode (no session required)
-        $isTestMode = strpos(current_url(), 'test-order-action') !== false;
-        
-        if (!$isTestMode) {
-            $accessCheck = $this->checkCustomerAccess();
-            if ($accessCheck !== true) {
-                return $accessCheck;
-            }
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder((int) $orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             log_message('error', 'Order not found for orderId: ' . $orderId);
             return redirect()->to('/customer/orders')->with('error', 'Order not found.');
         }
 
-        // For test mode, skip ownership check
-        if (!$isTestMode && $order['created_by'] != $this->session->get('user_id')) {
+        if ((int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
             log_message('error', 'Access denied for orderId: ' . $orderId);
             return redirect()->to('/customer/orders')->with('error', 'Order not found.');
         }
@@ -1789,15 +1659,49 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/orders')->with('error', 'Order cannot be paid.');
         }
 
-        // Update payment status and delivery status
-        $recordModel = new RecordModel();
-        $recordModel->update($order['id'], [
-            'payment_status' => 'paid',
-            'delivery_status' => 'to_ship'
-        ]);
-        
-        // Auto-populate customer info when order is set to to_ship
-        $this->autoPopulateCustomerInfo($order['id'], $order);
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            foreach (($order['items'] ?? []) as $item) {
+                $product = $this->productModel->getProductById((int) $item['id'], true);
+                if (! $product || (int) $product['stock'] < (int) $item['qty']) {
+                    throw new \RuntimeException('Insufficient stock for one of the order items.');
+                }
+
+                if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['qty']))) {
+                    throw new \RuntimeException('Failed to update stock.');
+                }
+            }
+
+            $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
+            $updated = $this->orderModel->updateOrder(
+                (int) $order['id'],
+                ['status' => 'completed'],
+                [
+                    'status' => 'paid',
+                    'amount' => round((float) ($order['total_amount'] ?? 0), 2),
+                    'amount_received' => round((float) ($order['total_amount'] ?? 0), 2),
+                    'change_amount' => 0.00,
+                    'paid_at' => date('Y-m-d H:i:s'),
+                ],
+                $this->buildCustomerShipmentData($customer, [
+                    'status' => 'to_ship',
+                ])
+            );
+
+            if (! $updated) {
+                throw new \RuntimeException('Unable to update the order payment status.');
+            }
+
+            $db->transComplete();
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Payment transaction failed.');
+            }
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->to('/customer/orders')->with('error', $e->getMessage());
+        }
 
         return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
     }
@@ -1808,11 +1712,37 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/orders')->with('error', 'Order cannot be cancelled.');
         }
 
-        $recordModel = new RecordModel();
-        $recordModel->update($order['id'], [
-            'delivery_status' => 'cancelled',
-            'status' => 'cancelled'
-        ]);
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            if (($order['delivery_status'] ?? 'to_pay') === 'to_ship') {
+                foreach (($order['items'] ?? []) as $item) {
+                    if (! $this->productModel->updateStock((int) $item['id'], (int) $item['qty'])) {
+                        throw new \RuntimeException('Failed to restore stock for a cancelled order.');
+                    }
+                }
+            }
+
+            $updated = $this->orderModel->updateOrder(
+                (int) $order['id'],
+                ['status' => 'cancelled'],
+                [],
+                ['status' => 'cancelled']
+            );
+
+            if (! $updated) {
+                throw new \RuntimeException('Unable to cancel this order.');
+            }
+
+            $db->transComplete();
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Cancellation transaction failed.');
+            }
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->to('/customer/orders')->with('error', $e->getMessage());
+        }
 
         return redirect()->to('/customer/orders')->with('success', 'Order cancelled successfully.');
     }
@@ -1823,27 +1753,20 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/orders')->with('error', 'Order cannot be confirmed.');
         }
 
-        $recordModel = new RecordModel();
-        $recordModel->update($order['id'], [
-            'delivery_status' => 'completed',
-            'status' => 'completed'
-        ]);
+        $this->orderModel->updateDeliveryStatus((int) $order['id'], 'completed');
 
         return redirect()->to('/customer/orders')->with('success', 'Order confirmed as received. Thank you!');
     }
 
     private function reorderItems($order)
     {
-        // Add items back to cart
-        $notes = $order['notes'] ?? '';
         $cartItems = [];
-        
-        if (!empty($notes)) {
-            $decoded = json_decode($notes, true);
-            if ($decoded && isset($decoded['items'])) {
-                foreach ($decoded['items'] as $item) {
-                    $cartItems[$item['id']] = $item['qty'];
-                }
+
+        foreach (($order['items'] ?? []) as $item) {
+            $productId = (int) ($item['id'] ?? 0);
+            $quantity = (int) ($item['qty'] ?? 0);
+            if ($productId > 0 && $quantity > 0) {
+                $cartItems[$productId] = $quantity;
             }
         }
 
@@ -1869,15 +1792,14 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
+        $order = $this->orderModel->getOrder((int) $orderId);
 
-        if (!$order || $order['record_type'] !== 'sales') {
+        if (! $order) {
             log_message('error', 'Order not found for orderId: ' . $orderId);
             return redirect()->to('/customer/orders')->with('error', 'Order not found.');
         }
 
-        if ($order['created_by'] != $this->session->get('user_id')) {
+        if ((int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
             log_message('error', 'Access denied for orderId: ' . $orderId);
             return redirect()->to('/customer/orders')->with('error', 'Order not found.');
         }
@@ -1887,37 +1809,27 @@ class Dashboard extends BaseController
 
     private function viewOrderDetailsPrivate($order)
     {
-        // Parse order items
-        $notes = $order['notes'] ?? '';
-        $orderItems = [];
-        
-        if (!empty($notes)) {
-            $decoded = json_decode($notes, true);
-            if ($decoded && isset($decoded['items'])) {
-                $orderItems = $decoded['items'];
-            }
-        }
+        $orderItems = $order['items'] ?? [];
 
-        // Add tracking information for to_ship orders
         $trackingInfo = [];
         if ($order['delivery_status'] === 'to_ship') {
             $trackingInfo = [
                 'status' => 'Preparing for shipment',
                 'estimated_date' => date('F j, Y', strtotime('+3 days')),
-                'message' => 'Your order is being prepared and will be shipped soon.'
+                'message' => 'Your order is being prepared and will be shipped soon.',
             ];
         } elseif ($order['delivery_status'] === 'to_receive') {
             $trackingInfo = [
                 'status' => 'Out for delivery',
                 'estimated_date' => date('F j, Y', strtotime('+1 day')),
-                'message' => 'Your order is out for delivery.'
+                'message' => 'Your order is out for delivery.',
             ];
         }
 
         return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
             'order' => $order,
             'items' => $orderItems,
-            'tracking_info' => $trackingInfo
+            'tracking_info' => $trackingInfo,
         ]));
     }
 

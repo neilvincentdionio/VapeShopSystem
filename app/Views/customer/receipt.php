@@ -112,19 +112,28 @@
 </style>
 
 <?php
+    $payload = [];
     $notes = $receipt['notes'] ?? '';
-    $payload = is_string($notes) ? json_decode($notes, true) : null;
-    if (!is_array($payload)) {
-        $payload = [];
+    if (is_string($notes)) {
+        $decoded = json_decode($notes, true);
+        if (is_array($decoded)) {
+            $payload = $decoded;
+        }
     }
 
-    $items = $payload['items'] ?? [];
-    $cashGiven = (float) ($payload['cash_given'] ?? 0);
-    $change = (float) ($payload['change'] ?? 0);
-    $total = (float) ($payload['total'] ?? ($receipt['total_amount'] ?? 0));
+    $items = $receipt['items'] ?? ($payload['items'] ?? []);
+    $cashGiven = (float) ($receipt['amount_received'] ?? ($payload['cash_given'] ?? 0));
+    $change = (float) ($receipt['change_amount'] ?? ($payload['change'] ?? 0));
+    $total = (float) ($receipt['total_amount'] ?? ($payload['total'] ?? 0));
+
+    if (!is_array($items)) {
+        $payload = [];
+        $items = [];
+    }
 
     $receiptNumber = (string) ($receipt['reference_number'] ?? '');
     $receiptDate = (string) ($receipt['date'] ?? $receipt['record_date'] ?? '');
+    $paymentMethod = ucwords(str_replace('_', ' ', (string) ($receipt['payment_method'] ?? 'cash')));
 ?>
 
 <div class="receipt-panel">
@@ -139,7 +148,7 @@
         <div><span class="label">Receipt #:</span> <?= esc($receiptNumber) ?></div>
         <div><span class="label">Date:</span> <?= esc($receiptDate) ?></div>
         <div><span class="label">Customer:</span> <?= esc($user_name ?? '') ?></div>
-        <div><span class="label">Payment:</span> Cash</div>
+        <div><span class="label">Payment:</span> <?= esc($paymentMethod) ?></div>
     </div>
 
     <table class="table">
