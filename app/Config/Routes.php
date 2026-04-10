@@ -128,16 +128,6 @@ $routes->get('/customer/orders/(:num)/(:alpha)', 'Dashboard::customerOrderAction
 // Customer order details page
 $routes->get('/customer/order-details/(:num)', 'Dashboard::viewOrderDetails/$1', ['filter' => 'auth']);
 
-// Debug route for testing (without auth filter for testing)
-$routes->get('/test-order-action/(:num)/(:alpha)', 'Dashboard::customerOrderAction/$1/$2');
-$routes->get('/debug-test/(:num)/(:alpha)', 'Dashboard::debugTest/$1/$2');
-$routes->get('/simple-test', 'Dashboard::debugTest');
-
-// Dedicated order details route (without auth filter for testing)
-$routes->get('/order-details/(:num)', 'Dashboard::viewOrderDetailsDirect/$1');
-
-// Simple test route
-$routes->get('/test-details', 'Dashboard::testOrderDetails');
 
 // Admin delivery status update (AJAX)
 $routes->post('/orders/update-delivery-status', 'Dashboard::updateDeliveryStatus', ['filter' => 'auth:admin']);

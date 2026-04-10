@@ -1309,10 +1309,7 @@ class Dashboard extends BaseController
             ]);
         }
 
-        // Debug: Log current status
         $currentStatus = $order['delivery_status'] ?? 'to_pay';
-        log_message('debug', 'Current delivery status: ' . $currentStatus);
-        log_message('debug', 'Requested new status: ' . $newStatus);
 
         // Allow any valid status transition for now (simplified logic)
         // This allows the button to work regardless of current status
@@ -1624,62 +1621,18 @@ class Dashboard extends BaseController
         return view('admin/dashboard/profile', $data);
     }
 
-    /**
-     * Simple test method for order details
-     */
-    public function testOrderDetails()
-    {
-        // Redirect to the clean standalone page
-        return redirect()->to(base_url('order_details_standalone.html'));
-    }
-
-    /**
-     * Direct order details view (for testing)
-     */
-    public function viewOrderDetailsDirect($orderId)
-    {
-        log_message('info', 'viewOrderDetailsDirect called with orderId: ' . $orderId);
-        
-        $recordModel = new RecordModel();
-        $order = $recordModel->find($orderId);
-
-        if (!$order || $order['record_type'] !== 'sales') {
-            log_message('error', 'Order not found for orderId: ' . $orderId);
-            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
-        }
-
-        // Parse order items
-        $notes = $order['notes'] ?? '';
-        $orderItems = [];
-        
-        if (!empty($notes)) {
-            $decoded = json_decode($notes, true);
-            if ($decoded && isset($decoded['items'])) {
-                $orderItems = $decoded['items'];
-            }
-        }
-
-        return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
-            'order' => $order,
-            'items' => $orderItems
-        ]));
-    }
-
+    
     /**
      * Order action handlers for Shopee-like delivery process
      */
     public function customerOrderAction($orderId, $action)
     {
-        // Debug logging
-        log_message('info', 'customerOrderAction called with orderId: ' . $orderId . ', action: ' . $action);
-        
         // Check if we're in test mode (no session required)
         $isTestMode = strpos(current_url(), 'test-order-action') !== false;
         
         if (!$isTestMode) {
             $accessCheck = $this->checkCustomerAccess();
             if ($accessCheck !== true) {
-                log_message('error', 'Access check failed for customerOrderAction');
                 return $accessCheck;
             }
         }

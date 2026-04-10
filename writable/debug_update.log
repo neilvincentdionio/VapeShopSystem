@@ -208,3 +208,23 @@
 
 2026-04-09 14:12:57 - UserModel update result: SUCCESS
 2026-04-09 14:12:57 - Parent update affected rows: 1
+2026-04-10 11:14:26 - UserModel update called with ID: 1
+2026-04-10 11:14:26 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 11:14:26
+)
+
+2026-04-10 11:14:26 - UserModel update result: SUCCESS
+2026-04-10 11:14:26 - Parent update affected rows: 1
+2026-04-10 11:26:20 - UserModel update called with ID: 2
+2026-04-10 11:26:20 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 11:26:20
+)
+
+2026-04-10 11:26:20 - UserModel update result: SUCCESS
+2026-04-10 11:26:20 - Parent update affected rows: 1
