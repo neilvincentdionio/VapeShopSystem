@@ -228,3 +228,65 @@
 
 2026-04-10 11:26:20 - UserModel update result: SUCCESS
 2026-04-10 11:26:20 - Parent update affected rows: 1
+2026-04-10 13:36:01 - UserModel update called with ID: 1
+2026-04-10 13:36:01 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 13:36:01
+)
+
+2026-04-10 13:36:01 - UserModel update result: SUCCESS
+2026-04-10 13:36:01 - Parent update affected rows: 1
+2026-04-10 15:14:17 - UserModel update called with ID: 1
+2026-04-10 15:14:17 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 15:14:17
+)
+
+2026-04-10 15:14:17 - UserModel update result: SUCCESS
+2026-04-10 15:14:17 - Parent update affected rows: 1
+2026-04-10 15:14:37 - UserModel update called with ID: 2
+2026-04-10 15:14:37 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 15:14:37
+)
+
+2026-04-10 15:14:37 - UserModel update result: SUCCESS
+2026-04-10 15:14:37 - Parent update affected rows: 1
+2026-04-10 16:01:32 - UserModel update called with ID: 2
+2026-04-10 16:01:32 - UserModel update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [phone_number] => +63 9365879409
+    [address_line] => 22 Vapor Street
+    [city] => 
+    [country] => Philippines
+    [barangay] => 
+    [province] => 
+    [postal_code] => 1100
+)
+
+2026-04-10 16:01:32 - UserModel update result: SUCCESS
+2026-04-10 16:01:32 - Parent update affected rows: 1
+2026-04-10 16:07:07 - UserModel update called with ID: 2
+2026-04-10 16:07:07 - UserModel update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [phone_number] => +63 9365879409
+    [address_line] => 22 Vapor Street
+    [city] => Iligan City
+    [country] => Philippines
+    [barangay] => Pala-o
+    [province] => Lanao del Norte
+    [postal_code] => 9200
+)
+
+2026-04-10 16:07:07 - UserModel update result: SUCCESS
+2026-04-10 16:07:07 - Parent update affected rows: 1

@@ -26,6 +26,7 @@ $routes->get('/auth/logout', 'Auth::logout');
 // Dashboard routes (protected by AuthFilter)
 $routes->get('/dashboard', 'Dashboard::index', ['filter' => 'auth']);
 $routes->get('/dashboard/profile', 'Dashboard::profile', ['filter' => 'auth']);
+$routes->post('/dashboard/profile/update', 'Dashboard::updateCustomerProfile', ['filter' => 'auth']);
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth']);
 
 // Orders routes (Admin only)

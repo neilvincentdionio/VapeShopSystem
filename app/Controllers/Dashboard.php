@@ -1232,6 +1232,12 @@ class Dashboard extends BaseController
                 if (!empty($customer['city'])) {
                     $addressParts[] = $customer['city'];
                 }
+                if (!empty($customer['barangay'])) {
+                    $addressParts[] = $customer['barangay'];
+                }
+                if (!empty($customer['country'])) {
+                    $addressParts[] = $customer['country'];
+                }
                 if (!empty($customer['province'])) {
                     $addressParts[] = $customer['province'];
                 }
@@ -1619,6 +1625,105 @@ class Dashboard extends BaseController
         ];
 
         return view('admin/dashboard/profile', $data);
+    }
+
+    /**
+     * Update customer profile details from profile settings.
+     */
+    public function updateCustomerProfile()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $userId = (int) $this->session->get('user_id');
+        $customer = $this->userModel->find($userId);
+
+        if (!$customer || (string) ($customer['role'] ?? '') !== 'customer') {
+            return redirect()->to('/dashboard/profile')->with('error', 'Customer account not found.');
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $email = trim((string) $this->request->getPost('email'));
+        $phoneNumber = trim((string) $this->request->getPost('phone_number'));
+        $addressLine = trim((string) $this->request->getPost('address_line'));
+        $city = trim((string) $this->request->getPost('city'));
+        $country = trim((string) $this->request->getPost('country'));
+        $barangay = trim((string) $this->request->getPost('barangay'));
+        $province = trim((string) $this->request->getPost('province'));
+        $postalCode = trim((string) $this->request->getPost('postal_code'));
+        $newPassword = (string) $this->request->getPost('new_password');
+        $confirmPassword = (string) $this->request->getPost('confirm_password');
+
+        $input = [
+            'name' => $name,
+            'email' => $email,
+            'phone_number' => $phoneNumber,
+            'address_line' => $addressLine,
+            'city' => $city,
+            'country' => $country,
+            'barangay' => $barangay,
+            'province' => $province,
+            'postal_code' => $postalCode,
+            'new_password' => $newPassword,
+            'confirm_password' => $confirmPassword,
+        ];
+
+        $rules = [
+            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
+            'email' => 'required|valid_email|is_unique[users.email,id,' . $userId . ']',
+            'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
+            'address_line' => 'permit_empty|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\.\'#,\/]+$/]',
+            'city' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+            'country' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+            'barangay' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+            'province' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+            'postal_code' => 'permit_empty|max_length[20]|regex_match[/^[a-zA-Z0-9\s\-]+$/]',
+            'new_password' => 'permit_empty|min_length[8]',
+            'confirm_password' => 'permit_empty|matches[new_password]',
+        ];
+
+        $messages = [
+            'confirm_password' => [
+                'matches' => 'Confirm password does not match the new password.',
+            ],
+        ];
+
+        if (!$this->validateData($input, $rules, $messages)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('errors', $this->validator->getErrors());
+        }
+
+        $updateData = [
+            'name' => $name,
+            'email' => $email,
+            'phone_number' => $phoneNumber,
+            'address_line' => $addressLine,
+            'city' => $city,
+            'country' => $country,
+            'barangay' => $barangay,
+            'province' => $province,
+            'postal_code' => $postalCode,
+        ];
+
+        if ($newPassword !== '') {
+            $updateData['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
+        }
+
+        if (!$this->userModel->update($userId, $updateData)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('error', 'Failed to update profile. Please try again.');
+        }
+
+        $this->session->set([
+            'user_name' => $name,
+            'user_email' => $email,
+        ]);
+
+        return redirect()->to('/dashboard/profile')->with('success', 'Profile updated successfully.');
     }
 
     

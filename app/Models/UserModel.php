@@ -21,6 +21,8 @@ class UserModel extends Model
         'phone_number',
         'address_line',
         'city',
+        'country',
+        'barangay',
         'province',
         'postal_code',
         'legal_age_confirmed',
@@ -48,6 +50,8 @@ class UserModel extends Model
         'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
         'address_line' => 'permit_empty|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\.\'#,\/]+$/]',
         'city' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+        'country' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
+        'barangay' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
         'province' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
         'postal_code' => 'permit_empty|max_length[20]|regex_match[/^[a-zA-Z0-9\s\-]+$/]',
         'legal_age_confirmed' => 'permit_empty|in_list[0,1]',
@@ -72,6 +76,12 @@ class UserModel extends Model
         ],
         'city' => [
             'regex_match' => 'City contains unsupported characters.'
+        ],
+        'country' => [
+            'regex_match' => 'Country contains unsupported characters.'
+        ],
+        'barangay' => [
+            'regex_match' => 'Barangay contains unsupported characters.'
         ],
         'province' => [
             'regex_match' => 'Province contains unsupported characters.'
