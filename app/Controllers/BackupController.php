@@ -18,10 +18,9 @@ class BackupController extends BaseController
      */
     public function index()
     {
-        // Check if user has backup permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return redirect()->to('/dashboard')
-                           ->with('error', 'Access denied. Admin privileges required.');
+        $guard = $this->enforceBackupPermission();
+        if ($guard !== true) {
+            return $guard;
         }
 
         $data = [
@@ -38,12 +37,9 @@ class BackupController extends BaseController
      */
     public function create()
     {
-        // Check if user has backup write permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Access denied. Admin privileges required.'
-            ])->setStatusCode(403);
+        $guard = $this->enforceBackupPermission(true);
+        if ($guard !== true) {
+            return $guard;
         }
 
         $backupName = $this->request->getPost('backup_name');
@@ -57,12 +53,9 @@ class BackupController extends BaseController
      */
     public function restore()
     {
-        // Check if user has backup write permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Access denied. Admin privileges required.'
-            ])->setStatusCode(403);
+        $guard = $this->enforceBackupPermission(true);
+        if ($guard !== true) {
+            return $guard;
         }
 
         $backupFile = $this->request->getPost('backup_file');
@@ -76,12 +69,9 @@ class BackupController extends BaseController
      */
     public function delete()
     {
-        // Check if user has backup delete permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Access denied. Admin privileges required.'
-            ])->setStatusCode(403);
+        $guard = $this->enforceBackupPermission(true);
+        if ($guard !== true) {
+            return $guard;
         }
 
         $backupFile = $this->request->getPost('backup_file');
@@ -95,10 +85,9 @@ class BackupController extends BaseController
      */
     public function download($filename)
     {
-        // Check if user has backup read permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return redirect()->to('/dashboard')
-                           ->with('error', 'Access denied. Admin privileges required.');
+        $guard = $this->enforceBackupPermission();
+        if ($guard !== true) {
+            return $guard;
         }
 
         $filepath = $this->backupService->downloadBackup($filename);
@@ -116,12 +105,9 @@ class BackupController extends BaseController
      */
     public function cleanup()
     {
-        // Check if user has backup delete permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Access denied. Admin privileges required.'
-            ])->setStatusCode(403);
+        $guard = $this->enforceBackupPermission(true);
+        if ($guard !== true) {
+            return $guard;
         }
 
         $keepCount = $this->request->getPost('keep_count') ?? 10;
@@ -135,12 +121,9 @@ class BackupController extends BaseController
      */
     public function stats()
     {
-        // Check if user has backup read permissions
-        if (!session()->get('user_role') || session()->get('user_role') !== 'admin') {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => 'Access denied. Admin privileges required.'
-            ])->setStatusCode(403);
+        $guard = $this->enforceBackupPermission(true);
+        if ($guard !== true) {
+            return $guard;
         }
 
         $stats = $this->backupService->getBackupStats();
@@ -149,5 +132,32 @@ class BackupController extends BaseController
             'status' => 'success',
             'data' => $stats
         ]);
+    }
+
+    private function enforceBackupPermission(bool $json = false)
+    {
+        if (!session()->get('logged_in')) {
+            if ($json) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Unauthorized.',
+                ])->setStatusCode(401);
+            }
+
+            return redirect()->to('/login')->with('error', 'Please login first.');
+        }
+
+        if (!$this->hasPermission('manage_backups')) {
+            if ($json) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Forbidden. Backup permission required.',
+                ])->setStatusCode(403);
+            }
+
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Backup permission required.');
+        }
+
+        return true;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filters;
 
+use App\Libraries\AccessControlService;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -26,6 +27,7 @@ class AuthFilter implements FilterInterface
     public function before(RequestInterface $request, $arguments = null)
     {
         $session = session();
+        $access = new AccessControlService();
         
         // Check if user is logged in
         if (!$session->get('logged_in')) {
@@ -47,9 +49,15 @@ class AuthFilter implements FilterInterface
 
         // Check role-based access if arguments are provided
         if ($arguments && !empty($arguments)) {
-            $userRole = $session->get('user_role');
-            
-            if (!in_array($userRole, $arguments)) {
+            $granted = false;
+            foreach ((array) $arguments as $requiredRole) {
+                if ($access->hasRole((string) $requiredRole)) {
+                    $granted = true;
+                    break;
+                }
+            }
+
+            if (!$granted) {
                 return redirect()->to('/dashboard')
                                ->with('error', 'Access denied. Insufficient privileges.');
             }

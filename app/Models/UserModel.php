@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Libraries\PasswordService;
 use CodeIgniter\Model;
 
 class UserModel extends Model
@@ -17,6 +18,7 @@ class UserModel extends Model
         'email',
         'password',
         'role',
+        'role_id',
         'shop_name',
         'approval_status',
         'verification_id_path',
@@ -31,10 +33,11 @@ class UserModel extends Model
     protected $afterFind = ['hydrateUserRelations'];
 
     protected $validationRules = [
-        'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
+        'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
         'email' => 'required|valid_email|is_unique[users.email,id,{id}]',
         'password' => 'permit_empty|min_length[8]',
-        'role' => 'required|in_list[admin,customer]',
+        'role' => 'permit_empty|in_list[admin,staff,customer]',
+        'role_id' => 'permit_empty|integer',
         'shop_name' => 'permit_empty|max_length[150]',
         'approval_status' => 'permit_empty|in_list[pending,approved,rejected]',
         'verification_id_path' => 'permit_empty|max_length[255]',
@@ -49,7 +52,7 @@ class UserModel extends Model
             'min_length' => 'Password must be at least 8 characters long.',
         ],
         'name' => [
-            'regex_match' => 'Name can only contain letters, numbers, spaces, hyphens, apostrophes, and periods.',
+            'regex_match' => 'Name can only contain letters (including ñ), numbers, spaces, hyphens, apostrophes, and periods.',
         ],
     ];
 
@@ -69,6 +72,7 @@ class UserModel extends Model
         'province',
         'postal_code',
     ];
+    private ?bool $usersRoleIdColumnExists = null;
 
     public function getUserByEmail($email)
     {
@@ -95,7 +99,11 @@ class UserModel extends Model
             return false;
         }
 
-        if (password_verify($password, (string) $user['password'])) {
+        if (PasswordService::verify((string) $password, (string) $user['password'])) {
+            if (PasswordService::needsRehash((string) $user['password'])) {
+                $this->update((int) $user['id'], ['password' => (string) $password]);
+            }
+
             $this->resetLoginAttempts((int) $user['id']);
             return $this->find((int) $user['id']);
         }
@@ -138,12 +146,13 @@ class UserModel extends Model
         $coreData = $this->extractCoreData($data);
         $profileData = $this->extractProfileData($data);
         $addressData = $this->extractAddressData($data);
+        $coreData = $this->normalizeRoleAssignments($coreData);
 
         if (! isset($coreData['password'])) {
             return false;
         }
 
-        $coreData['password'] = password_hash((string) $coreData['password'], PASSWORD_DEFAULT);
+        $coreData['password'] = PasswordService::hash((string) $coreData['password']);
 
         $this->db->transStart();
 
@@ -184,6 +193,11 @@ class UserModel extends Model
         $coreData = $this->extractCoreData($data);
         $profileData = $this->extractProfileData($data);
         $addressData = $this->extractAddressData($data);
+        $coreData = $this->normalizeRoleAssignments($coreData);
+
+        if (array_key_exists('password', $coreData) && $coreData['password'] !== null && $coreData['password'] !== '') {
+            $coreData['password'] = PasswordService::hash((string) $coreData['password']);
+        }
 
         $this->db->transStart();
 
@@ -207,8 +221,7 @@ class UserModel extends Model
 
     public function updatePassword($userId, $newPassword)
     {
-        $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
-        return $this->update($userId, ['password' => $hashedPassword]);
+        return $this->update($userId, ['password' => $newPassword]);
     }
 
     public function isUserLocked($userId)
@@ -286,6 +299,8 @@ class UserModel extends Model
     private function mergeRelations(array $row, array $profile, array $address): array
     {
         $row = array_merge([
+            'role_id' => null,
+            'role_name' => null,
             'shop_name' => null,
             'phone_number' => null,
             'legal_age_confirmed' => 0,
@@ -314,6 +329,7 @@ class UserModel extends Model
 
         $row['phone'] = $row['phone_number'];
         $row['address'] = $this->buildAddressString($row);
+        $row['role_name'] = $this->resolveRoleName($row);
 
         return $row;
     }
@@ -457,6 +473,225 @@ class UserModel extends Model
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string,mixed> $coreData
+     * @return array<string,mixed>
+     */
+    private function normalizeRoleAssignments(array $coreData): array
+    {
+        $supportsRoleId = $this->supportsRoleIdColumn();
+
+        $roleName = isset($coreData['role']) ? strtolower(trim((string) $coreData['role'])) : '';
+        $roleId = isset($coreData['role_id']) ? (int) $coreData['role_id'] : 0;
+
+        if (!$supportsRoleId) {
+            unset($coreData['role_id']);
+        }
+
+        if ($supportsRoleId && $roleId > 0 && $roleName === '') {
+            $resolvedName = $this->getRoleNameById($roleId);
+            $coreData['role'] = $resolvedName ?? 'customer';
+            return $coreData;
+        }
+
+        if ($roleName !== '') {
+            $coreData['role'] = in_array($roleName, ['admin', 'staff', 'customer'], true) ? $roleName : 'customer';
+            if ($supportsRoleId) {
+                $resolvedRoleId = $this->getRoleIdByName($coreData['role']);
+                if ($resolvedRoleId !== null) {
+                    $coreData['role_id'] = $resolvedRoleId;
+                }
+            }
+            return $coreData;
+        }
+
+        if ($roleId <= 0) {
+            $coreData['role'] = $coreData['role'] ?? 'customer';
+            if ($supportsRoleId) {
+                $resolvedRoleId = $this->getRoleIdByName((string) $coreData['role']);
+                if ($resolvedRoleId !== null) {
+                    $coreData['role_id'] = $resolvedRoleId;
+                }
+            }
+        }
+
+        return $coreData;
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    public function userHasRole(array $user, string $roleName): bool
+    {
+        $expectedRole = strtolower(trim($roleName));
+        if ($expectedRole === '') {
+            return false;
+        }
+
+        $resolvedRole = strtolower((string) $this->resolveRoleName($user));
+        if ($resolvedRole !== '' && hash_equals($resolvedRole, $expectedRole)) {
+            return true;
+        }
+
+        $roleId = (int) ($user['role_id'] ?? 0);
+        if ($roleId > 0) {
+            $byId = $this->getRoleNameById($roleId);
+            return is_string($byId) && hash_equals(strtolower($byId), $expectedRole);
+        }
+
+        return false;
+    }
+
+    public function hasRole(int $userId, string $roleName): bool
+    {
+        $user = $this->find($userId);
+        return is_array($user) && $this->userHasRole($user, $roleName);
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    public function userHasPermission(array $user, string $permissionName): bool
+    {
+        $targetPermission = strtolower(trim($permissionName));
+        if ($targetPermission === '') {
+            return false;
+        }
+
+        if (
+            !$this->db->tableExists('roles')
+            || !$this->db->tableExists('permissions')
+            || !$this->db->tableExists('role_permissions')
+        ) {
+            $role = strtolower((string) ($user['role'] ?? ''));
+            if ($role === 'admin') {
+                return true;
+            }
+
+            if ($role === 'customer') {
+                return in_array($targetPermission, ['read', 'view_products'], true);
+            }
+
+            if ($role === 'staff') {
+                return in_array($targetPermission, ['read', 'write', 'update', 'view_products', 'create_products', 'update_products', 'manage_orders'], true);
+            }
+
+            return false;
+        }
+
+        $permissions = $this->getPermissionNamesForUser((int) ($user['id'] ?? 0), $user);
+        foreach ($permissions as $permission) {
+            if (hash_equals(strtolower($permission), $targetPermission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasPermission(int $userId, string $permissionName): bool
+    {
+        $user = $this->find($userId);
+        return is_array($user) && $this->userHasPermission($user, $permissionName);
+    }
+
+    /**
+     * @param array<string,mixed>|null $user
+     * @return string[]
+     */
+    public function getPermissionNamesForUser(int $userId, ?array $user = null): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $roleId = 0;
+        $userRow = $user;
+        if (!is_array($userRow)) {
+            $userRow = $this->find($userId);
+        }
+
+        if (is_array($userRow)) {
+            $roleId = (int) ($userRow['role_id'] ?? 0);
+            if ($roleId <= 0) {
+                $roleName = $this->resolveRoleName($userRow);
+                $fallbackRoleId = $this->getRoleIdByName($roleName);
+                $roleId = $fallbackRoleId ?? 0;
+            }
+        }
+
+        if ($roleId <= 0) {
+            return [];
+        }
+
+        $rows = $this->db->table('role_permissions rp')
+            ->select('p.name')
+            ->join('permissions p', 'p.id = rp.permission_id', 'inner')
+            ->where('rp.role_id', $roleId)
+            ->get()
+            ->getResultArray();
+
+        return array_values(array_unique(array_map(static fn ($row) => (string) ($row['name'] ?? ''), $rows)));
+    }
+
+    /**
+     * @param array<string,mixed> $user
+     */
+    public function resolveRoleName(array $user): ?string
+    {
+        $legacyRole = strtolower(trim((string) ($user['role'] ?? '')));
+        if ($legacyRole !== '') {
+            return $legacyRole;
+        }
+
+        $roleId = (int) ($user['role_id'] ?? 0);
+        if ($roleId > 0) {
+            return $this->getRoleNameById($roleId);
+        }
+
+        return null;
+    }
+
+    public function getRoleIdByName(string $roleName): ?int
+    {
+        $normalized = strtolower(trim($roleName));
+        if ($normalized === '' || !$this->db->tableExists('roles')) {
+            return null;
+        }
+
+        $row = $this->db->table('roles')
+            ->select('id')
+            ->where('name', $normalized)
+            ->get()
+            ->getRowArray();
+
+        return is_array($row) ? (int) $row['id'] : null;
+    }
+
+    public function getRoleNameById(int $roleId): ?string
+    {
+        if ($roleId <= 0 || !$this->db->tableExists('roles')) {
+            return null;
+        }
+
+        $row = $this->db->table('roles')
+            ->select('name')
+            ->where('id', $roleId)
+            ->get()
+            ->getRowArray();
+
+        return is_array($row) ? (string) $row['name'] : null;
+    }
+
+    private function supportsRoleIdColumn(): bool
+    {
+        if ($this->usersRoleIdColumnExists === null) {
+            $this->usersRoleIdColumnExists = $this->db->fieldExists('role_id', $this->table);
+        }
+
+        return $this->usersRoleIdColumnExists;
     }
 
     private function buildAddressString(array $row): string

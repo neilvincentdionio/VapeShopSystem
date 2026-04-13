@@ -21,6 +21,11 @@ class Products extends BaseController
      */
     public function index()
     {
+        $guard = $this->enforcePermission('view_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $products = $this->productModel->getAllProducts();
         $data = [
             'title' => 'Product Management',
@@ -39,6 +44,11 @@ class Products extends BaseController
      */
     public function create()
     {
+        $guard = $this->enforcePermission('create_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $data = [
             'title' => 'Add New Product',
             'categories' => $this->productModel->getCategoryOptions(),
@@ -52,6 +62,11 @@ class Products extends BaseController
      */
     public function store()
     {
+        $guard = $this->enforcePermission('create_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $validation = $this->validate([
             'name' => 'required|min_length[3]|max_length[255]',
             'category' => 'required|in_list[Devices,Pods,E-Liquid,Disposable,Accessories]',
@@ -97,6 +112,11 @@ class Products extends BaseController
      */
     public function edit($id)
     {
+        $guard = $this->enforcePermission('update_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $product = $this->productModel->find($id);
 
         if (!$product) {
@@ -117,6 +137,11 @@ class Products extends BaseController
      */
     public function update($id)
     {
+        $guard = $this->enforcePermission('update_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $product = $this->productModel->find($id);
 
         if (!$product) {
@@ -179,6 +204,11 @@ class Products extends BaseController
      */
     public function delete($id)
     {
+        $guard = $this->enforcePermission('delete_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $product = $this->productModel->find($id);
 
         if (!$product) {
@@ -202,6 +232,11 @@ class Products extends BaseController
      */
     public function toggleStatus($id)
     {
+        $guard = $this->enforcePermission('update_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
         $product = $this->productModel->find($id);
 
         if (!$product) {
@@ -216,5 +251,18 @@ class Products extends BaseController
         }
 
         return redirect()->to('/products')->with('error', 'Failed to update product status.');
+    }
+
+    private function enforcePermission(string $permissionName)
+    {
+        if (!session()->get('logged_in')) {
+            return redirect()->to('/login')->with('error', 'Please login first.');
+        }
+
+        if (!$this->hasPermission($permissionName)) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Insufficient permission.');
+        }
+
+        return true;
     }
 }

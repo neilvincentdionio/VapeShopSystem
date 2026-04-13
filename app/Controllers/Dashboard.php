@@ -1548,7 +1548,7 @@ class Dashboard extends BaseController
         ];
 
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
+            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
             'email' => 'required|valid_email|is_unique[users.email,id,' . $userId . ']',
             'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
             'address_line' => 'permit_empty|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\.\'#,\/]+$/]',
@@ -1586,7 +1586,7 @@ class Dashboard extends BaseController
         ];
 
         if ($newPassword !== '') {
-            $updateData['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
+            $updateData['password'] = $newPassword;
         }
 
         if (!$this->userModel->update($userId, $updateData)) {

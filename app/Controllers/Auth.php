@@ -5,15 +5,14 @@ namespace App\Controllers;
 use App\Models\UserModel;
 use App\Models\PasswordResetModel;
 use App\Models\LoginAttemptModel;
-use App\Models\OtpCodeModel;
-use App\Libraries\OtpMailer;
+use App\Libraries\OtpService;
 
 class Auth extends BaseController
 {
     protected $userModel;
     protected $passwordResetModel;
     protected $loginAttemptModel;
-    protected $otpCodeModel;
+    protected $otpService;
     protected $session;
 
     public function __construct()
@@ -21,7 +20,7 @@ class Auth extends BaseController
         $this->userModel = new UserModel();
         $this->passwordResetModel = new PasswordResetModel();
         $this->loginAttemptModel = new LoginAttemptModel();
-        $this->otpCodeModel = new OtpCodeModel();
+        $this->otpService = new OtpService();
         $this->session = session();
     }
 
@@ -154,53 +153,28 @@ class Auth extends BaseController
         $user = $this->userModel->verifyCredentials($email, $password);
 
         if ($user) {
-            // Record successful login attempt for audit/rate limiting.
             $this->loginAttemptModel->recordAttempt($email, true);
-
-            // Regenerate session ID for security
             session()->regenerate();
 
-            // Exempt admin accounts from OTP (direct login).
-            if (($user['role'] ?? '') === 'admin') {
-                $this->session->set([
-                    'user_id' => $user['id'],
-                    'user_name' => $user['name'],
-                    'user_email' => $user['email'],
-                    'user_role' => $user['role'],
-                    'user_shop_name' => $user['shop_name'] ?? null,
-                    'logged_in' => true,
-                    'last_activity' => time(),
-                ]);
-
-                return redirect()->to('/dashboard')
-                    ->with('success', 'Welcome back, ' . htmlspecialchars($user['name']) . '!');
-            }
-
-            // Step 1: mark user as OTP-pending (not fully logged in yet)
             $this->session->set([
-                'otp_pending'    => true,
-                'otp_user_id'    => $user['id'],
-                'otp_user_email' => $user['email'],
-                'otp_user_name'  => $user['name'],
-                'otp_user_role'  => $user['role'],
+                'otp_pending' => true,
+                'otp_user_id' => (int) $user['id'],
+                'otp_user_email' => (string) $user['email'],
+                'otp_user_name' => (string) $user['name'],
+                'otp_user_role' => (string) $user['role'],
+                'otp_user_role_id' => (int) ($user['role_id'] ?? 0),
                 'otp_user_shop_name' => $user['shop_name'] ?? null,
             ]);
 
-            // Step 2: create and send OTP
-            $otpCode = (string) random_int(100000, 999999);
-            $expiresAt = date('Y-m-d H:i:s', time() + 5 * 60);
-            $this->otpCodeModel->createForUser((int) $user['id'], (string) $user['email'], $otpCode, $expiresAt);
+            $issued = $this->otpService->issueOtp((int) $user['id'], (string) $user['email']);
 
-            $mailer = new OtpMailer();
-            $sendResult = $mailer->sendOtp((string) $user['email'], $otpCode);
-
-            // Optional: show OTP on screen if email is not configured
-            if (!$sendResult['sent']) {
-                $this->session->setFlashdata('otp_debug', $otpCode);
-                $this->session->setFlashdata('otp_email_error', (string) ($sendResult['error'] ?? 'Unable to send OTP email.'));
+            if (!$issued['sent']) {
+                $this->session->setFlashdata('otp_debug', $issued['otp']);
+                $this->session->setFlashdata('otp_email_error', (string) ($issued['email_error'] ?? 'Unable to send OTP email.'));
             }
 
-            return redirect()->to('/otp');
+            return redirect()->to('/otp')
+                ->with('success', 'Password verified. Enter the OTP to finish signing in.');
         } else {
             // Record failed login attempt for audit/rate limiting.
             $this->loginAttemptModel->recordAttempt($email, false);
@@ -224,11 +198,16 @@ class Auth extends BaseController
      */
     public function otp()
     {
-        if (!$this->session->get('otp_pending') || !$this->session->get('otp_user_id')) {
+        $userId = (int) ($this->session->get('otp_user_id') ?? 0);
+        if (!$this->session->get('otp_pending') || $userId <= 0) {
             return redirect()->to('/login');
         }
 
-        return view('auth/otp_verify');
+        return view('auth/otp_verify', [
+            'remaining_attempts' => $this->otpService->getWebRemainingAttempts($userId),
+            'resend_cooldown' => $this->otpService->getWebResendCooldown($userId),
+            'max_attempts' => $this->otpService->maxAttempts(),
+        ]);
     }
 
     /**
@@ -250,43 +229,34 @@ class Auth extends BaseController
             return redirect()->back()->with('error', 'Please enter the 6-digit OTP.');
         }
 
-        $row = $this->otpCodeModel->getActiveForUser($userId);
-        if ($row === null) {
-            return redirect()->back()->with('error', 'OTP not found. Please resend OTP.');
+        $verification = $this->otpService->verifyForWeb($userId, $otpInput);
+        if ($verification['status'] !== 'ok') {
+            if (in_array($verification['status'], ['locked', 'expired'], true)) {
+                $this->session->remove($this->pendingOtpSessionKeys());
+                return redirect()->to('/login')->with('error', $verification['message']);
+            }
+
+            $error = $verification['message'];
+            if (isset($verification['remaining_attempts'])) {
+                $error .= ' Remaining attempts: ' . (int) $verification['remaining_attempts'] . '.';
+            }
+
+            return redirect()->back()->with('error', $error);
         }
 
-        // Optional: limit OTP attempts (max 3) - tracked in session for simplicity
-        $attempts = (int) ($this->session->get('otp_attempts') ?? 0);
-        if ($attempts >= 3) {
-            $this->otpCodeModel->deleteForUser($userId);
-            $this->session->remove(['otp_pending', 'otp_user_id', 'otp_user_email', 'otp_user_name', 'otp_user_role', 'otp_user_shop_name', 'otp_attempts']);
-            return redirect()->to('/login')->with('error', 'Too many OTP attempts. Please login again.');
-        }
-
-        if (strtotime((string) $row['expires_at']) < time()) {
-            $this->otpCodeModel->deleteForUser($userId);
-            return redirect()->back()->with('error', 'OTP expired. Please resend OTP.');
-        }
-
-        if (!hash_equals((string) $row['otp_code'], $otpInput)) {
-            $this->session->set('otp_attempts', $attempts + 1);
-            return redirect()->back()->with('error', 'Invalid OTP.');
-        }
-
-        // OTP is valid. Complete login.
-        $this->otpCodeModel->markUsed((int) $row['id']);
-
+        session()->regenerate();
         $this->session->set([
             'user_id' => $userId,
             'user_name' => (string) ($this->session->get('otp_user_name') ?? ''),
             'user_email' => $email,
             'user_role' => (string) ($this->session->get('otp_user_role') ?? ''),
+            'user_role_id' => (int) ($this->session->get('otp_user_role_id') ?? 0),
             'user_shop_name' => $this->session->get('otp_user_shop_name'),
             'logged_in' => true,
             'last_activity' => time(),
         ]);
 
-        $this->session->remove(['otp_pending', 'otp_user_id', 'otp_user_email', 'otp_user_name', 'otp_user_role', 'otp_user_shop_name', 'otp_attempts']);
+        $this->session->remove($this->pendingOtpSessionKeys());
 
         return redirect()->to('/dashboard')->with('success', 'OTP verified. Welcome!');
     }
@@ -303,20 +273,21 @@ class Auth extends BaseController
             return redirect()->to('/login');
         }
 
-        $otpCode = (string) random_int(100000, 999999);
-        $expiresAt = date('Y-m-d H:i:s', time() + 5 * 60);
-        $this->otpCodeModel->createForUser($userId, $email, $otpCode, $expiresAt);
-        $this->session->set('otp_attempts', 0);
+        $result = $this->otpService->resendForWeb($userId, $email);
 
-        $mailer = new OtpMailer();
-        $sendResult = $mailer->sendOtp($email, $otpCode);
-
-        if (!$sendResult['sent']) {
-            $this->session->setFlashdata('otp_debug', $otpCode);
-            $this->session->setFlashdata('otp_email_error', (string) ($sendResult['error'] ?? 'Unable to send OTP email.'));
+        if ($result['status'] === 'cooldown') {
+            return redirect()->to('/otp')->with(
+                'error',
+                'Please wait ' . (int) ($result['resend_available_in'] ?? 0) . ' second(s) before resending OTP.'
+            );
         }
 
-        return redirect()->to('/otp')->with('success', 'A new OTP has been generated.');
+        if (!($result['sent'] ?? false)) {
+            $this->session->setFlashdata('otp_debug', (string) ($result['otp'] ?? ''));
+            $this->session->setFlashdata('otp_email_error', (string) ($result['email_error'] ?? 'Unable to send OTP email.'));
+        }
+
+        return redirect()->to('/otp')->with('success', 'A new OTP has been sent.');
     }
 
     /**
@@ -324,11 +295,27 @@ class Auth extends BaseController
      */
     public function logout()
     {
-        // Destroy session
+        $this->session->remove($this->pendingOtpSessionKeys());
         $this->session->destroy();
 
         return redirect()->to('/login')
                        ->with('success', 'You have been logged out successfully.');
+    }
+
+    /**
+     * @return string[]
+     */
+    private function pendingOtpSessionKeys(): array
+    {
+        return [
+            'otp_pending',
+            'otp_user_id',
+            'otp_user_email',
+            'otp_user_name',
+            'otp_user_role',
+            'otp_user_role_id',
+            'otp_user_shop_name',
+        ];
     }
 
     /**
@@ -513,8 +500,8 @@ class Auth extends BaseController
             $errors['name'] = 'Full name must be at least 3 characters long.';
         } elseif (strlen($name) > 255) {
             $errors['name'] = 'Full name must not exceed 255 characters.';
-        } elseif (!preg_match("/^[a-zA-Z0-9\\s\\-\\'\\.]+$/", $name)) {
-            $errors['name'] = 'Full name can only contain letters, numbers, spaces, hyphens, apostrophes, and periods.';
+        } elseif (!preg_match("/^[\\p{L}\\p{M}\\p{N}\\s\\-\\.'’]+$/u", $name)) {
+            $errors['name'] = 'Full name can only contain letters (including ñ), numbers, spaces, hyphens, apostrophes, and periods.';
         }
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {

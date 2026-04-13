@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\AccessControlService;
 use CodeIgniter\Controller;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -20,6 +21,9 @@ use Psr\Log\LoggerInterface;
  */
 abstract class BaseController extends Controller
 {
+    protected $helpers = ['rbac'];
+    protected ?AccessControlService $accessControl = null;
+
     /**
      * Be sure to declare properties for any property fetch you initialized.
      * The creation of dynamic property is deprecated in PHP 8.2.
@@ -41,5 +45,32 @@ abstract class BaseController extends Controller
 
         // Preload any models, libraries, etc, here.
         // $this->session = service('session');
+    }
+
+    protected function hasRole(string $roleName): bool
+    {
+        return $this->accessControl()->hasRole($roleName);
+    }
+
+    protected function hasPermission(string $permissionName): bool
+    {
+        return $this->accessControl()->hasPermission($permissionName);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function getAuthenticatedUser(): ?array
+    {
+        return $this->accessControl()->getCurrentUser();
+    }
+
+    protected function accessControl(): AccessControlService
+    {
+        if ($this->accessControl === null) {
+            $this->accessControl = new AccessControlService();
+        }
+
+        return $this->accessControl;
     }
 }

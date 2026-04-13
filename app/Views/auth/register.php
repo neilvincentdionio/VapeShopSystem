@@ -150,6 +150,27 @@
             transform: translateY(-1px);
         }
 
+        .password-input-wrap {
+            position: relative;
+        }
+
+        .password-input-wrap input {
+            padding-right: 2.8rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 0.65rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            color: #666666;
+            font-size: 1rem;
+            line-height: 1;
+        }
+
         .form-group small {
             color: #6c8077;
             line-height: 1.45;
@@ -274,26 +295,32 @@
 
                         <div class="form-group">
                             <label for="password">Password</label>
-                            <input
-                                type="password"
-                                id="password"
-                                name="password"
-                                autocomplete="new-password"
-                                required
-                                placeholder="Minimum 8 characters"
-                            >
+                            <div class="password-input-wrap">
+                                <input
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    autocomplete="new-password"
+                                    required
+                                    placeholder="Minimum 8 characters"
+                                >
+                                <button type="button" class="password-toggle" data-target="password" aria-label="Show password">&#128065;</button>
+                            </div>
                         </div>
 
                         <div class="form-group">
                             <label for="confirm_password">Confirm Password</label>
-                            <input
-                                type="password"
-                                id="confirm_password"
-                                name="confirm_password"
-                                autocomplete="new-password"
-                                required
-                                placeholder="Re-enter your password"
-                            >
+                            <div class="password-input-wrap">
+                                <input
+                                    type="password"
+                                    id="confirm_password"
+                                    name="confirm_password"
+                                    autocomplete="new-password"
+                                    required
+                                    placeholder="Re-enter your password"
+                                >
+                                <button type="button" class="password-toggle" data-target="confirm_password" aria-label="Show password">&#128065;</button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -417,6 +444,20 @@
                 successAlert.style.display = 'none';
             }
         }, 5000);
+
+        document.querySelectorAll('.password-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                if (!input) {
+                    return;
+                }
+
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            });
+        });
     </script>
 </body>
 </html>

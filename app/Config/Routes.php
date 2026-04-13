@@ -30,9 +30,9 @@ $routes->post('/dashboard/profile/update', 'Dashboard::updateCustomerProfile', [
 $routes->get('/dashboard/settings', 'Dashboard::settings', ['filter' => 'auth']);
 
 // Orders routes (Admin only)
-$routes->get('/orders', 'Dashboard::adminOrders', ['filter' => 'auth:admin']);
-$routes->get('/orders/checkout/(:num)', 'Dashboard::adminCheckout/$1');
-$routes->post('/orders/checkout-submit/(:num)', 'Dashboard::adminCheckoutSubmit/$1');
+$routes->get('/orders', 'Dashboard::adminOrders', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->get('/orders/checkout/(:num)', 'Dashboard::adminCheckout/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/orders/checkout-submit/(:num)', 'Dashboard::adminCheckoutSubmit/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Working checkout route - bypass all issues
 $routes->get('/checkout/(:num)', function($orderId) {
@@ -68,18 +68,21 @@ $routes->get('/customer/home', 'Dashboard::customerHome', ['filter' => 'auth']);
 $routes->get('/customer/products', 'Dashboard::customerProducts', ['filter' => 'auth']);
 $routes->get('/customer/orders', 'Dashboard::customerOrders', ['filter' => 'auth']);
 $routes->get('/customer/cart', 'Dashboard::customerCart', ['filter' => 'auth']);
+$routes->get('/customer/user-management', static function () {
+    return redirect()->to('/dashboard')->with('error', 'Access denied.');
+}, ['filter' => 'auth']);
 
 // User Management routes (protected by AuthFilter)
-$routes->get('/user-management', 'UserManagement::index', ['filter' => 'auth:admin']);
-$routes->get('/user-management/create', 'UserManagement::create', ['filter' => 'auth:admin']);
-$routes->post('/user-management/store', 'UserManagement::store', ['filter' => 'auth:admin']);
-$routes->get('/user-management/view/(:num)', 'UserManagement::view/$1', ['filter' => 'auth:admin']);
-$routes->get('/user-management/verification-id/(:num)', 'UserManagement::verificationId/$1', ['filter' => 'auth:admin']);
-$routes->post('/user-management/approve/(:num)', 'UserManagement::approve/$1', ['filter' => 'auth:admin']);
-$routes->get('/user-management/edit/(:num)', 'UserManagement::edit/$1', ['filter' => 'auth:admin']);
-$routes->post('/user-management/update/(:num)', 'UserManagement::update/$1', ['filter' => 'auth:admin']);
-$routes->get('/user-management/delete/(:num)', 'UserManagement::delete/$1', ['filter' => 'auth:admin']);
-$routes->post('/user-management/destroy/(:num)', 'UserManagement::destroy/$1', ['filter' => 'auth:admin']);
+$routes->get('/user-management', 'UserManagement::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/user-management/create', 'UserManagement::create', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/user-management/store', 'UserManagement::store', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/user-management/view/(:num)', 'UserManagement::view/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/user-management/verification-id/(:num)', 'UserManagement::verificationId/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/user-management/approve/(:num)', 'UserManagement::approve/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/user-management/edit/(:num)', 'UserManagement::edit/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/user-management/update/(:num)', 'UserManagement::update/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/user-management/delete/(:num)', 'UserManagement::delete/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/user-management/destroy/(:num)', 'UserManagement::destroy/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
 
 // Records module routes (Task 3)
 $routes->group('records', ['filter' => 'auth'], static function ($routes) {
@@ -94,13 +97,13 @@ $routes->group('records', ['filter' => 'auth'], static function ($routes) {
 
 // Products module routes (Admin only)
 $routes->group('products', ['filter' => 'auth:admin'], static function ($routes) {
-    $routes->get('/', 'Products::index');
-    $routes->get('create', 'Products::create');
-    $routes->post('store', 'Products::store');
-    $routes->get('edit/(:num)', 'Products::edit/$1');
-    $routes->post('update/(:num)', 'Products::update/$1');
-    $routes->get('delete/(:num)', 'Products::delete/$1');
-    $routes->get('toggle-status/(:num)', 'Products::toggleStatus/$1');
+    $routes->get('/', 'Products::index', ['filter' => 'permission:view_products']);
+    $routes->get('create', 'Products::create', ['filter' => 'permission:create_products']);
+    $routes->post('store', 'Products::store', ['filter' => 'permission:create_products']);
+    $routes->get('edit/(:num)', 'Products::edit/$1', ['filter' => 'permission:update_products']);
+    $routes->post('update/(:num)', 'Products::update/$1', ['filter' => 'permission:update_products']);
+    $routes->get('delete/(:num)', 'Products::delete/$1', ['filter' => 'permission:delete_products']);
+    $routes->get('toggle-status/(:num)', 'Products::toggleStatus/$1', ['filter' => 'permission:update_products']);
 });
 
 // Customer product details route
@@ -131,26 +134,28 @@ $routes->get('/customer/order-details/(:num)', 'Dashboard::viewOrderDetails/$1',
 
 
 // Admin delivery status update (AJAX)
-$routes->post('/orders/update-delivery-status', 'Dashboard::updateDeliveryStatus', ['filter' => 'auth:admin']);
+$routes->post('/orders/update-delivery-status', 'Dashboard::updateDeliveryStatus', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Admin delivery information endpoints
-$routes->get('/orders/get-delivery-info/(:num)', 'Dashboard::getDeliveryInfo/$1', ['filter' => 'auth:admin']);
-$routes->post('/orders/save-delivery-info', 'Dashboard::saveDeliveryInfo', ['filter' => 'auth:admin']);
+$routes->get('/orders/get-delivery-info/(:num)', 'Dashboard::getDeliveryInfo/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/orders/save-delivery-info', 'Dashboard::saveDeliveryInfo', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Admin order details page
-$routes->get('/admin/order-details/(:num)', 'Dashboard::viewAdminOrderDetails/$1', ['filter' => 'auth:admin']);
+$routes->get('/admin/order-details/(:num)', 'Dashboard::viewAdminOrderDetails/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Backup Management routes (Admin only)
-$routes->get('/backup', 'BackupController::index', ['filter' => 'auth:admin']);
-$routes->post('/backup/create', 'BackupController::create', ['filter' => 'auth:admin']);
-$routes->post('/backup/restore', 'BackupController::restore', ['filter' => 'auth:admin']);
-$routes->post('/backup/delete', 'BackupController::delete', ['filter' => 'auth:admin']);
-$routes->get('/backup/download/(:any)', 'BackupController::download/$1', ['filter' => 'auth:admin']);
-$routes->post('/backup/cleanup', 'BackupController::cleanup', ['filter' => 'auth:admin']);
-$routes->get('/backup/stats', 'BackupController::stats', ['filter' => 'auth:admin']);
+$routes->get('/backup', 'BackupController::index', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->post('/backup/create', 'BackupController::create', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->post('/backup/restore', 'BackupController::restore', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->post('/backup/delete', 'BackupController::delete', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->get('/backup/download/(:any)', 'BackupController::download/$1', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->post('/backup/cleanup', 'BackupController::cleanup', ['filter' => ['auth:admin', 'permission:manage_backups']]);
+$routes->get('/backup/stats', 'BackupController::stats', ['filter' => ['auth:admin', 'permission:manage_backups']]);
 
 // API Authentication routes (JWT)
 $routes->post('/api/auth/login', 'ApiAuth::login');
+$routes->post('/api/auth/mfa/verify', 'ApiAuth::verifyMfa');
+$routes->post('/api/auth/mfa/resend', 'ApiAuth::resendMfa');
 $routes->post('/api/auth/refresh', 'ApiAuth::refresh');
 $routes->post('/api/auth/logout', 'ApiAuth::logout');
-$routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => 'jwtauth']);
+$routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => ['jwtauth', 'permission:read']]);

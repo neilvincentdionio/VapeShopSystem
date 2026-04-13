@@ -126,6 +126,27 @@
         .form-group select::placeholder {
             color: #999999;
         }
+        
+        .password-input-wrap {
+            position: relative;
+        }
+
+        .password-input-wrap input {
+            padding-right: 2.8rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 0.65rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            color: #666666;
+            font-size: 1rem;
+            line-height: 1;
+        }
 
         .form-group .error {
             color: #dc3545;
@@ -292,15 +313,15 @@
         }
 
         .alert-error {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
         .validation-errors {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background-color: #fde8ea;
+            color: #842029;
+            border: 1px solid #f5c2c7;
             padding: 0.75rem;
             border-radius: 10px;
             margin-bottom: 1rem;
@@ -356,8 +377,14 @@
         <?php endif; ?>
 
         <?php if (session()->getFlashdata('error')): ?>
+            <?php
+                $flashError = session()->getFlashdata('error');
+                if (is_array($flashError)) {
+                    $flashError = implode(' ', array_map(static fn ($msg) => (string) $msg, $flashError));
+                }
+            ?>
             <div class="alert alert-error">
-                <?= htmlspecialchars(session()->getFlashdata('error')) ?>
+                <?= htmlspecialchars((string) $flashError) ?>
             </div>
         <?php endif; ?>
 
@@ -409,14 +436,17 @@
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        required 
-                        autocomplete="new-password"
-                        placeholder="Enter password (min 8 characters)"
-                    >
+                    <div class="password-input-wrap">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required 
+                            autocomplete="new-password"
+                            placeholder="Enter password (min 8 characters)"
+                        >
+                        <button type="button" class="password-toggle" data-target="password" aria-label="Show password">&#128065;</button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -473,6 +503,20 @@
             if (strength >= 4) color = 'rgba(40, 167, 69, 0.5)'; // Strong
             
             this.style.borderColor = color;
+        });
+
+        document.querySelectorAll('.password-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                if (!input) {
+                    return;
+                }
+
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            });
         });
     </script>
 </body>

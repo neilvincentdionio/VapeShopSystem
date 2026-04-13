@@ -2,76 +2,76 @@
 
 namespace App\Filters;
 
+use App\Libraries\AccessControlService;
+use App\Libraries\JwtService;
+use App\Models\UserModel;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
-use App\Libraries\JwtService;
 
 class JwtAuthFilter implements FilterInterface
 {
-    /**
-     * JWT Authentication filter
-     */
     public function before(RequestInterface $request, $arguments = null)
     {
         $response = service('response');
-        
-        // Get token from Authorization header
+
         $token = JwtService::getTokenFromRequest();
-        
-        if (!$token) {
+        if ($token === null) {
             return $response->setJSON([
                 'status' => 'error',
-                'message' => 'Authorization token required'
+                'message' => 'Authorization token required.',
             ])->setStatusCode(401);
         }
 
-        // Validate token
         $payload = JwtService::validateToken($token);
-        if (!$payload) {
-            return $response->setJSON([
-                'status' => 'error',
-                'message' => 'Invalid or expired token'
-            ])->setStatusCode(401);
-        }
-
-        // Check if it's an access token
         if (!JwtService::isAccessToken($payload)) {
             return $response->setJSON([
                 'status' => 'error',
-                'message' => 'Invalid token type'
+                'message' => 'Invalid, expired, or wrong token type.',
             ])->setStatusCode(401);
         }
 
-        // Get user from token
-        $user = JwtService::getCurrentUser();
-        if (!$user) {
+        $userId = (int) ($payload['user_id'] ?? 0);
+        $userRole = (string) ($payload['user_role'] ?? '');
+
+        if ($userId <= 0 || $userRole === '') {
             return $response->setJSON([
                 'status' => 'error',
-                'message' => 'User not found'
+                'message' => 'Invalid token payload.',
             ])->setStatusCode(401);
         }
 
-        // Check role-based access if arguments are provided
-        if ($arguments && !empty($arguments)) {
-            $userRole = $user['role'];
-            
-            if (!in_array($userRole, $arguments)) {
+        $userModel = new UserModel();
+        $user = $userModel->find($userId);
+        if (!is_array($user) || (int) ($user['is_active'] ?? 0) !== 1) {
+            return $response->setJSON([
+                'status' => 'error',
+                'message' => 'User is inactive or not found.',
+            ])->setStatusCode(401);
+        }
+
+        if (is_array($arguments) && $arguments !== []) {
+            $access = new AccessControlService();
+            $granted = false;
+            foreach ($arguments as $requiredRole) {
+                if ($access->hasRole((string) $requiredRole, $user)) {
+                    $granted = true;
+                    break;
+                }
+            }
+
+            if (!$granted) {
                 return $response->setJSON([
                     'status' => 'error',
-                    'message' => 'Access denied. Insufficient privileges.'
+                    'message' => 'Access denied. Insufficient privileges.',
                 ])->setStatusCode(403);
             }
         }
 
-        // Add user to request for easy access in controllers
-        $request->user = $user;
-        
         return null;
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
     {
-        // Do nothing here
     }
 }

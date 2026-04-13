@@ -20,9 +20,13 @@ class UserManagement extends BaseController
      */
     private function checkAdminAuth()
     {
-        if (!$this->session->get('logged_in') || $this->session->get('user_role') !== 'admin') {
+        if (
+            !$this->session->get('logged_in')
+            || !$this->hasRole('admin')
+            || !$this->hasPermission('manage_users')
+        ) {
             return redirect()->to('/dashboard')
-                           ->with('error', 'Access denied. Admin privileges required.');
+                           ->with('error', 'Access denied. User management permission required.');
         }
         return true;
     }
@@ -210,7 +214,7 @@ class UserManagement extends BaseController
 
         // Validate input data
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
+            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
             'email' => 'required|valid_email|is_unique[users.email]',
             'password' => 'required|min_length[8]',
             'role' => 'required|in_list[admin,customer]'
@@ -240,6 +244,13 @@ class UserManagement extends BaseController
                 return redirect()->to('/user-management')
                                ->with('success', 'User created successfully.');
             } else {
+                $modelErrors = $this->userModel->errors();
+                if (!empty($modelErrors)) {
+                    return redirect()->back()
+                                   ->withInput()
+                                   ->with('errors', $modelErrors);
+                }
+
                 return redirect()->back()
                                ->with('error', 'Failed to create user. Database error occurred.');
             }
@@ -320,7 +331,7 @@ class UserManagement extends BaseController
 
         // Validate input data
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\'\.]+$/]',
+            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
             'email' => 'required|valid_email|is_unique[users.email,id,' . $id . ']'
         ];
 
@@ -352,7 +363,7 @@ class UserManagement extends BaseController
 
         // Update password if provided
         if (!empty($request->getPost('password'))) {
-            $data['password'] = password_hash($request->getPost('password'), PASSWORD_DEFAULT);
+            $data['password'] = $request->getPost('password');
         }
 
         try {
