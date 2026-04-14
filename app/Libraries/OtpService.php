@@ -46,6 +46,7 @@ class OtpService
             $userId,
             $email,
             PasswordService::hash($otp),
+            $otp,
             $expiresAt,
             $challengeToken !== null ? $this->hashChallengeToken($challengeToken) : null,
             $this->maxAttempts()

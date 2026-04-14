@@ -37,21 +37,39 @@ class OtpCodeModel extends Model
     /** @var array<string,bool> */
     private array $columnExistsCache = [];
 
+    public function __construct(?\CodeIgniter\Database\ConnectionInterface $db = null, ?\CodeIgniter\Validation\ValidationInterface $validation = null)
+    {
+        parent::__construct($db, $validation);
+
+        $hasCreatedAt = $this->hasColumn('created_at');
+        $hasUpdatedAt = $this->hasColumn('updated_at');
+
+        $this->useTimestamps = $hasCreatedAt || $hasUpdatedAt;
+        $this->createdField = $hasCreatedAt ? 'created_at' : '';
+        $this->updatedField = $hasUpdatedAt ? 'updated_at' : '';
+    }
+
     public function createForUser(
         int $userId,
         string $email,
         string $otpHash,
+        string $plainOtp,
         string $expiresAt,
         ?string $challengeTokenHash = null,
         int $maxAttempts = 3
     ): bool {
-        $legacyOtpPlaceholder = substr(hash('sha256', $otpHash . microtime(true)), 0, 6);
         $data = [
             'user_id' => $userId,
-            'otp_code' => $legacyOtpPlaceholder,
             'expiry_time' => $expiresAt,
             'attempts' => 0,
         ];
+
+        // Legacy schema stores the OTP directly in otp_code because otp_hash does not exist.
+        if ($this->hasColumn('otp_hash')) {
+            $data['otp_code'] = substr(hash('sha256', $otpHash . microtime(true)), 0, 6);
+        } else {
+            $data['otp_code'] = $plainOtp;
+        }
 
         if ($this->hasColumn('email')) {
             $data['email'] = $email;
