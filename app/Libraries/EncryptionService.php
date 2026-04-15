@@ -2,19 +2,26 @@
 
 namespace App\Libraries;
 
-use CodeIgniter\Encryption\Encryption;
-
 class EncryptionService
 {
     protected $encrypter;
     protected $key;
+    protected bool $enabled = false;
 
     public function __construct()
     {
-        $this->encrypter = new Encryption();
-        // Use a secure key from environment or generate one
-        $this->key = $_ENV['encryption_key'] ?? $this->generateSecureKey();
-        $this->encrypter->setKey($this->key);
+        $config = config('Encryption');
+        $this->key = $this->resolveKey((string) ($config->key ?? ''));
+
+        if ($this->key === '') {
+            log_message('warning', 'Encryption key is not configured. Sensitive fields will be stored without encryption until a key is set.');
+            $this->encrypter = null;
+            return;
+        }
+
+        $config->key = $this->key;
+        $this->encrypter = service('encrypter', $config);
+        $this->enabled = true;
     }
 
     /**
@@ -22,7 +29,15 @@ class EncryptionService
      */
     public function encrypt(string $data): string
     {
-        return $this->encrypter->encrypt($data);
+        if ($data === '') {
+            return '';
+        }
+
+        if (!$this->enabled || $this->encrypter === null) {
+            return $data;
+        }
+
+        return base64_encode($this->encrypter->encrypt($data));
     }
 
     /**
@@ -30,7 +45,24 @@ class EncryptionService
      */
     public function decrypt(string $encryptedData): string
     {
-        return $this->encrypter->decrypt($encryptedData);
+        if ($encryptedData === '') {
+            return '';
+        }
+
+        if (!$this->enabled || $this->encrypter === null) {
+            return $encryptedData;
+        }
+
+        $decoded = base64_decode($encryptedData, true);
+        if ($decoded === false) {
+            return $encryptedData;
+        }
+
+        try {
+            return (string) $this->encrypter->decrypt($decoded);
+        } catch (\Throwable $e) {
+            return $encryptedData;
+        }
     }
 
     /**
@@ -79,14 +111,6 @@ class EncryptionService
     public function decryptAddress(string $encryptedAddress): string
     {
         return $this->decrypt($encryptedAddress);
-    }
-
-    /**
-     * Generate secure encryption key
-     */
-    private function generateSecureKey(): string
-    {
-        return base64_encode(random_bytes(32));
     }
 
     /**
@@ -143,5 +167,25 @@ class EncryptionService
         $masked = str_repeat('*', strlen($cleanPhone) - 4) . $visible;
         
         return $masked;
+    }
+
+    private function resolveKey(string $configuredKey): string
+    {
+        $candidate = trim($configuredKey);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        $envKey = trim((string) env('encryption.key', env('encryption_key', '')));
+        if ($envKey !== '') {
+            return $envKey;
+        }
+
+        $jwtSecret = trim((string) env('JWT_SECRET', ''));
+        if ($jwtSecret !== '') {
+            return $jwtSecret;
+        }
+
+        return '';
     }
 }

@@ -7,11 +7,15 @@ $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
 $isOrders = $seg1 === 'orders';
 $isUsers = $seg1 === 'user-management';
+$isBackup = $seg1 === 'backup';
 $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
 ?>
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
-        <a href="<?= site_url('dashboard') ?>" class="navbar-brand">Quick Puff Vape Shop</a>
+        <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
+            <span class="brand-mark">Quick Puff</span>
+            <span class="brand-subtitle">Vape Shop Admin</span>
+        </a>
 
         <div class="navbar-center">
             <div class="navbar-menu">
@@ -20,6 +24,7 @@ $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
                 <a href="<?= site_url('orders') ?>" class="nav-link <?= $isOrders ? 'active' : '' ?>">Orders</a>
                 <a href="<?= site_url('records') ?>" class="nav-link <?= $isRecords ? 'active' : '' ?>">Records</a>
                 <a href="<?= site_url('user-management') ?>" class="nav-link <?= $isUsers ? 'active' : '' ?>">User Management</a>
+                <a href="<?= site_url('backup') ?>" class="nav-link <?= $isBackup ? 'active' : '' ?>">Backup</a>
                 <a href="<?= site_url('dashboard/settings') ?>" class="nav-link <?= $isSettings ? 'active' : '' ?>">Settings</a>
             </div>
         </div>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Libraries\EncryptionService;
 use App\Libraries\PasswordService;
 use CodeIgniter\Model;
 
@@ -73,6 +74,13 @@ class UserModel extends Model
         'postal_code',
     ];
     private ?bool $usersRoleIdColumnExists = null;
+    private EncryptionService $encryptionService;
+
+    public function __construct(?\CodeIgniter\Database\ConnectionInterface $db = null, ?\CodeIgniter\Validation\ValidationInterface $validation = null)
+    {
+        parent::__construct($db, $validation);
+        $this->encryptionService = new EncryptionService();
+    }
 
     public function getUserByEmail($email)
     {
@@ -347,6 +355,7 @@ class UserModel extends Model
 
         $profiles = [];
         foreach ($rows as $row) {
+            $row = $this->decryptProfileRow($row);
             $profiles[(int) $row['user_id']] = $row;
         }
 
@@ -368,6 +377,7 @@ class UserModel extends Model
 
         $addresses = [];
         foreach ($rows as $row) {
+            $row = $this->decryptAddressRow($row);
             $userId = (int) $row['user_id'];
             if (! isset($addresses[$userId])) {
                 $addresses[$userId] = $row;
@@ -399,6 +409,9 @@ class UserModel extends Model
             ->where('user_id', $userId)
             ->get()
             ->getRowArray();
+
+        $existing = is_array($existing) ? $this->decryptProfileRow($existing) : [];
+        $profileData = $this->encryptProfileData($profileData);
 
         $payload = array_merge([
             'phone_number' => $existing['phone_number'] ?? null,
@@ -432,6 +445,9 @@ class UserModel extends Model
             ->getRowArray();
 
         $timestamp = date('Y-m-d H:i:s');
+        $existing = is_array($existing) ? $this->decryptAddressRow($existing) : [];
+        $addressData = $this->encryptAddressData($addressData);
+
         $payload = array_merge([
             'address_line' => $existing['address_line'] ?? null,
             'city' => $existing['city'] ?? null,
@@ -705,5 +721,72 @@ class UserModel extends Model
         }
 
         return implode(', ', $parts);
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function decryptProfileRow(array $row): array
+    {
+        if (array_key_exists('phone_number', $row) && $row['phone_number'] !== null) {
+            $row['phone_number'] = $this->decryptSensitiveValue((string) $row['phone_number'], 'phone');
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function decryptAddressRow(array $row): array
+    {
+        foreach ($this->addressFields as $field) {
+            if (array_key_exists($field, $row) && $row[$field] !== null) {
+                $row[$field] = $this->decryptSensitiveValue((string) $row[$field], 'address');
+            }
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param array<string,mixed> $profileData
+     * @return array<string,mixed>
+     */
+    private function encryptProfileData(array $profileData): array
+    {
+        if (array_key_exists('phone_number', $profileData) && $profileData['phone_number'] !== null && $profileData['phone_number'] !== '') {
+            $profileData['phone_number'] = $this->encryptionService->encryptPhoneNumber((string) $profileData['phone_number']);
+        }
+
+        return $profileData;
+    }
+
+    /**
+     * @param array<string,mixed> $addressData
+     * @return array<string,mixed>
+     */
+    private function encryptAddressData(array $addressData): array
+    {
+        foreach ($this->addressFields as $field) {
+            if (array_key_exists($field, $addressData) && $addressData[$field] !== null && $addressData[$field] !== '') {
+                $addressData[$field] = $this->encryptionService->encryptAddress((string) $addressData[$field]);
+            }
+        }
+
+        return $addressData;
+    }
+
+    private function decryptSensitiveValue(string $value, string $type): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return $type === 'phone'
+            ? $this->encryptionService->decryptPhoneNumber($value)
+            : $this->encryptionService->decryptAddress($value);
     }
 }

@@ -59,7 +59,8 @@ class BackupController extends BaseController
         }
 
         $backupFile = $this->request->getPost('backup_file');
-        $result = $this->backupService->restoreBackup($backupFile);
+        $createSafetyBackup = filter_var($this->request->getPost('create_safety_backup'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $result = $this->backupService->restoreBackup($backupFile, $createSafetyBackup !== false);
 
         return $this->response->setJSON($result);
     }

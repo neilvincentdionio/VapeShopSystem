@@ -36,6 +36,7 @@ class OtpCodeModel extends Model
     protected $updatedField = 'updated_at';
     /** @var array<string,bool> */
     private array $columnExistsCache = [];
+    private ?bool $tableExistsCache = null;
 
     public function __construct(?\CodeIgniter\Database\ConnectionInterface $db = null, ?\CodeIgniter\Validation\ValidationInterface $validation = null)
     {
@@ -282,10 +283,23 @@ class OtpCodeModel extends Model
 
     private function hasColumn(string $column): bool
     {
+        if (!$this->tableExists()) {
+            return false;
+        }
+
         if (!array_key_exists($column, $this->columnExistsCache)) {
             $this->columnExistsCache[$column] = $this->db->fieldExists($column, $this->table);
         }
 
         return $this->columnExistsCache[$column];
+    }
+
+    private function tableExists(): bool
+    {
+        if ($this->tableExistsCache === null) {
+            $this->tableExistsCache = $this->db->tableExists($this->table);
+        }
+
+        return $this->tableExistsCache;
     }
 }

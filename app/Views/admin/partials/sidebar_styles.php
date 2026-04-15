@@ -31,15 +31,32 @@
     .admin-sidebar .navbar-brand {
         display: block !important;
         font-size: 1.1rem !important;
-        padding: 0.35rem 0.25rem 0.85rem !important;
+        padding: 0.25rem 0.25rem 1rem !important;
         margin: 0 !important;
         box-sizing: border-box !important;
         border-bottom: 1px solid #ececec !important;
         font-weight: 700 !important;
         text-align: left !important;
         white-space: normal !important;
-        overflow-wrap: anywhere !important;
-        line-height: 1.25 !important;
+        overflow-wrap: normal !important;
+        line-height: 1.2 !important;
+        text-decoration: none !important;
+        color: #1f2937 !important;
+    }
+    .admin-sidebar .brand-mark {
+        display: block !important;
+        font-size: 1.35rem !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.03em !important;
+        color: #4c1d95 !important;
+        margin-bottom: 0.2rem !important;
+    }
+    .admin-sidebar .brand-subtitle {
+        display: block !important;
+        font-size: 0.76rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.12em !important;
+        color: #6b7280 !important;
     }
     .admin-sidebar .navbar-center {
         flex: 1 1 auto !important;
@@ -192,7 +209,8 @@
         background: #c82333 !important;
     }
 
-    .container {
+    .container,
+    .container-fluid {
         max-width: none !important;
         margin-left: 270px !important;
         width: calc(100% - 270px) !important;
@@ -213,7 +231,8 @@
             min-height: auto !important;
         }
 
-        .container {
+        .container,
+        .container-fluid {
             margin-left: 0 !important;
             width: 100% !important;
             padding: 1rem !important;

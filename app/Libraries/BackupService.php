@@ -3,11 +3,13 @@
 namespace App\Libraries;
 
 use CodeIgniter\Database\Database;
+use CodeIgniter\I18n\Time;
 
 class BackupService
 {
     protected $db;
     protected $backupPath;
+    private const ALLOWED_BACKUP_EXTENSIONS = ['sql', 'gz'];
 
     public function __construct()
     {
@@ -25,7 +27,7 @@ class BackupService
      */
     public function createBackup(string $backupName = null): array
     {
-        $backupName = $backupName ?: 'backup_' . date('Y-m-d_H-i-s');
+        $backupName = $backupName ?: 'backup_' . $this->now()->format('Y-m-d_H-i-s');
         $filename = $backupName . '.sql';
         $filepath = $this->backupPath . $filename;
 
@@ -34,7 +36,7 @@ class BackupService
             $tables = $this->db->listTables();
             
             $backupContent = "-- Database Backup\n";
-            $backupContent .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
+            $backupContent .= "-- Generated: " . $this->now()->format('Y-m-d H:i:s') . "\n";
             $backupContent .= "-- Database: " . $this->db->database . "\n\n";
             
             // Add CREATE TABLE statements and data
@@ -58,7 +60,7 @@ class BackupService
                 'filename' => basename($compressedFile),
                 'filepath' => $compressedFile,
                 'size' => filesize($compressedFile),
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => $this->now()->format('Y-m-d H:i:s')
             ];
 
         } catch (\Exception $e) {
@@ -95,7 +97,7 @@ class BackupService
                     if ($value === null) {
                         $values[] = 'NULL';
                     } else {
-                        $values[] = "'" . $this->db->escape($value) . "'";
+                        $values[] = $this->db->escape($value);
                     }
                 }
                 $sql .= "INSERT INTO `{$table}` (`" . implode('`, `', $columns) . "`) VALUES (" . implode(', ', $values) . ");\n";
@@ -140,61 +142,388 @@ class BackupService
     /**
      * Restore database from backup
      */
-    public function restoreBackup(string $backupFile): array
+    public function restoreBackup(string $backupFile, bool $createSafetyBackup = true): array
     {
-        $filepath = $this->backupPath . $backupFile;
-        
-        if (!file_exists($filepath)) {
-            return [
-                'success' => false,
-                'error' => 'Backup file not found'
-            ];
+        $validatedBackup = $this->validateBackupFile($backupFile);
+        if (!$validatedBackup['success']) {
+            return $validatedBackup;
         }
 
+        $filepath = $validatedBackup['filepath'];
+
         try {
-            // Decompress if needed
-            $content = '';
-            if (pathinfo($filepath, PATHINFO_EXTENSION) === 'gz') {
-                $content = gzfile_get_contents($filepath);
-                if ($content === false) {
-                    throw new \Exception("Failed to decompress backup file");
-                }
-            } else {
-                $content = file_get_contents($filepath);
-                if ($content === false) {
-                    throw new \Exception("Failed to read backup file");
+            $this->ensureDatabaseConnection();
+
+            $safetyBackup = null;
+            if ($createSafetyBackup) {
+                $safetyBackupName = pathinfo($backupFile, PATHINFO_FILENAME) . '_pre_restore_' . $this->now()->format('Y-m-d_H-i-s');
+                $safetyBackup = $this->createBackup($safetyBackupName);
+
+                if (!$safetyBackup['success']) {
+                    throw new \RuntimeException('Failed to create safety backup before restore: ' . ($safetyBackup['error'] ?? 'Unknown error'));
                 }
             }
 
-            // Split into individual statements
-            $statements = array_filter(array_map('trim', explode(";\n", $content)));
-            
-            // Execute each statement
-            $this->db->transStart();
-            
-            foreach ($statements as $statement) {
-                if (!empty($statement) && !preg_match('/^--/', $statement)) {
+            $content = $this->readBackupContent($filepath);
+            $statements = $this->parseSqlStatements($content);
+            if (empty($statements)) {
+                throw new \RuntimeException('The backup file did not contain any executable SQL statements.');
+            }
+
+            $orderedStatements = $this->orderRestoreStatements($statements);
+
+            $this->db->query('SET FOREIGN_KEY_CHECKS = 0');
+            $this->dropAllTables();
+
+            $executedStatements = 0;
+            foreach ($orderedStatements as $index => $statement) {
+                $statement = trim($statement);
+                if ($statement === '') {
+                    continue;
+                }
+
+                try {
                     $this->db->query($statement);
+                    $executedStatements++;
+                } catch (\Throwable $exception) {
+                    throw new \RuntimeException(
+                        sprintf(
+                            'Restore failed on statement %d of %d: %s. SQL: %s',
+                            $index + 1,
+                            count($orderedStatements),
+                            $exception->getMessage(),
+                            $this->summarizeSql($statement)
+                        ),
+                        0,
+                        $exception
+                    );
                 }
             }
-            
-            $this->db->transComplete();
-            
-            if ($this->db->transStatus() === false) {
-                throw new \Exception("Database restore failed");
+
+            $this->db->query('SET FOREIGN_KEY_CHECKS = 1');
+
+            $message = 'Database restored successfully.';
+            if ($createSafetyBackup && isset($safetyBackup['filename'])) {
+                $message .= ' Safety backup created: ' . $safetyBackup['filename'];
             }
 
             return [
                 'success' => true,
-                'message' => 'Database restored successfully',
-                'statements_executed' => count($statements)
+                'message' => $message,
+                'statements_executed' => $executedStatements,
+                'source_backup' => basename($filepath),
+                'safety_backup' => $safetyBackup['filename'] ?? null,
             ];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            try {
+                $this->db->query('SET FOREIGN_KEY_CHECKS = 1');
+            } catch (\Throwable $ignored) {
+            }
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    private function validateBackupFile(string $backupFile): array
+    {
+        $backupFile = trim($backupFile);
+        if ($backupFile === '') {
+            return [
+                'success' => false,
+                'error' => 'Please select a backup file to restore.',
+            ];
+        }
+
+        if (basename($backupFile) !== $backupFile) {
+            return [
+                'success' => false,
+                'error' => 'Invalid backup filename.',
+            ];
+        }
+
+        $extension = strtolower((string) pathinfo($backupFile, PATHINFO_EXTENSION));
+        if (!in_array($extension, self::ALLOWED_BACKUP_EXTENSIONS, true)) {
+            return [
+                'success' => false,
+                'error' => 'Unsupported backup file type. Only .sql and .gz backups can be restored.',
+            ];
+        }
+
+        $filepath = $this->backupPath . $backupFile;
+        if (!is_file($filepath)) {
+            return [
+                'success' => false,
+                'error' => 'Backup file not found.',
+            ];
+        }
+
+        if (!is_readable($filepath)) {
+            return [
+                'success' => false,
+                'error' => 'Backup file is not readable.',
+            ];
+        }
+
+        if ((int) filesize($filepath) === 0) {
+            return [
+                'success' => false,
+                'error' => 'Backup file is empty.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'filepath' => $filepath,
+        ];
+    }
+
+    private function ensureDatabaseConnection(): void
+    {
+        if ($this->db->connID === false || $this->db->connID === null) {
+            $this->db->initialize();
+        }
+
+        $this->db->query('SELECT 1');
+    }
+
+    private function readBackupContent(string $filepath): string
+    {
+        if (strtolower((string) pathinfo($filepath, PATHINFO_EXTENSION)) === 'gz') {
+            $content = $this->readCompressedBackup($filepath);
+            if ($content === false) {
+                throw new \RuntimeException('Failed to extract the compressed backup file.');
+            }
+
+            return $content;
+        }
+
+        $content = file_get_contents($filepath);
+        if ($content === false) {
+            throw new \RuntimeException('Failed to read the backup file.');
+        }
+
+        return $content;
+    }
+
+    private function readCompressedBackup(string $filepath): string|false
+    {
+        $handle = gzopen($filepath, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+
+        $content = '';
+        while (!gzeof($handle)) {
+            $chunk = gzread($handle, 1024 * 512);
+            if ($chunk === false) {
+                gzclose($handle);
+                return false;
+            }
+
+            $content .= $chunk;
+        }
+
+        gzclose($handle);
+
+        return $content;
+    }
+
+    /**
+     * Convert a SQL dump into individual executable statements.
+     */
+    private function parseSqlStatements(string $content): array
+    {
+        $statements = [];
+        $buffer = '';
+        $inString = false;
+        $stringDelimiter = '';
+        $length = strlen($content);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $content[$i];
+            $next = $i + 1 < $length ? $content[$i + 1] : '';
+
+            if (!$inString) {
+                // Skip line comments that start at the beginning of a line or after whitespace.
+                if (
+                    $char === '-'
+                    && $next === '-'
+                    && $this->isCommentStart($buffer)
+                ) {
+                    while ($i < $length && !in_array($content[$i], ["\n", "\r"], true)) {
+                        $i++;
+                    }
+                    continue;
+                }
+
+                if ($char === '#' && $this->isCommentStart($buffer)) {
+                    while ($i < $length && !in_array($content[$i], ["\n", "\r"], true)) {
+                        $i++;
+                    }
+                    continue;
+                }
+            }
+
+            if ($char === "'" || $char === '"') {
+                if ($inString && $stringDelimiter === $char) {
+                    $previous = $i > 0 ? $content[$i - 1] : '';
+                    if ($previous !== '\\') {
+                        $inString = false;
+                        $stringDelimiter = '';
+                    }
+                } elseif (!$inString) {
+                    $inString = true;
+                    $stringDelimiter = $char;
+                }
+            }
+
+            if (!$inString && $char === ';') {
+                $statement = trim($buffer);
+                if ($statement !== '') {
+                    $statements[] = $statement;
+                }
+                $buffer = '';
+                continue;
+            }
+
+            $buffer .= $char;
+        }
+
+        $statement = trim($buffer);
+        if ($statement !== '') {
+            $statements[] = $statement;
+        }
+
+        return $statements;
+    }
+
+    private function orderRestoreStatements(array $statements): array
+    {
+        $createTableStatements = [];
+        $insertStatements = [];
+        $otherStatements = [];
+
+        foreach ($statements as $statement) {
+            $normalized = strtoupper(ltrim($statement));
+
+            if (str_starts_with($normalized, 'CREATE TABLE')) {
+                $tableName = $this->extractCreatedTableName($statement);
+                if ($tableName !== null) {
+                    $createTableStatements[$tableName] = $statement;
+                    continue;
+                }
+            }
+
+            if (str_starts_with($normalized, 'INSERT INTO')) {
+                $insertStatements[] = $statement;
+                continue;
+            }
+
+            $otherStatements[] = $statement;
+        }
+
+        $orderedCreates = $this->sortCreateTableStatementsByDependency($createTableStatements);
+
+        return array_merge($otherStatements, $orderedCreates, $insertStatements);
+    }
+
+    private function extractCreatedTableName(string $statement): ?string
+    {
+        if (preg_match('/CREATE\s+TABLE\s+`?([a-zA-Z0-9_]+)`?/i', $statement, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
+    private function sortCreateTableStatementsByDependency(array $createTableStatements): array
+    {
+        $dependencies = [];
+        $dependents = [];
+        $inDegree = [];
+
+        foreach ($createTableStatements as $tableName => $statement) {
+            $dependencies[$tableName] = $this->extractReferencedTables($statement);
+            $inDegree[$tableName] = 0;
+            $dependents[$tableName] = [];
+        }
+
+        foreach ($dependencies as $tableName => $referencedTables) {
+            foreach ($referencedTables as $referencedTable) {
+                if (!array_key_exists($referencedTable, $createTableStatements)) {
+                    continue;
+                }
+
+                $dependents[$referencedTable][] = $tableName;
+                $inDegree[$tableName]++;
+            }
+        }
+
+        $queue = [];
+        foreach ($inDegree as $tableName => $count) {
+            if ($count === 0) {
+                $queue[] = $tableName;
+            }
+        }
+
+        sort($queue);
+
+        $ordered = [];
+        while ($queue !== []) {
+            $tableName = array_shift($queue);
+            $ordered[] = $createTableStatements[$tableName];
+
+            foreach ($dependents[$tableName] as $dependentTable) {
+                $inDegree[$dependentTable]--;
+                if ($inDegree[$dependentTable] === 0) {
+                    $queue[] = $dependentTable;
+                    sort($queue);
+                }
+            }
+        }
+
+        if (count($ordered) !== count($createTableStatements)) {
+            return array_values($createTableStatements);
+        }
+
+        return $ordered;
+    }
+
+    private function extractReferencedTables(string $statement): array
+    {
+        preg_match_all('/REFERENCES\s+`?([a-zA-Z0-9_]+)`?/i', $statement, $matches);
+
+        return array_values(array_unique($matches[1] ?? []));
+    }
+
+    private function summarizeSql(string $statement, int $limit = 200): string
+    {
+        $summary = preg_replace('/\s+/', ' ', trim($statement)) ?? trim($statement);
+
+        if (strlen($summary) <= $limit) {
+            return $summary;
+        }
+
+        return substr($summary, 0, $limit - 3) . '...';
+    }
+
+    private function isCommentStart(string $buffer): bool
+    {
+        $trimmed = rtrim($buffer);
+
+        return $trimmed === '' || str_ends_with($trimmed, "\n") || str_ends_with($trimmed, "\r");
+    }
+
+    private function dropAllTables(): void
+    {
+        $tables = $this->db->listTables();
+
+        foreach ($tables as $table) {
+            $this->db->query('DROP TABLE IF EXISTS `' . str_replace('`', '``', $table) . '`');
         }
     }
 
@@ -215,7 +544,7 @@ class BackupService
                     'filename' => $file,
                     'filepath' => $filepath,
                     'size' => $stat['size'],
-                    'created_at' => date('Y-m-d H:i:s', $stat['mtime']),
+                    'created_at' => $this->formatTimestamp((int) $stat['mtime']),
                     'type' => pathinfo($file, PATHINFO_EXTENSION)
                 ];
             }
@@ -338,5 +667,20 @@ class BackupService
         }
         
         return round($bytes, $precision) . ' ' . $units[$i];
+    }
+
+    private function now(): Time
+    {
+        return Time::now($this->getAppTimezone());
+    }
+
+    private function formatTimestamp(int $timestamp): string
+    {
+        return Time::createFromTimestamp($timestamp, $this->getAppTimezone())->format('Y-m-d H:i:s');
+    }
+
+    private function getAppTimezone(): string
+    {
+        return config('App')->appTimezone ?: date_default_timezone_get();
     }
 }
