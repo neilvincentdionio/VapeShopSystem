@@ -30,6 +30,11 @@ class CreateOtpCodesTable extends Migration
                 'constraint' => 6,
                 'null'       => false,
             ],
+            'otp_hash' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
+                'null'       => true,
+            ],
             'expiry_time' => [
                 'type' => 'DATETIME',
                 'null' => false,

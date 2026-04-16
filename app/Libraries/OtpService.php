@@ -228,7 +228,12 @@ class OtpService
                 $valid = hash_equals($otpHash, $otpInput);
             }
         } elseif (!empty($record['otp_code'])) {
-            $valid = hash_equals((string) $record['otp_code'], $otpInput);
+            $otpCodeValue = (string) $record['otp_code'];
+            if ($this->looksLikePasswordHash($otpCodeValue)) {
+                $valid = PasswordService::verify($otpInput, $otpCodeValue);
+            } else {
+                $valid = hash_equals($otpCodeValue, $otpInput);
+            }
         }
 
         if (!$valid) {
