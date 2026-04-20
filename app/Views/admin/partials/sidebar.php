@@ -9,6 +9,8 @@ $isOrders = $seg1 === 'orders';
 $isUsers = $seg1 === 'user-management';
 $isBackup = $seg1 === 'backup';
 $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
+$isSessionLogs = $seg1 === 'admin' && $seg2 === 'session-logs';
+$isActivityLogs = $seg1 === 'admin' && $seg2 === 'activity-logs';
 ?>
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
@@ -23,6 +25,8 @@ $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
                 <a href="<?= site_url('products') ?>" class="nav-link <?= $isProducts ? 'active' : '' ?>">Products</a>
                 <a href="<?= site_url('orders') ?>" class="nav-link <?= $isOrders ? 'active' : '' ?>">Orders</a>
                 <a href="<?= site_url('records') ?>" class="nav-link <?= $isRecords ? 'active' : '' ?>">Records</a>
+                <a href="<?= site_url('admin/session-logs') ?>" class="nav-link <?= $isSessionLogs ? 'active' : '' ?>">Session Logs</a>
+                <a href="<?= site_url('admin/activity-logs') ?>" class="nav-link <?= $isActivityLogs ? 'active' : '' ?>">Activity Logs</a>
                 <a href="<?= site_url('user-management') ?>" class="nav-link <?= $isUsers ? 'active' : '' ?>">User Management</a>
                 <a href="<?= site_url('backup') ?>" class="nav-link <?= $isBackup ? 'active' : '' ?>">Backup</a>
                 <a href="<?= site_url('dashboard/settings') ?>" class="nav-link <?= $isSettings ? 'active' : '' ?>">Settings</a>

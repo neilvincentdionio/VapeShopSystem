@@ -184,6 +184,16 @@ class App extends BaseConfig
 
     /**
      * --------------------------------------------------------------------------
+     * Session Timeout
+     * --------------------------------------------------------------------------
+     *
+     * Session timeout in minutes. Sessions will be automatically marked as expired
+     * after this period of inactivity.
+     */
+    public int $sessionTimeout = 15;
+
+    /**
+     * --------------------------------------------------------------------------
      * Content Security Policy
      * --------------------------------------------------------------------------
      *

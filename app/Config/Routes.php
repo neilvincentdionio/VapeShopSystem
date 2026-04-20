@@ -154,6 +154,18 @@ $routes->get('/backup/download/(:any)', 'BackupController::download/$1', ['filte
 $routes->post('/backup/cleanup', 'BackupController::cleanup', ['filter' => ['auth:admin', 'permission:manage_backups']]);
 $routes->get('/backup/stats', 'BackupController::stats', ['filter' => ['auth:admin', 'permission:manage_backups']]);
 
+// Test route
+$routes->get('/admin/test', 'AdminController::test');
+
+// Session and Activity Logs routes (Admin only)
+$routes->get('/admin/session-logs', 'AdminController::sessionLogs');
+$routes->get('/admin/get-session-details/(.+)', 'AdminController::getSessionDetails/$1');
+$routes->post('/admin/end-session/(.+)', 'AdminController::endSession/$1');
+
+$routes->get('/admin/activity-logs', 'AdminController::activityLogs');
+$routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1');
+$routes->get('/admin/export-logs', 'AdminController::exportLogs');
+
 // API Authentication routes (JWT)
 $routes->post('/api/auth/login', 'ApiAuth::login');
 $routes->post('/api/auth/mfa/verify', 'ApiAuth::verifyMfa');

@@ -38,6 +38,7 @@ class Filters extends BaseFilters
         'jwtauth'       => \App\Filters\JwtAuthFilter::class,
         'role'          => \App\Filters\RoleFilter::class,
         'permission'    => \App\Filters\PermissionFilter::class,
+        'session'       => \App\Filters\SessionFilter::class,
     ];
 
     /**
@@ -69,6 +70,7 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => [
+            'session',
             // 'honeypot',
             // 'csrf',
             // 'invalidchars',

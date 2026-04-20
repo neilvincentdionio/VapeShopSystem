@@ -6,6 +6,7 @@ use App\Models\UserModel;
 use App\Models\PasswordResetModel;
 use App\Models\LoginAttemptModel;
 use App\Libraries\OtpService;
+use App\Libraries\ActivityLogger;
 
 class Auth extends BaseController
 {
@@ -14,6 +15,7 @@ class Auth extends BaseController
     protected $loginAttemptModel;
     protected $otpService;
     protected $session;
+    protected $activityLogger;
 
     public function __construct()
     {
@@ -22,6 +24,7 @@ class Auth extends BaseController
         $this->loginAttemptModel = new LoginAttemptModel();
         $this->otpService = new OtpService();
         $this->session = session();
+        $this->activityLogger = new ActivityLogger();
     }
 
     /**
@@ -100,6 +103,10 @@ class Auth extends BaseController
                 ->with('errors', $modelErrors !== [] ? $modelErrors : ['Unable to create your account right now. Please try again.']);
         }
 
+        // Log account creation
+        $userId = $this->userModel->getInsertID();
+        $this->activityLogger->logAccountCreated($userId, $data['email']);
+
         return redirect()->to('/login')
             ->with('success', 'Your account request has been submitted and is pending admin approval.');
     }
@@ -155,6 +162,9 @@ class Auth extends BaseController
         if ($user) {
             $this->loginAttemptModel->recordAttempt($email, true);
             session()->regenerate();
+            
+            // Log successful login activity
+            $this->activityLogger->logLoginSuccess((int) $user['id'], (string) $user['email']);
 
             $this->session->set([
                 'otp_pending' => true,
@@ -178,6 +188,9 @@ class Auth extends BaseController
         } else {
             // Record failed login attempt for audit/rate limiting.
             $this->loginAttemptModel->recordAttempt($email, false);
+            
+            // Log failed login activity
+            $this->activityLogger->logLoginFailed($email, 'Invalid credentials');
 
             // Check if account is locked
             $user = $this->userModel->getUserByEmail($email);
@@ -256,6 +269,9 @@ class Auth extends BaseController
             'last_activity' => time(),
         ]);
 
+        // Create user session and log complete login
+        $this->activityLogger->createUserSession($userId);
+        
         $this->session->remove($this->pendingOtpSessionKeys());
 
         return redirect()->to('/dashboard')->with('success', 'OTP verified. Welcome!');
@@ -295,6 +311,14 @@ class Auth extends BaseController
      */
     public function logout()
     {
+        // Log logout activity if user is logged in
+        $userId = $this->session->get('user_id');
+        $userEmail = $this->session->get('user_email');
+        
+        if ($userId && $userEmail) {
+            $this->activityLogger->logLogout((int) $userId, (string) $userEmail);
+        }
+        
         $this->session->remove($this->pendingOtpSessionKeys());
         $this->session->destroy();
 
