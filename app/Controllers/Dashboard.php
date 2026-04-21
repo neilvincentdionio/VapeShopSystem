@@ -559,67 +559,65 @@ class Dashboard extends BaseController
         ];
 
         if ($paymentMethod === 'cash_on_delivery') {
-            $cashGiven = (float) ($this->request->getPost('cash_given') ?? 0);
-            if ($cashGiven <= 0) {
-                return redirect()->to('/customer/checkout')->with('error', 'Please enter a valid cash amount.');
-            }
-
-            if ($cashGiven < $total) {
-                return redirect()->to('/customer/checkout')->with('error', 'Cash amount is not enough. Please provide sufficient cash.');
-            }
-
-            $change = $cashGiven - $total;
-
             $orderData['title'] = 'Cash on Delivery Order';
             $orderData['description'] = 'Customer order with Cash on Delivery payment.';
             $orderData['status'] = 'pending';
+            $orderData['notes'] = 'PAYMENT_METHOD:COD';
 
             $paymentData = [
                 'method' => 'cash',
                 'status' => 'unpaid',
                 'amount' => round($total, 2),
-                'amount_received' => round($cashGiven, 2),
-                'change_amount' => round($change, 2),
+                'amount_received' => null,
+                'change_amount' => null,
             ];
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
                 'status' => 'to_pay',
             ]);
         } elseif ($paymentMethod === 'gcash') {
-            $gcashReference = $this->request->getPost('gcash_reference');
-            if (! $gcashReference || trim($gcashReference) === '') {
-                return redirect()->to('/customer/checkout')->with('error', 'Please enter your GCash reference number.');
-            }
-
-            if (strlen(trim($gcashReference)) < 6) {
-                return redirect()->to('/customer/checkout')->with('error', 'GCash reference number appears to be invalid.');
+            $gcashReference = trim((string) ($this->request->getPost('gcash_reference') ?? ''));
+            if ($gcashReference === '' || strlen($gcashReference) < 6) {
+                return redirect()->to('/customer/products')->with('error', 'Please enter a valid GCash reference number after payment.');
             }
 
             $orderData['title'] = 'GCash Payment Order';
-            $orderData['description'] = "Customer order with GCash payment. Ref: " . trim($gcashReference);
+            $orderData['description'] = 'Customer order with GCash payment.';
             $orderData['status'] = 'pending';
+            $orderData['notes'] = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639365879409;GCASH_REF:' . $gcashReference;
 
             $paymentData = [
                 'method' => 'gcash',
-                'status' => 'pending',
+                'status' => 'paid',
                 'amount' => round($total, 2),
-                'gcash_reference' => trim($gcashReference),
+                'amount_received' => round($total, 2),
+                'change_amount' => 0.00,
+                'paid_at' => date('Y-m-d H:i:s'),
             ];
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
-                'status' => 'to_pay',
+                'status' => 'to_ship',
             ]);
         }
 
         $db->transStart();
 
         try {
-            // For COD, we don't deduct stock yet. For GCash, we deduct after payment confirmation
-            if ($paymentMethod === 'cash_on_delivery') {
-                // Don't deduct stock for COD until payment is received
-            } else {
-                // For GCash, we could deduct stock here if you want to reserve items
-                // For now, we'll wait for admin confirmation
+            // For GCash (paid), reserve/deduct stock immediately.
+            // For COD (unpaid), stock is deducted on payment confirmation/admin checkout.
+            if ($paymentMethod === 'gcash') {
+                foreach ($cartItems as $item) {
+                    $product = $this->productModel->getProductById((int) $item['id'], true);
+                    if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
+                        throw new \RuntimeException('Insufficient stock for one of the selected items.');
+                    }
+                }
+
+                foreach ($cartItems as $item) {
+                    if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['quantity']))) {
+                        throw new \RuntimeException('Failed to reserve stock for one of the selected items.');
+                    }
+                }
             }
 
             $orderId = $this->orderModel->createOrder(
@@ -641,7 +639,12 @@ class Dashboard extends BaseController
 
             $this->clearCustomerCart();
 
-            return redirect()->to(site_url('customer/receipt/' . $orderId));
+            $redirectTab = $paymentMethod === 'cash_on_delivery' ? 'to_pay' : 'to_ship';
+            $successMessage = $paymentMethod === 'cash_on_delivery'
+                ? 'Order placed successfully. COD payment is pending.'
+                : 'GCash transaction successful. Your order is marked as paid.';
+            return redirect()->to(site_url('customer/orders?tab=' . $redirectTab))
+                ->with('success', $successMessage);
         } catch (\Throwable $e) {
             $db->transRollback();
             return redirect()->to('/customer/checkout')->with('error', $e->getMessage());
@@ -965,15 +968,20 @@ class Dashboard extends BaseController
 
         foreach ($orders as $order) {
             $customerInfo = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+            $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
+            $displayStatus = in_array($deliveryStatus, ['completed', 'cancelled'], true) ? $deliveryStatus : 'pending';
+            $normalizedPayment = $this->normalizeOrderPayment($order);
 
             $orderDetails[] = [
                 'id' => $order['id'],
                 'reference_number' => $order['reference_number'],
                 'date' => $order['date'],
                 'total_amount' => $order['total_amount'],
-                'payment_method' => $order['payment_method'],
-                'status' => $order['status'],
-                'delivery_status' => $order['delivery_status'] ?? 'to_pay',
+                'payment_method' => $normalizedPayment['method'],
+                'payment_status' => $normalizedPayment['status'],
+                'notes' => $order['notes'] ?? '',
+                'status' => $displayStatus,
+                'delivery_status' => $deliveryStatus,
                 'tracking_number' => $order['tracking_number'],
                 'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?? 'Not provided'),
                 'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?? 'Not provided'),
@@ -1245,7 +1253,17 @@ class Dashboard extends BaseController
             ]);
         }
 
-        if (($order['delivery_status'] ?? 'to_pay') === 'to_pay' && $newStatus === 'to_ship' && ($order['payment_status'] ?? 'unpaid') !== 'paid') {
+        $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+        $orderNotes = (string) ($order['notes'] ?? '');
+        $isCodOrder = in_array($paymentMethod, ['cash', 'cod', 'cash_on_delivery'], true)
+            || str_contains($orderNotes, 'PAYMENT_METHOD:COD');
+
+        if (
+            ($order['delivery_status'] ?? 'to_pay') === 'to_pay'
+            && $newStatus === 'to_ship'
+            && ($order['payment_status'] ?? 'unpaid') !== 'paid'
+            && ! $isCodOrder
+        ) {
             return $this->response->setStatusCode(422)->setJSON([
                 'success' => false,
                 'message' => 'Process checkout first before shipping this order.',
@@ -1259,7 +1277,26 @@ class Dashboard extends BaseController
         }
 
         try {
-            $result = $this->orderModel->updateDeliveryStatus($orderId, $newStatus, $shipmentData);
+            // COD: mark as paid only when parcel is delivered.
+            if ($newStatus === 'completed' && $isCodOrder && ($order['payment_status'] ?? 'unpaid') !== 'paid') {
+                $result = $this->orderModel->updateOrder(
+                    $orderId,
+                    ['status' => 'completed'],
+                    [
+                        'status' => 'paid',
+                        'amount' => round((float) ($order['total_amount'] ?? 0), 2),
+                        'amount_received' => round((float) ($order['total_amount'] ?? 0), 2),
+                        'change_amount' => 0.00,
+                        'paid_at' => date('Y-m-d H:i:s'),
+                    ],
+                    array_merge($shipmentData, [
+                        'status' => 'completed',
+                        'delivered_at' => date('Y-m-d H:i:s'),
+                    ])
+                );
+            } else {
+                $result = $this->orderModel->updateDeliveryStatus($orderId, $newStatus, $shipmentData);
+            }
 
             if ($result) {
                 return $this->response->setStatusCode(200)->setJSON([
@@ -1447,6 +1484,10 @@ class Dashboard extends BaseController
             return redirect()->to('/orders')->with('error', 'Order not found.');
         }
 
+        $normalizedPayment = $this->normalizeOrderPayment($order);
+        $order['payment_method'] = $normalizedPayment['method'];
+        $order['payment_status'] = $normalizedPayment['status'];
+
         $data = [
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
@@ -1458,6 +1499,29 @@ class Dashboard extends BaseController
         ];
 
         return view('admin/orders/order_details', $data);
+    }
+
+    /**
+     * Ensure GCash orders are always reflected as gcash + paid in admin views.
+     *
+     * @param array<string, mixed> $order
+     * @return array{method:string,status:string}
+     */
+    private function normalizeOrderPayment(array $order): array
+    {
+        $method = strtolower((string) ($order['payment_method'] ?? 'cash'));
+        $status = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+        $notes = (string) ($order['notes'] ?? '');
+
+        if (str_contains($notes, 'PAYMENT_METHOD:GCASH') || str_contains($notes, 'GCASH_REF:')) {
+            $method = 'gcash';
+            $status = 'paid';
+        }
+
+        return [
+            'method' => $method !== '' ? $method : 'cash',
+            'status' => $status !== '' ? $status : 'unpaid',
+        ];
     }
 
     private function generateTrackingNumber(): string
@@ -1752,10 +1816,45 @@ class Dashboard extends BaseController
         if ($order['delivery_status'] !== 'to_receive') {
             return redirect()->to('/customer/orders')->with('error', 'Order cannot be confirmed.');
         }
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
+        }
 
-        $this->orderModel->updateDeliveryStatus((int) $order['id'], 'completed');
+        $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+        $orderNotes = (string) ($order['notes'] ?? '');
+        $isCodOrder = in_array($paymentMethod, ['cash', 'cod', 'cash_on_delivery'], true)
+            || str_contains($orderNotes, 'PAYMENT_METHOD:COD');
 
-        return redirect()->to('/customer/orders')->with('success', 'Order confirmed as received. Thank you!');
+        $shipmentData = [
+            'status' => 'completed',
+            'delivered_at' => date('Y-m-d H:i:s'),
+        ];
+
+        // Customer "Order Received" should finalize order.
+        // For COD, payment is collected upon delivery, so mark as paid here.
+        if ($isCodOrder && ($order['payment_status'] ?? 'unpaid') !== 'paid') {
+            $updated = $this->orderModel->updateOrder(
+                $orderId,
+                ['status' => 'completed'],
+                [
+                    'status' => 'paid',
+                    'amount' => round((float) ($order['total_amount'] ?? 0), 2),
+                    'amount_received' => round((float) ($order['total_amount'] ?? 0), 2),
+                    'change_amount' => 0.00,
+                    'paid_at' => date('Y-m-d H:i:s'),
+                ],
+                $shipmentData
+            );
+        } else {
+            $updated = $this->orderModel->updateDeliveryStatus($orderId, 'completed', $shipmentData);
+        }
+
+        if (! $updated) {
+            return redirect()->to('/customer/orders')->with('error', 'Failed to confirm order received.');
+        }
+
+        return redirect()->to('/customer/orders?tab=completed')->with('success', 'Order received successfully. Order is now completed.');
     }
 
     private function reorderItems($order)

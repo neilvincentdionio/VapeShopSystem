@@ -465,6 +465,122 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+
+    .checkout-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1200;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .checkout-modal.show {
+        display: flex;
+    }
+
+    .checkout-modal-card {
+        width: 100%;
+        max-width: 480px;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        padding: 1.25rem;
+    }
+
+    .checkout-modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .checkout-modal-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #333333;
+    }
+
+    .checkout-modal-close {
+        background: transparent;
+        border: none;
+        font-size: 1.25rem;
+        cursor: pointer;
+        color: #666666;
+    }
+
+    .checkout-modal-total {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 0.8rem 0.9rem;
+        margin-bottom: 1rem;
+        font-weight: 700;
+        color: #333333;
+    }
+
+    .checkout-field {
+        margin-bottom: 0.8rem;
+    }
+
+    .checkout-label {
+        display: block;
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin-bottom: 0.35rem;
+        color: #333333;
+    }
+
+    .checkout-input {
+        width: 100%;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.7rem 0.85rem;
+        font-size: 0.9rem;
+        outline: none;
+    }
+
+    .gcash-box {
+        border: 1px solid #dbeafe;
+        background: #eff6ff;
+        border-radius: 10px;
+        padding: 0.75rem;
+        margin-bottom: 0.8rem;
+        color: #1e3a8a;
+        font-size: 0.88rem;
+        line-height: 1.4;
+    }
+
+    .gcash-qr-wrap {
+        text-align: center;
+        margin: 0.5rem 0 0.8rem;
+    }
+
+    .gcash-qr {
+        width: 210px;
+        height: 210px;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        background: #fff;
+        object-fit: contain;
+    }
+
+    .btn-open-gcash {
+        width: 100%;
+        margin-top: 0.6rem;
+        background: #0057d9;
+        border-color: #0057d9;
+        color: #ffffff;
+        font-weight: 700;
+    }
+
+    .btn-open-gcash:hover {
+        background: #0047b1;
+        border-color: #0047b1;
+    }
 </style>
 
 <div class="products-container">
@@ -643,10 +759,52 @@
     </div>
 </div>
 
+<div class="checkout-modal" id="checkoutModal">
+    <div class="checkout-modal-card">
+        <div class="checkout-modal-head">
+            <div class="checkout-modal-title">Checkout</div>
+            <button type="button" class="checkout-modal-close" onclick="closeCheckoutModal()">&times;</button>
+        </div>
+        <div class="checkout-modal-total">
+            Total: ₱<?= number_format((float) ($cart_total ?? 0), 2) ?>
+        </div>
+
+        <form method="post" action="<?= site_url('customer/checkout') ?>" id="checkoutModalForm" onsubmit="return validateCheckoutModal();">
+            <div class="checkout-field">
+                <label class="checkout-label" for="popup_payment_method">Payment Method</label>
+                <select class="checkout-input" id="popup_payment_method" name="payment_method" onchange="toggleCheckoutModalFields()" required>
+                    <option value="">Select Payment Method</option>
+                    <option value="cash_on_delivery">Cash on Delivery (COD)</option>
+                    <option value="gcash">GCash</option>
+                </select>
+            </div>
+
+            <div class="checkout-field" id="popup_gcash_wrap" style="display:none;">
+                <div class="gcash-box">
+                    <strong>Pay to QuickPuff GCash:</strong> +63 9365879409
+                </div>
+                <div class="gcash-qr-wrap">
+                    <img id="popup_gcash_qr" class="gcash-qr" alt="QuickPuff GCash QR">
+                </div>
+                <button type="button" class="btn btn-open-gcash" onclick="openInGcashApp()">
+                    Open in GCash
+                </button>
+                <label class="checkout-label" for="popup_gcash_reference">GCash Reference Number</label>
+                <input class="checkout-input" type="text" id="popup_gcash_reference" name="gcash_reference" maxlength="50" placeholder="Enter GCash reference number">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%;">Place Order</button>
+        </form>
+    </div>
+</div>
+
 <script>
 const addUrl = '<?= site_url('customer/cart/add') ?>';
 const cartUrl = '<?= site_url('customer/cart') ?>';
-const directOrderUrl = '<?= site_url('customer/direct-order') ?>';
+const gcashMerchantNumber = '+639365879409';
+const gcashMerchantName = 'QuickPuff VapeShop';
+const checkoutTotal = <?= json_encode((float) ($cart_total ?? 0)) ?>;
+let currentGcashQrPayload = '';
 
 function showToast(message, type = 'processing', showSpinner = false) {
     // Remove existing toast if any
@@ -680,44 +838,74 @@ function showToast(message, type = 'processing', showSpinner = false) {
 }
 
 function processDirectOrder() {
-    // Show processing toast
-    showToast('Processing your Order. Please Wait for Checkout', 'processing', true);
-    
-    // Make AJAX request to process order
-    fetch(directOrderUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: ''
-    })
-    .then(async (res) => {
-        const data = await res.json().catch(() => null);
-        
-        if (res.ok && data && data.success) {
-            // Show success toast
-            showToast('Order processed successfully!', 'success', false);
-            
-            // Redirect to orders page after a short delay
-            setTimeout(() => {
-                window.location.href = data.redirect || '<?= site_url('customer/orders') ?>';
-            }, 1500);
-        } else {
-            // Handle error or age verification redirect
-            if (data && data.redirect) {
-                showToast('Redirecting to age verification...', 'processing', false);
-                setTimeout(() => {
-                    window.location.href = data.redirect;
-                }, 1500);
-            } else {
-                showToast(data?.message || 'Failed to process order. Please try again.', 'error', false);
-            }
+    openCheckoutModal();
+}
+
+function openCheckoutModal() {
+    const modal = document.getElementById('checkoutModal');
+    if (!modal) return;
+    modal.classList.add('show');
+}
+
+function closeCheckoutModal() {
+    const modal = document.getElementById('checkoutModal');
+    if (!modal) return;
+    modal.classList.remove('show');
+}
+
+function toggleCheckoutModalFields() {
+    const method = document.getElementById('popup_payment_method').value;
+    const gcashWrap = document.getElementById('popup_gcash_wrap');
+    if (!gcashWrap) return;
+    gcashWrap.style.display = method === 'gcash' ? 'block' : 'none';
+    if (method === 'gcash') {
+        const refInput = document.getElementById('popup_gcash_reference');
+        const qrImage = document.getElementById('popup_gcash_qr');
+        if (refInput) {
+            refInput.value = '';
         }
-    })
-    .catch(() => {
-        showToast('Network error. Please try again.', 'error', false);
-    });
+
+        if (qrImage) {
+            currentGcashQrPayload = `GCASH|MERCHANT:${gcashMerchantName}|NUMBER:${gcashMerchantNumber}|AMOUNT:${checkoutTotal.toFixed(2)}|REF:${refInput ? refInput.value : ''}`;
+            qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=${encodeURIComponent(currentGcashQrPayload)}`;
+        }
+    }
+}
+
+function openInGcashApp() {
+    const refInput = document.getElementById('popup_gcash_reference');
+
+    // Attempt app deep-link first.
+    const deepLink = 'gcash://';
+    const fallbackWeb = 'https://www.gcash.com/';
+
+    const start = Date.now();
+    window.location.href = deepLink;
+
+    setTimeout(() => {
+        // If app did not open, fallback to GCash website.
+        if (Date.now() - start < 1800) {
+            window.open(fallbackWeb, '_blank');
+        }
+    }, 1200);
+}
+
+function validateCheckoutModal() {
+    const method = document.getElementById('popup_payment_method').value;
+    if (!method) {
+        alert('Please select a payment method.');
+        return false;
+    }
+
+    if (method === 'gcash') {
+        const gcashRef = (document.getElementById('popup_gcash_reference').value || '').trim();
+        if (!gcashRef || gcashRef.length < 6) {
+            alert('Please enter a valid GCash reference number.');
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function addToCart(productId) {
@@ -983,6 +1171,11 @@ function closeProductModal() {
 
 // Close modal when clicking outside
 window.onclick = function(event) {
+    const checkoutModal = document.getElementById('checkoutModal');
+    if (event.target === checkoutModal) {
+        closeCheckoutModal();
+    }
+
     const modal = document.getElementById('productModal');
     if (event.target === modal) {
         closeProductModal();

@@ -16,6 +16,21 @@ if (!function_exists('getDeliveryStatusLabel')) {
         return $labels[$status] ?? ucfirst($status);
     }
 }
+
+if (!function_exists('extractGcashReference')) {
+    function extractGcashReference($notes) {
+        $notes = (string) $notes;
+        if ($notes === '') {
+            return null;
+        }
+
+        if (preg_match('/GCASH_REF:([^;\\s]+)/', $notes, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+}
 ?>
 
 <div class="orders-container">
@@ -36,6 +51,16 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <div class="order-status status-<?= esc(str_replace('_', '-', $order['delivery_status'])) ?>">
                         <?= getDeliveryStatusLabel($order['delivery_status']) ?>
                     </div>
+                    <div style="margin-top:.5rem; font-size:.9rem; color:#555;">
+                        Payment: <?= esc(strtoupper((string) ($order['payment_method'] ?? 'cash'))) ?> |
+                        <strong><?= esc(ucfirst((string) ($order['payment_status'] ?? 'unpaid'))) ?></strong>
+                    </div>
+                    <?php $gcashRef = (($order['payment_method'] ?? '') === 'gcash') ? extractGcashReference($order['notes'] ?? '') : null; ?>
+                    <?php if ($gcashRef): ?>
+                        <div style="margin-top:.35rem; font-size:.9rem; color:#555;">
+                            GCash Ref: <strong><?= esc($gcashRef) ?></strong>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="order-total">
                     <h3>Total Amount</h3>
@@ -158,10 +183,24 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <h3><i class="fas fa-cog"></i> Delivery Management</h3>
                 
                 <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                    <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
-                        <i class="fas fa-cash-register"></i>
-                        Open Checkout
-                    </a>
+                    <?php if (($order['payment_status'] ?? 'unpaid') !== 'paid'): ?>
+                        <?php if (strtolower((string) ($order['payment_method'] ?? 'cash')) === 'cash'): ?>
+                            <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                                <i class="fas fa-box"></i>
+                                Ship COD Order
+                            </button>
+                        <?php else: ?>
+                            <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
+                                <i class="fas fa-cash-register"></i>
+                                Collect Payment
+                            </a>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                            <i class="fas fa-box"></i>
+                            Ready to Ship
+                        </button>
+                    <?php endif; ?>
                 <?php endif; ?>
                 
                 <?php if ($order['delivery_status'] === 'to_ship'): ?>

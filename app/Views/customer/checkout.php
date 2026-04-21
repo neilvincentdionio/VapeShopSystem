@@ -139,7 +139,7 @@
 
 <div class="checkout-panel">
     <div class="checkout-title">Checkout</div>
-    <div class="checkout-subtitle">Cashiering: enter cash amount, we will calculate change and generate a receipt.</div>
+    <div class="checkout-subtitle">Choose your payment method to place your order (COD or GCash).</div>
 
     <div class="items">
         <div class="items-head">
@@ -182,21 +182,8 @@
 
                 <!-- Cash on Delivery Fields -->
                 <div id="cash_fields" style="display: none; margin-top: 1rem;">
-                    <label class="field-label" for="cash_given">Cash Given (for payment)</label>
-                    <input
-                        class="input"
-                        type="number"
-                        step="0.01"
-                        min="<?= number_format((float) $estimated_total, 2, '.', '') ?>"
-                        id="cash_given"
-                        name="cash_given"
-                        value="<?= number_format((float) $estimated_total, 2, '.', '') ?>"
-                    >
-
-                    <div class="change-box" id="change_box">Change: ₱0.00</div>
-                    
                     <div style="margin-top: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666;">
-                        <strong>Note:</strong> Payment will be collected upon delivery. Cash amount is for reference only.
+                        <strong>Note:</strong> You will pay in cash upon delivery.
                     </div>
                 </div>
 
@@ -229,17 +216,10 @@
 </div>
 
 <script>
-    const totalAmount = <?= json_encode((float) $estimated_total) ?>;
     const paymentMethodSelect = document.getElementById('payment_method');
     const cashFields = document.getElementById('cash_fields');
     const gcashFields = document.getElementById('gcash_fields');
-    const cashInput = document.getElementById('cash_given');
-    const changeBox = document.getElementById('change_box');
     const submitBtn = document.getElementById('submit_btn');
-
-    function formatMoney(n) {
-        return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-    }
 
     function togglePaymentFields() {
         const selectedMethod = paymentMethodSelect.value;
@@ -252,7 +232,6 @@
         if (selectedMethod === 'cash_on_delivery') {
             cashFields.style.display = 'block';
             submitBtn.textContent = 'Place Order (COD)';
-            computeChange();
         } else if (selectedMethod === 'gcash') {
             gcashFields.style.display = 'block';
             submitBtn.textContent = 'Place Order (GCash)';
@@ -263,18 +242,6 @@
         // Enable/disable submit button
         submitBtn.disabled = !selectedMethod;
     }
-
-    function computeChange() {
-        const cash = parseFloat(cashInput.value || '0');
-        const change = cash - totalAmount;
-        if (change < 0) {
-            changeBox.textContent = `Change: ₱0.00 (cash is short)`;
-        } else {
-            changeBox.textContent = `Change: ₱${formatMoney(change)}`;
-        }
-        return change;
-    }
-
     function validatePayment() {
         const selectedMethod = paymentMethodSelect.value;
         
@@ -282,14 +249,7 @@
             alert('Please select a payment method.');
             return false;
         }
-        
-        if (selectedMethod === 'cash_on_delivery') {
-            const cash = parseFloat(cashInput.value || '0');
-            if (cash < totalAmount) {
-                alert('Cash amount is not enough. Please enter sufficient cash.');
-                return false;
-            }
-        } else if (selectedMethod === 'gcash') {
+        if (selectedMethod === 'gcash') {
             const gcashReference = document.getElementById('gcash_reference').value.trim();
             if (!gcashReference) {
                 alert('Please enter your GCash reference number.');
@@ -306,13 +266,11 @@
 
     // Event listeners
     paymentMethodSelect.addEventListener('change', togglePaymentFields);
-    if (cashInput) {
-        cashInput.addEventListener('input', computeChange);
-    }
     
     // Initialize
     togglePaymentFields();
 </script>
 
 <?= $this->include('customer/partials/footer') ?>
+
 

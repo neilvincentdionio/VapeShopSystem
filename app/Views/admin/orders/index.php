@@ -24,13 +24,31 @@ if (!function_exists('getDeliveryStatusLabel')) {
     }
 }
 
+if (!function_exists('extractGcashReference')) {
+    function extractGcashReference($notes) {
+        $notes = (string) $notes;
+        if ($notes === '') {
+            return null;
+        }
+
+        if (preg_match('/GCASH_REF:([^;\\s]+)/', $notes, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+}
+
 $ordersList = is_array($orders ?? null) ? $orders : [];
 $hasOrders = ! empty($ordersList);
 $totalOrders = count($ordersList);
-$totalRevenue = array_sum(array_map(static fn ($order) => (float) ($order['total_amount'] ?? 0), $ordersList));
+$totalRevenue = array_sum(array_map(
+    static fn ($order) => (($order['payment_status'] ?? 'unpaid') === 'paid') ? (float) ($order['total_amount'] ?? 0) : 0.0,
+    $ordersList
+));
 $completedOrders = count(array_filter(
     $ordersList,
-    static fn ($order) => ($order['status'] ?? '') === 'completed'
+    static fn ($order) => ($order['delivery_status'] ?? 'to_pay') === 'completed'
 ));
 $activeDeliveries = count(array_filter(
     $ordersList,
@@ -464,6 +482,11 @@ $activeDeliveries = count(array_filter(
             background: #e8f5e8;
             color: #2e7d2e;
         }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
         
         .status-cancelled {
             background: #f8d7da;
@@ -486,6 +509,30 @@ $activeDeliveries = count(array_filter(
             gap: 0.5rem;
             font-size: 0.9rem;
             color: #666;
+            margin-bottom: 0.35rem;
+        }
+
+        .payment-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .payment-status.paid {
+            background: #e8f5e8;
+            color: #2e7d2e;
+        }
+
+        .payment-status.unpaid,
+        .payment-status.pending,
+        .payment-status.partial {
+            background: #fff3cd;
+            color: #856404;
         }
         
         .empty-state {
@@ -901,6 +948,15 @@ $activeDeliveries = count(array_filter(
                                     <i class="fas fa-money-bill-wave"></i>
                                     <?= esc(ucfirst($order['payment_method'])) ?>
                                 </div>
+                                <span class="payment-status <?= esc(strtolower((string) ($order['payment_status'] ?? 'unpaid'))) ?>">
+                                    <?= esc(ucfirst((string) ($order['payment_status'] ?? 'unpaid'))) ?>
+                                </span>
+                                <?php $gcashRef = (($order['payment_method'] ?? '') === 'gcash') ? extractGcashReference($order['notes'] ?? '') : null; ?>
+                                <?php if ($gcashRef): ?>
+                                    <div class="detail-text" style="margin-top:.35rem;">
+                                        Ref: <strong><?= esc($gcashRef) ?></strong>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <div class="order-status status-<?= esc($order['status']) ?>">
@@ -930,10 +986,24 @@ $activeDeliveries = count(array_filter(
                             <td>
                                 <div class="action-buttons">
                                     <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_pay'): ?>
-                                        <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
-                                            <i class="fas fa-cash-register"></i>
-                                            Checkout Order
-                                        </a>
+                                        <?php if (($order['payment_status'] ?? 'unpaid') !== 'paid'): ?>
+                                            <?php if (strtolower((string) ($order['payment_method'] ?? 'cash')) === 'cash'): ?>
+                                                <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                                                    <i class="fas fa-box"></i>
+                                                    Ship COD Order
+                                                </button>
+                                            <?php else: ?>
+                                                <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
+                                                    <i class="fas fa-cash-register"></i>
+                                                    Collect Payment
+                                                </a>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
+                                                <i class="fas fa-box"></i>
+                                                Ready to Ship
+                                            </button>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                     
                                     <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_ship'): ?>

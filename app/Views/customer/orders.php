@@ -18,6 +18,21 @@ if (!function_exists('getDeliveryStatusLabel')) {
         return $labels[$status] ?? ucfirst($status);
     }
 }
+
+if (!function_exists('extractGcashReference')) {
+    function extractGcashReference($notes) {
+        $notes = (string) $notes;
+        if ($notes === '') {
+            return null;
+        }
+
+        if (preg_match('/GCASH_REF:([^;\\s]+)/', $notes, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+}
 ?>
 
 <style>
@@ -624,7 +639,7 @@ window.addEventListener('beforeunload', function() {
                             </button>
                             <div class="order-date"><?= date('M j, Y', strtotime($order['date'])) ?></div>
                         </div>
-                        <div class="order-status status-<?= esc(str_replace('_', '-', $order['delivery_status'])) ?>">
+                        <div class="order-status status-<?= esc($order['delivery_status']) ?>">
                             <?= getDeliveryStatusLabel($order['delivery_status']) ?>
                         </div>
                     </div>
@@ -656,6 +671,18 @@ window.addEventListener('beforeunload', function() {
                         <span>Total</span>
                         <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                     </div>
+
+                    <div class="tracking-info">
+                        <div>
+                            <strong>Payment:</strong>
+                            <?= esc(strtoupper((string) ($order['payment_method'] ?? 'cash'))) ?> |
+                            <?= esc(ucfirst((string) ($order['payment_status'] ?? 'unpaid'))) ?>
+                        </div>
+                        <?php $gcashRef = (($order['payment_method'] ?? '') === 'gcash') ? extractGcashReference($order['notes'] ?? '') : null; ?>
+                        <?php if ($gcashRef): ?>
+                            <div><strong>GCash Ref:</strong> <?= esc($gcashRef) ?></div>
+                        <?php endif; ?>
+                    </div>
                     
                     <?php if (!empty($order['tracking_number']) || !empty($order['shipping_address'])): ?>
                         <div class="tracking-info">
@@ -673,7 +700,9 @@ window.addEventListener('beforeunload', function() {
                     
                     <div class="action-buttons">
                         <?php if ($order['delivery_status'] === 'to_pay'): ?>
-                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">Pay Now</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">
+                                <?= ($order['payment_method'] ?? 'cash') === 'cash' ? 'Confirm Payment' : 'Pay Now' ?>
+                            </a>
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                         <?php endif; ?>
                         
@@ -683,7 +712,7 @@ window.addEventListener('beforeunload', function() {
                         <?php endif; ?>
                         
                         <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Order Received</a>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                         
