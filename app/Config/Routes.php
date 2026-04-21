@@ -158,13 +158,21 @@ $routes->get('/backup/stats', 'BackupController::stats', ['filter' => ['auth:adm
 $routes->get('/admin/test', 'AdminController::test');
 
 // Session and Activity Logs routes (Admin only)
-$routes->get('/admin/session-logs', 'AdminController::sessionLogs');
-$routes->get('/admin/get-session-details/(.+)', 'AdminController::getSessionDetails/$1');
-$routes->post('/admin/end-session/(.+)', 'AdminController::endSession/$1');
+$routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' => 'auth:admin']);
+$routes->get('/admin/get-session-details/(.+)', 'AdminController::getSessionDetails/$1', ['filter' => 'auth:admin']);
+$routes->post('/admin/end-session/(.+)', 'AdminController::endSession/$1', ['filter' => 'auth:admin']);
 
-$routes->get('/admin/activity-logs', 'AdminController::activityLogs');
-$routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1');
-$routes->get('/admin/export-logs', 'AdminController::exportLogs');
+$routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => 'auth:admin']);
+$routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1', ['filter' => 'auth:admin']);
+$routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => 'auth:admin']);
+
+// Additional routes for index views compatibility
+$routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => 'auth:admin']);
+$routes->post('/admin/session-logs/end/(:num)', 'AdminController::endSessionById/$1', ['filter' => 'auth:admin']);
+$routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions', ['filter' => 'auth:admin']);
+
+$routes->get('/admin/activity-logs/details/(:num)', 'AdminController::getLogDetailsById/$1', ['filter' => 'auth:admin']);
+$routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => 'auth:admin']);
 
 // API Authentication routes (JWT)
 $routes->post('/api/auth/login', 'ApiAuth::login');

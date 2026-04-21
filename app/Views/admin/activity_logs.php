@@ -467,6 +467,9 @@
     </style>
 
     <script>
+        // Base URL for AJAX requests
+        const baseUrl = '<?= site_url() ?>';
+        
         function viewLogDetails(logId) {
             // Show modal
             document.getElementById('logDetailsModal').classList.add('show');
@@ -474,11 +477,11 @@
             // Show loading
             document.getElementById('logDetailsContent').innerHTML = '<div style="text-align: center;"><div style="border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div></div>';
             
-            fetch(`/admin/get-log-details/${logId}`)
+            fetch(`${baseUrl}/admin/get-log-details/${logId}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.error) {
-                        document.getElementById('logDetailsContent').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                    if (!data.success) {
+                        document.getElementById('logDetailsContent').innerHTML = `<div class="alert alert-error">${data.message || 'Unknown error'}</div>`;
                         return;
                     }
                     
@@ -577,7 +580,7 @@
         }
 
         function exportLogs(type = 'all') {
-            window.open(`/admin/export-logs?type=${type}`, '_blank');
+            window.open(`${baseUrl}/admin/export-logs?type=${type}`, '_blank');
         }
 
         function refreshLogs() {

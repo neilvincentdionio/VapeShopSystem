@@ -350,7 +350,7 @@
                                 <span class="badge-success"><?= esc($session['status']) ?></span>
                             </td>
                             <td>
-                                <button class="btn btn-info btn-sm" onclick="viewSessionDetails('<?= $session['session_id'] ?>')">
+                                <button class="btn btn-info btn-sm" onclick="viewSessionDetails('<?= $session['session_id'] ?>')" title="Session ID: <?= $session['session_id'] ?>">
                                     <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                         <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                                         <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
@@ -394,6 +394,9 @@
     </style>
 
     <script>
+        // Base URL for AJAX requests
+        const baseUrl = '<?= site_url() ?>';
+        
         function viewSessionDetails(sessionId) {
             console.log('Loading session details for:', sessionId);
             
@@ -405,7 +408,7 @@
             
             // Fetch session details
             const encodedSessionId = encodeURIComponent(sessionId);
-            fetch(`/admin/get-session-details/${encodedSessionId}`)
+            fetch(`${baseUrl}/admin/get-session-details/${encodedSessionId}`)
                 .then(response => {
                     console.log('Response status:', response.status);
                     if (!response.ok) {
@@ -416,8 +419,8 @@
                 .then(data => {
                     console.log('Session data:', data);
                     
-                    if (data.error) {
-                        document.getElementById('sessionDetailsContent').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                    if (!data.success) {
+                        document.getElementById('sessionDetailsContent').innerHTML = `<div class="alert alert-error">${data.message || 'Unknown error'}</div>`;
                         return;
                     }
                     
@@ -471,8 +474,6 @@
         }
 
         function endSession(sessionId) {
-            console.log('Ending session:', sessionId);
-            
             if (!confirm('Are you sure you want to end this session?')) {
                 return;
             }
@@ -482,7 +483,7 @@
             
             const encodedSessionId = encodeURIComponent(sessionId);
             
-            fetch(`/admin/end-session/${encodedSessionId}`, {
+            fetch(`${baseUrl}/admin/end-session/${encodedSessionId}`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -500,7 +501,7 @@
                     alert('Session ended successfully');
                     refreshSessions();
                 } else {
-                    alert(data.error || 'Failed to end session');
+                    alert(data.message || 'Failed to end session');
                 }
             })
             .catch(error => {

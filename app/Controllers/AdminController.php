@@ -127,18 +127,19 @@ class AdminController extends BaseController
     public function getSessionDetails($sessionId)
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['error' => 'Access denied']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
         $session = $this->sessionModel->getSessionBySessionId($sessionId);
         if (!$session) {
-            return $this->response->setJSON(['error' => 'Session not found']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Session not found']);
         }
 
         // Get user activity logs
         $userLogs = $this->activityModel->getUserLogs($session['user_id'], 10);
 
         return $this->response->setJSON([
+            'success' => true,
             'session' => $session,
             'userLogs' => $userLogs
         ]);
@@ -150,33 +151,22 @@ class AdminController extends BaseController
     public function endSession($sessionId)
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['error' => 'Access denied']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
         $session = $this->sessionModel->getSessionBySessionId($sessionId);
         if (!$session) {
-            return $this->response->setJSON(['error' => 'Session not found']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Session not found']);
         }
 
         // End the session
         $result = $this->sessionModel->endSession($sessionId);
         
         if ($result) {
-            // Log the action
-            $this->activityLogger->logActivity(
-                session()->get('user_id'),
-                "Admin ended session for user ID: {$session['user_id']}",
-                'SESSION_ENDED',
-                $this->request->getIPAddress(),
-                $this->request->getUserAgent()->getAgentString(),
-                "Session ID: {$sessionId}",
-                'success'
-            );
-            
-            return $this->response->setJSON(['success' => 'Session ended successfully']);
+            return $this->response->setJSON(['success' => true, 'message' => 'Session ended successfully']);
         }
 
-        return $this->response->setJSON(['error' => 'Failed to end session']);
+        return $this->response->setJSON(['success' => false, 'message' => 'Failed to end session']);
     }
 
     /**
@@ -185,15 +175,15 @@ class AdminController extends BaseController
     public function getLogDetails($logId)
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['error' => 'Access denied']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
         $log = $this->activityModel->find($logId);
         if (!$log) {
-            return $this->response->setJSON(['error' => 'Log not found']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Log not found']);
         }
 
-        return $this->response->setJSON(['log' => $log]);
+        return $this->response->setJSON(['success' => true, 'log' => $log]);
     }
 
     /**
@@ -242,5 +232,126 @@ class AdminController extends BaseController
         
         fclose($output);
         exit;
+    }
+
+    /**
+     * Get session details by ID (for index views)
+     */
+    public function getSessionDetailsById($sessionId)
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $session = $this->sessionModel->find($sessionId);
+        if (!$session) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Session not found']);
+        }
+
+        // Get user information
+        if ($session['user_id']) {
+            $userModel = new \App\Models\UserModel();
+            $user = $userModel->find($session['user_id']);
+            if ($user) {
+                $session['user_name'] = $user['name'];
+                $session['user_email'] = $user['email'];
+            }
+        }
+
+        return $this->response->setJSON(['success' => true, 'data' => $session]);
+    }
+
+    /**
+     * End session by ID (for index views)
+     */
+    public function endSessionById($sessionId)
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $session = $this->sessionModel->find($sessionId);
+        if (!$session) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Session not found']);
+        }
+
+        if ($session['status'] !== 'active') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Session is not active']);
+        }
+
+        // End the session
+        $result = $this->sessionModel->endSession($session['session_id']);
+        
+        if ($result) {
+            // Log the action
+            $this->activityLogger->logActivity(
+                session()->get('user_id'),
+                "Admin ended session for user ID: {$session['user_id']}",
+                'SESSION_ENDED',
+                $this->request->getIPAddress(),
+                $this->request->getUserAgent()->getAgentString(),
+                "Session ID: {$session['session_id']}",
+                'success'
+            );
+            
+            return $this->response->setJSON(['success' => true, 'message' => 'Session ended successfully']);
+        }
+
+        return $this->response->setJSON(['success' => false, 'message' => 'Failed to end session']);
+    }
+
+    /**
+     * Clean up old sessions
+     */
+    public function cleanupSessions()
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $count = $this->sessionModel->cleanupOldSessions(30);
+        
+        return $this->response->setJSON(['success' => true, 'count' => $count]);
+    }
+
+    /**
+     * Get log details by ID (for index views)
+     */
+    public function getLogDetailsById($logId)
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $log = $this->activityModel->find($logId);
+        if (!$log) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Log not found']);
+        }
+
+        // Get user information
+        if ($log['user_id']) {
+            $userModel = new \App\Models\UserModel();
+            $user = $userModel->find($log['user_id']);
+            if ($user) {
+                $log['user_name'] = $user['name'];
+                $log['user_email'] = $user['email'];
+            }
+        }
+
+        return $this->response->setJSON(['success' => true, 'data' => $log]);
+    }
+
+    /**
+     * Clean up old logs
+     */
+    public function cleanupLogs()
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $count = $this->activityModel->cleanupOldLogs(90);
+        
+        return $this->response->setJSON(['success' => true, 'count' => $count]);
     }
 }
