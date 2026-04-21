@@ -5,18 +5,21 @@ namespace App\Controllers;
 use App\Models\UserSessionModel;
 use App\Models\ActivityLogModel;
 use App\Libraries\ActivityLogger;
+use App\Libraries\SecurityAuditService;
 
 class AdminController extends BaseController
 {
     protected $sessionModel;
     protected $activityModel;
     protected $activityLogger;
+    protected $securityAuditService;
 
     public function __construct()
     {
         $this->sessionModel = new UserSessionModel();
         $this->activityModel = new ActivityLogModel();
         $this->activityLogger = new ActivityLogger();
+        $this->securityAuditService = new SecurityAuditService();
     }
 
     /**
@@ -76,6 +79,7 @@ class AdminController extends BaseController
         }
 
         $activityStats = $this->activityModel->getActivityStats();
+        $securityReport = $this->securityAuditService->generateAuditReport(24);
 
         $data = [
             'title' => 'Activity Logs',
@@ -83,9 +87,70 @@ class AdminController extends BaseController
             'recentLogs' => $this->activityModel->getRecentActivities(50),
             'failedLoginCount' => $this->getFailedLoginCount($activityStats),
             'successRate' => $this->getSuccessRate($activityStats),
+            'securitySummary' => $securityReport['summary'],
+            'securityAlerts' => $securityReport['alerts'],
+            'securityRecommendations' => $securityReport['recommendations'],
         ];
 
         return view('admin/activity_logs', $data);
+    }
+
+    /**
+     * Export periodic security audit report.
+     */
+    public function exportSecurityReport()
+    {
+        if (!$this->isAdmin()) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied');
+        }
+
+        $hours = (int) ($this->request->getGet('hours') ?? 24);
+        $format = strtolower((string) ($this->request->getGet('format') ?? 'json'));
+        $report = $this->securityAuditService->generateAuditReport($hours);
+
+        if ($format === 'csv') {
+            $filename = 'security_audit_report_' . date('Y-m-d_H-i-s') . '.csv';
+            $rows = [
+                ['Section', 'Metric', 'Value'],
+                ['Summary', 'Window (hours)', (string) $report['window_hours']],
+                ['Summary', 'Generated At', (string) $report['generated_at']],
+            ];
+
+            foreach (($report['summary'] ?? []) as $metric => $value) {
+                $rows[] = ['Summary', $metric, (string) $value];
+            }
+
+            foreach (($report['alerts'] ?? []) as $index => $alert) {
+                $prefix = 'Alert #' . ($index + 1);
+                $rows[] = [$prefix, 'severity', (string) ($alert['severity'] ?? '')];
+                $rows[] = [$prefix, 'type', (string) ($alert['type'] ?? '')];
+                $rows[] = [$prefix, 'message', (string) ($alert['message'] ?? '')];
+                $rows[] = [$prefix, 'last_seen', (string) ($alert['last_seen'] ?? '')];
+            }
+
+            foreach (($report['recommendations'] ?? []) as $index => $recommendation) {
+                $rows[] = ['Recommendation', 'item_' . ($index + 1), (string) $recommendation];
+            }
+
+            $file = fopen('php://temp', 'w+');
+            foreach ($rows as $row) {
+                fputcsv($file, $row);
+            }
+            rewind($file);
+            $csv = stream_get_contents($file) ?: '';
+            fclose($file);
+
+            return $this->response
+                ->setHeader('Content-Type', 'text/csv')
+                ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->setBody($csv);
+        }
+
+        $filename = 'security_audit_report_' . date('Y-m-d_H-i-s') . '.json';
+        return $this->response
+            ->setHeader('Content-Type', 'application/json')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setJSON($report);
     }
 
     /**

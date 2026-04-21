@@ -141,6 +141,15 @@ class Auth extends BaseController
         // Check IP-based rate limiting
         $ipAddress = $request->getIPAddress();
         if ($this->loginAttemptModel->isIpBlocked($ipAddress)) {
+            $this->activityLogger->logSecurityAlert(
+                "Suspicious login traffic blocked from IP {$ipAddress}",
+                json_encode([
+                    'email' => $email,
+                    'reason' => 'ip_rate_limited',
+                    'ip_address' => $ipAddress,
+                ])
+            );
+
             return redirect()->back()
                            ->withInput()
                            ->with('error', 'Too many login attempts from this IP. Please try again later.');

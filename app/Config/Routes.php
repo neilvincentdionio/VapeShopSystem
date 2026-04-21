@@ -165,6 +165,7 @@ $routes->post('/admin/end-session/(.+)', 'AdminController::endSession/$1', ['fil
 $routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => 'auth:admin']);
 $routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1', ['filter' => 'auth:admin']);
 $routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => 'auth:admin']);
+$routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => 'auth:admin']);
 
 // Additional routes for index views compatibility
 $routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => 'auth:admin']);

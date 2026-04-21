@@ -164,6 +164,22 @@
             text-align: center;
         }
         .stat-value { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; }
+        .security-alerts-list { display: grid; gap: .75rem; margin-top: 1rem; }
+        .security-alert-item {
+            border-left: 4px solid #f39c12;
+            background: #fff8e1;
+            border-radius: 8px;
+            padding: .75rem 1rem;
+        }
+        .security-alert-item.high {
+            border-left-color: #dc3545;
+            background: #fdecea;
+        }
+        .security-alert-item .meta {
+            font-size: .82rem;
+            color: #666666;
+            margin-top: .25rem;
+        }
 
         .dashboard-grid {
             display: grid;
@@ -330,6 +346,56 @@
                     <div class="stat-value"><?= $successRate ?? 0 ?>%</div>
                     <div>Success Rate</div>
                 </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <div class="card-icon" style="background:#fff3cd;color:#8a6d3b;">SA</div>
+                <div class="card-title">Security Alerts (Last 24 Hours)</div>
+                <div style="margin-left:auto;display:flex;gap:.5rem;">
+                    <button class="btn btn-info" onclick="exportSecurityReport('csv')">Export Security Report</button>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;">
+                <div class="stat-item">
+                    <div class="stat-value"><?= (int)($securitySummary['total_login_attempts'] ?? 0) ?></div>
+                    <div>Total Login Attempts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value"><?= (int)($securitySummary['failed_login_attempts'] ?? 0) ?></div>
+                    <div>Failed Attempts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value"><?= (int)($securitySummary['suspicious_ips'] ?? 0) ?></div>
+                    <div>Suspicious IPs</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value"><?= (int)($securitySummary['suspicious_accounts'] ?? 0) ?></div>
+                    <div>Targeted Accounts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value"><?= (int)($securitySummary['warning_events'] ?? 0) ?></div>
+                    <div>Warning Events</div>
+                </div>
+            </div>
+            <div class="security-alerts-list">
+                <?php if (!empty($securityAlerts)): ?>
+                    <?php foreach ($securityAlerts as $alert): ?>
+                        <div class="security-alert-item <?= esc($alert['severity'] ?? 'medium') ?>">
+                            <strong><?= esc($alert['message'] ?? 'Security alert') ?></strong>
+                            <div class="meta">
+                                Type: <?= esc($alert['type'] ?? 'N/A') ?> |
+                                Severity: <?= esc(strtoupper($alert['severity'] ?? 'medium')) ?> |
+                                Last Seen: <?= esc($alert['last_seen'] ?? 'N/A') ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="security-alert-item" style="border-left-color:#28a745;background:#edf7ed;">
+                        <strong>No suspicious activity detected in the last 24 hours.</strong>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -581,6 +647,10 @@
 
         function exportLogs(type = 'all') {
             window.open(`${baseUrl}/admin/export-logs?type=${type}`, '_blank');
+        }
+
+        function exportSecurityReport(format = 'csv') {
+            window.open(`${baseUrl}/admin/security-report?hours=24&format=${format}`, '_blank');
         }
 
         function refreshLogs() {

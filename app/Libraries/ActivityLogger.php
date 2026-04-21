@@ -61,6 +61,27 @@ class ActivityLogger
     }
 
     /**
+     * Log warning-level security alert for suspicious activity.
+     */
+    public function logSecurityAlert(string $message, ?string $details = null, ?int $userId = null): bool
+    {
+        $ipAddress = $this->request->getIPAddress();
+        $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
+
+        return $this->runSafeBool(static function () use ($userId, $message, $ipAddress, $userAgent, $details): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                $message,
+                'LOGIN_FAILED',
+                $ipAddress,
+                $userAgent,
+                $details,
+                'warning'
+            );
+        }, 'logSecurityAlert');
+    }
+
+    /**
      * Log user logout
      */
     public function logLogout(int $userId, string $email): bool
