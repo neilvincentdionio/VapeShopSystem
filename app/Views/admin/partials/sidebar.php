@@ -15,8 +15,7 @@ $isActivityLogs = $seg1 === 'admin' && $seg2 === 'activity-logs';
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
         <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
-            <span class="brand-mark">Quick Puff</span>
-            <span class="brand-subtitle">Vape Shop Admin</span>
+            <span class="brand-mark">QuickPuff VapeShop</span>
         </a>
 
         <div class="navbar-center">
@@ -39,10 +38,6 @@ $isActivityLogs = $seg1 === 'admin' && $seg2 === 'activity-logs';
                 <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link">
                     <?= esc(session()->get('user_name') ?? 'Administrator') ?>
                 </a>
-                <span class="badge"><?= esc(strtoupper(session()->get('user_role') ?? 'admin')) ?></span>
-                <?php if (!empty(session()->get('user_shop_name'))): ?>
-                    <span class="badge"><?= esc(session()->get('user_shop_name')) ?></span>
-                <?php endif; ?>
             </div>
             <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
         </div>

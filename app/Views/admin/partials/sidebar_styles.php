@@ -36,7 +36,7 @@
         box-sizing: border-box !important;
         border-bottom: 1px solid #ececec !important;
         font-weight: 700 !important;
-        text-align: left !important;
+        text-align: center !important;
         white-space: normal !important;
         overflow-wrap: normal !important;
         line-height: 1.2 !important;
@@ -50,13 +50,7 @@
         letter-spacing: -0.03em !important;
         color: #4c1d95 !important;
         margin-bottom: 0.2rem !important;
-    }
-    .admin-sidebar .brand-subtitle {
-        display: block !important;
-        font-size: 0.76rem !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.12em !important;
-        color: #6b7280 !important;
+        text-align: center !important;
     }
     .admin-sidebar .navbar-center {
         flex: 1 1 auto !important;
@@ -176,18 +170,6 @@
         color: #ffffff !important;
         font-weight: 600 !important;
         font-size: 0.9rem !important;
-    }
-
-     .admin-sidebar .badge {
-        background: #f8f9fa !important;
-        color: #6c757d !important;
-        padding: 0.25rem 0.5rem !important;
-        border-radius: 12px !important;
-        font-size: 0.75rem !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.3px !important;
-        border: none !important;
-        text-transform: uppercase !important;
     }
 
      .admin-sidebar .btn-danger {

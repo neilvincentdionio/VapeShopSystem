@@ -25,16 +25,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} logged in successfully",
-            'LOGIN_SUCCESS',
-            $ipAddress,
-            $userAgent,
-            null,
-            'success'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} logged in successfully",
+                'LOGIN_SUCCESS',
+                $ipAddress,
+                $userAgent,
+                null,
+                'success'
+            );
+        }, 'logLoginSuccess');
     }
 
     /**
@@ -44,16 +46,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            null,
-            "Failed login attempt for {$email}: {$reason}",
-            'LOGIN_FAILED',
-            $ipAddress,
-            $userAgent,
-            null,
-            'failed'
-        );
+
+        return $this->runSafeBool(static function () use ($email, $reason, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                null,
+                "Failed login attempt for {$email}: {$reason}",
+                'LOGIN_FAILED',
+                $ipAddress,
+                $userAgent,
+                null,
+                'failed'
+            );
+        }, 'logLoginFailed');
     }
 
     /**
@@ -63,20 +67,24 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        // End the session
-        $sessionId = session_id();
-        $this->userSessionModel->endSession($sessionId);
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} logged out",
-            'LOGOUT',
-            $ipAddress,
-            $userAgent,
-            null,
-            'success'
-        );
+
+        // End the session without breaking logout flow on tracking errors.
+        $this->runSafeBool(static function (): bool {
+            $sessionId = session_id();
+            return (new UserSessionModel())->endSession($sessionId);
+        }, 'endSession');
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} logged out",
+                'LOGOUT',
+                $ipAddress,
+                $userAgent,
+                null,
+                'success'
+            );
+        }, 'logLogout');
     }
 
     /**
@@ -86,18 +94,20 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
+
         $details = json_encode($changes);
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} updated profile",
-            'PROFILE_UPDATE',
-            $ipAddress,
-            $userAgent,
-            $details,
-            'success'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent, $details): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} updated profile",
+                'PROFILE_UPDATE',
+                $ipAddress,
+                $userAgent,
+                $details,
+                'success'
+            );
+        }, 'logProfileUpdate');
     }
 
     /**
@@ -107,16 +117,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} changed password",
-            'PASSWORD_CHANGE',
-            $ipAddress,
-            $userAgent,
-            null,
-            'success'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} changed password",
+                'PASSWORD_CHANGE',
+                $ipAddress,
+                $userAgent,
+                null,
+                'success'
+            );
+        }, 'logPasswordChange');
     }
 
     /**
@@ -126,16 +138,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} enabled MFA",
-            'MFA_ENABLED',
-            $ipAddress,
-            $userAgent,
-            null,
-            'success'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} enabled MFA",
+                'MFA_ENABLED',
+                $ipAddress,
+                $userAgent,
+                null,
+                'success'
+            );
+        }, 'logMfaEnabled');
     }
 
     /**
@@ -145,16 +159,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "User {$email} disabled MFA",
-            'MFA_DISABLED',
-            $ipAddress,
-            $userAgent,
-            null,
-            'warning'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "User {$email} disabled MFA",
+                'MFA_DISABLED',
+                $ipAddress,
+                $userAgent,
+                null,
+                'warning'
+            );
+        }, 'logMfaDisabled');
     }
 
     /**
@@ -164,16 +180,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "Account created for {$email}",
-            'ACCOUNT_CREATED',
-            $ipAddress,
-            $userAgent,
-            null,
-            'success'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "Account created for {$email}",
+                'ACCOUNT_CREATED',
+                $ipAddress,
+                $userAgent,
+                null,
+                'success'
+            );
+        }, 'logAccountCreated');
     }
 
     /**
@@ -183,16 +201,18 @@ class ActivityLogger
     {
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->activityLogModel->logActivity(
-            $userId,
-            "Account deleted for {$email}",
-            'ACCOUNT_DELETED',
-            $ipAddress,
-            $userAgent,
-            null,
-            'warning'
-        );
+
+        return $this->runSafeBool(static function () use ($userId, $email, $ipAddress, $userAgent): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                "Account deleted for {$email}",
+                'ACCOUNT_DELETED',
+                $ipAddress,
+                $userAgent,
+                null,
+                'warning'
+            );
+        }, 'logAccountDeleted');
     }
 
     /**
@@ -203,13 +223,15 @@ class ActivityLogger
         $sessionId = session_id();
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
-        
-        return $this->userSessionModel->createSession(
-            $userId,
-            $sessionId,
-            $ipAddress,
-            $userAgent
-        );
+
+        return $this->runSafeInt(static function () use ($userId, $sessionId, $ipAddress, $userAgent): int {
+            return (new UserSessionModel())->createSession(
+                $userId,
+                $sessionId,
+                $ipAddress,
+                $userAgent
+            );
+        }, 'createUserSession');
     }
 
     /**
@@ -218,7 +240,9 @@ class ActivityLogger
     public function updateSessionActivity(): bool
     {
         $sessionId = session_id();
-        return $this->userSessionModel->updateActivity($sessionId);
+        return $this->runSafeBool(static function () use ($sessionId): bool {
+            return (new UserSessionModel())->updateActivity($sessionId);
+        }, 'updateSessionActivity');
     }
 
     /**
@@ -226,7 +250,9 @@ class ActivityLogger
      */
     public function getUserActivities(int $userId, int $limit = 50): array
     {
-        return $this->activityLogModel->getUserLogs($userId, $limit);
+        return $this->runSafeArray(static function () use ($userId, $limit): array {
+            return (new ActivityLogModel())->getUserLogs($userId, $limit);
+        }, 'getUserActivities');
     }
 
     /**
@@ -234,7 +260,9 @@ class ActivityLogger
      */
     public function getUserSessions(int $userId, int $limit = 50): array
     {
-        return $this->userSessionModel->getUserSessions($userId, $limit);
+        return $this->runSafeArray(static function () use ($userId, $limit): array {
+            return (new UserSessionModel())->getUserSessions($userId, $limit);
+        }, 'getUserSessions');
     }
 
     /**
@@ -242,7 +270,9 @@ class ActivityLogger
      */
     public function getFailedLogins(int $hours = 24, int $limit = 100): array
     {
-        return $this->activityLogModel->getFailedLogins($hours, $limit);
+        return $this->runSafeArray(static function () use ($hours, $limit): array {
+            return (new ActivityLogModel())->getFailedLogins($hours, $limit);
+        }, 'getFailedLogins');
     }
 
     /**
@@ -250,7 +280,9 @@ class ActivityLogger
      */
     public function getRecentActivities(int $limit = 50): array
     {
-        return $this->activityLogModel->getRecentActivities($limit);
+        return $this->runSafeArray(static function () use ($limit): array {
+            return (new ActivityLogModel())->getRecentActivities($limit);
+        }, 'getRecentActivities');
     }
 
     /**
@@ -258,7 +290,9 @@ class ActivityLogger
      */
     public function getActivityStats(): array
     {
-        return $this->activityLogModel->getActivityStats();
+        return $this->runSafeArray(static function (): array {
+            return (new ActivityLogModel())->getActivityStats();
+        }, 'getActivityStats');
     }
 
     /**
@@ -266,6 +300,47 @@ class ActivityLogger
      */
     public function getSessionStats(): array
     {
-        return $this->userSessionModel->getSessionStats();
+        return $this->runSafeArray(static function (): array {
+            return (new UserSessionModel())->getSessionStats();
+        }, 'getSessionStats');
+    }
+
+    private function runSafeBool(callable $callback, string $context): bool
+    {
+        try {
+            return (bool) $callback();
+        } catch (\Throwable $e) {
+            log_message('error', 'ActivityLogger[{context}] failed: {message}', [
+                'context' => $context,
+                'message' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    private function runSafeInt(callable $callback, string $context): int
+    {
+        try {
+            return (int) $callback();
+        } catch (\Throwable $e) {
+            log_message('error', 'ActivityLogger[{context}] failed: {message}', [
+                'context' => $context,
+                'message' => $e->getMessage(),
+            ]);
+            return 0;
+        }
+    }
+
+    private function runSafeArray(callable $callback, string $context): array
+    {
+        try {
+            return (array) $callback();
+        } catch (\Throwable $e) {
+            log_message('error', 'ActivityLogger[{context}] failed: {message}', [
+                'context' => $context,
+                'message' => $e->getMessage(),
+            ]);
+            return [];
+        }
     }
 }
