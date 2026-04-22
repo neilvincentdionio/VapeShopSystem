@@ -186,7 +186,24 @@ class UserManagement extends BaseController
         }
 
         try {
-            if ($this->userModel->approveUser($id)) {
+            $db = \Config\Database::connect();
+            $db->transStart();
+
+            $approved = $this->userModel->approveUser($id);
+            if ($approved) {
+                $this->insertAuditLog(
+                    'user_approved',
+                    (int) $id,
+                    [
+                        'target_email' => $user['email'] ?? null,
+                        'approval_status' => 'approved',
+                    ]
+                );
+            }
+
+            $db->transComplete();
+
+            if ($approved && $db->transStatus() !== false) {
                 return redirect()->to('/user-management')
                                ->with('success', 'Customer account approved successfully.');
             }
@@ -194,6 +211,7 @@ class UserManagement extends BaseController
             return redirect()->to('/user-management')
                            ->with('error', 'Failed to approve the customer account.');
         } catch (\Exception $e) {
+            \Config\Database::connect()->transRollback();
             log_message('error', 'User approval error: ' . $e->getMessage());
             return redirect()->to('/user-management')
                            ->with('error', 'Failed to approve the customer account.');
@@ -238,9 +256,24 @@ class UserManagement extends BaseController
 
         // Create user with hashed password
         try {
+            $db = \Config\Database::connect();
+            $db->transStart();
             $result = $this->userModel->createUser($data);
-            
+
             if ($result) {
+                $this->insertAuditLog(
+                    'user_created',
+                    (int) $result,
+                    [
+                        'target_email' => $data['email'],
+                        'target_role' => $data['role'],
+                    ]
+                );
+            }
+
+            $db->transComplete();
+            
+            if ($result && $db->transStatus() !== false) {
                 return redirect()->to('/user-management')
                                ->with('success', 'User created successfully.');
             } else {
@@ -255,6 +288,7 @@ class UserManagement extends BaseController
                                ->with('error', 'Failed to create user. Database error occurred.');
             }
         } catch (\Exception $e) {
+            \Config\Database::connect()->transRollback();
             log_message('error', 'User creation error: ' . $e->getMessage());
             return redirect()->back()
                            ->with('error', 'Failed to create user: ' . $e->getMessage());
@@ -367,18 +401,33 @@ class UserManagement extends BaseController
         }
 
         try {
-            // Try the direct update method first
+            $db = \Config\Database::connect();
+            $db->transStart();
+            $nameUpdated = false;
+            $emailUpdated = false;
+            $roleUpdated = false;
             $result = $this->userModel->updateUserDirectly($id, $data);
             
             if ($result) {
+                $this->insertAuditLog(
+                    'user_updated',
+                    (int) $id,
+                    [
+                        'target_email' => $data['email'],
+                        'target_role' => $data['role'],
+                    ]
+                );
+
                 $updatedUser = $this->userModel->find($id);
                 $nameUpdated = $updatedUser && $updatedUser['name'] === $data['name'];
                 $emailUpdated = $updatedUser && $updatedUser['email'] === $data['email'];
                 $roleUpdated = $updatedUser && $updatedUser['role'] === $data['role'];
             }
+
+            $db->transComplete();
             
             // Consider it successful if the data matches what we tried to update
-            if ($result || ($nameUpdated && $emailUpdated && $roleUpdated)) {
+            if (($result || ($nameUpdated && $emailUpdated && $roleUpdated)) && $db->transStatus() !== false) {
                 return redirect()->to('/user-management')
                                ->with('success', 'User updated successfully.');
             } else {
@@ -386,6 +435,7 @@ class UserManagement extends BaseController
                                ->with('error', 'Failed to update user. No changes made or database error.');
             }
         } catch (\Exception $e) {
+            \Config\Database::connect()->transRollback();
             log_message('error', 'User update error: ' . $e->getMessage());
             return redirect()->back()
                            ->with('error', 'Failed to update user: ' . $e->getMessage());
@@ -479,13 +529,53 @@ class UserManagement extends BaseController
         }
 
         try {
-            $this->userModel->delete($id);
-            return redirect()->to('/user-management')
-                           ->with('success', 'User deleted successfully.');
+            $db = \Config\Database::connect();
+            $db->transStart();
+            $deleted = $this->userModel->delete($id);
+
+            if ($deleted) {
+                $this->insertAuditLog(
+                    'user_deleted',
+                    (int) $id,
+                    [
+                        'target_email' => $user['email'] ?? null,
+                        'target_role' => $user['role'] ?? null,
+                    ]
+                );
+            }
+
+            $db->transComplete();
+
+            if ($deleted && $db->transStatus() !== false) {
+                return redirect()->to('/user-management')
+                               ->with('success', 'User deleted successfully.');
+            }
+
+            return redirect()->back()
+                           ->with('error', 'Failed to delete user. Please try again.');
         } catch (\Exception $e) {
+            \Config\Database::connect()->transRollback();
             return redirect()->back()
                            ->with('error', 'Failed to delete user. Please try again.');
         }
+    }
+
+    private function insertAuditLog(string $action, int $resourceId, array $details = [], string $status = 'success'): bool
+    {
+        $request = service('request');
+        $userAgent = $request->getUserAgent();
+
+        return (bool) \Config\Database::connect()->table('audit_logs')->insert([
+            'user_id' => (int) ($this->session->get('user_id') ?? 0) ?: null,
+            'action' => $action,
+            'resource_type' => 'user',
+            'resource_id' => $resourceId,
+            'ip_address' => $request->getIPAddress(),
+            'user_agent' => $userAgent ? $userAgent->getAgentString() : null,
+            'details' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'status' => $status,
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     private function resolveVerificationIdAbsolutePath(?string $relativePath): ?string

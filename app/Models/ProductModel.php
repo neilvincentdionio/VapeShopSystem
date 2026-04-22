@@ -157,6 +157,72 @@ class ProductModel extends Model
         );
     }
 
+    public function reserveStockForItems(array $items, ?string $referenceType = null, ?int $referenceId = null, ?int $createdBy = null): bool
+    {
+        $requirements = $this->normalizeStockItems($items);
+        if ($requirements === []) {
+            return true;
+        }
+
+        $lockedStock = $this->lockProductStockLevels(array_keys($requirements));
+        if (count($lockedStock) !== count($requirements)) {
+            return false;
+        }
+
+        foreach ($requirements as $productId => $quantity) {
+            if (($lockedStock[$productId] ?? 0) < $quantity) {
+                return false;
+            }
+        }
+
+        foreach ($requirements as $productId => $quantity) {
+            if (! $this->createInventoryMovement(
+                $productId,
+                'sale',
+                -$quantity,
+                null,
+                $referenceType,
+                $referenceId,
+                'Reserved stock for transaction.',
+                $createdBy
+            )) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function restoreStockForItems(array $items, ?string $referenceType = null, ?int $referenceId = null, ?int $createdBy = null): bool
+    {
+        $requirements = $this->normalizeStockItems($items);
+        if ($requirements === []) {
+            return true;
+        }
+
+        $lockedStock = $this->lockProductStockLevels(array_keys($requirements));
+        if (count($lockedStock) !== count($requirements)) {
+            return false;
+        }
+
+        foreach ($requirements as $productId => $quantity) {
+            if (! $this->createInventoryMovement(
+                $productId,
+                'return',
+                $quantity,
+                null,
+                $referenceType,
+                $referenceId,
+                'Restored stock for reversed transaction.',
+                $createdBy
+            )) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public function hasSufficientStock($id, $requiredQuantity)
     {
         $product = $this->getProductById($id);
@@ -319,7 +385,8 @@ class ProductModel extends Model
         ?float $unitCost = null,
         ?string $referenceType = null,
         ?int $referenceId = null,
-        ?string $notes = null
+        ?string $notes = null,
+        ?int $createdBy = null
     ): bool {
         return (bool) $this->db->table('inventory_movements')->insert([
             'product_id' => $productId,
@@ -329,8 +396,58 @@ class ProductModel extends Model
             'reference_type' => $referenceType,
             'reference_id' => $referenceId,
             'notes' => $notes,
+            'created_by' => $createdBy,
             'created_at' => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    private function normalizeStockItems(array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            $productId = (int) ($item['id'] ?? $item['product_id'] ?? 0);
+            $quantity = (int) ($item['qty'] ?? $item['quantity'] ?? 0);
+
+            if ($productId <= 0 || $quantity <= 0) {
+                continue;
+            }
+
+            $normalized[$productId] = ($normalized[$productId] ?? 0) + $quantity;
+        }
+
+        ksort($normalized);
+
+        return $normalized;
+    }
+
+    private function lockProductStockLevels(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        sort($productIds);
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $sql = "
+            SELECT
+                p.id,
+                COALESCE(SUM(im.quantity), 0) AS stock
+            FROM products p
+            LEFT JOIN inventory_movements im ON im.product_id = p.id
+            WHERE p.id IN ({$placeholders})
+            GROUP BY p.id
+            FOR UPDATE
+        ";
+
+        $rows = $this->db->query($sql, $productIds)->getResultArray();
+        $stockMap = [];
+
+        foreach ($rows as $row) {
+            $stockMap[(int) $row['id']] = (int) $row['stock'];
+        }
+
+        return $stockMap;
     }
 
     private function slugify(string $value): string

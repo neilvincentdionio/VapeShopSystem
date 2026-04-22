@@ -603,23 +603,6 @@ class Dashboard extends BaseController
         $db->transStart();
 
         try {
-            // For GCash (paid), reserve/deduct stock immediately.
-            // For COD (unpaid), stock is deducted on payment confirmation/admin checkout.
-            if ($paymentMethod === 'gcash') {
-                foreach ($cartItems as $item) {
-                    $product = $this->productModel->getProductById((int) $item['id'], true);
-                    if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
-                        throw new \RuntimeException('Insufficient stock for one of the selected items.');
-                    }
-                }
-
-                foreach ($cartItems as $item) {
-                    if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['quantity']))) {
-                        throw new \RuntimeException('Failed to reserve stock for one of the selected items.');
-                    }
-                }
-            }
-
             $orderId = $this->orderModel->createOrder(
                 $orderData,
                 $orderItems,
@@ -629,6 +612,20 @@ class Dashboard extends BaseController
 
             if (! $orderId) {
                 throw new \RuntimeException('Failed to create order.');
+            }
+
+            // For GCash (paid), reserve/deduct stock immediately.
+            // For COD (unpaid), stock is deducted on payment confirmation/admin checkout.
+            if (
+                $paymentMethod === 'gcash'
+                && ! $this->productModel->reserveStockForItems(
+                    $orderItems,
+                    'order',
+                    (int) $orderId,
+                    (int) $this->session->get('user_id')
+                )
+            ) {
+                throw new \RuntimeException('Insufficient stock for one of the selected items.');
             }
 
             $db->transComplete();
@@ -1106,15 +1103,13 @@ class Dashboard extends BaseController
         $db->transStart();
 
         try {
-            foreach ($orderItems as $item) {
-                $product = $this->productModel->getProductById((int) $item['id'], true);
-                if (! $product || (int) $product['stock'] < (int) $item['qty']) {
-                    throw new \RuntimeException('Insufficient stock for item: ' . $item['name']);
-                }
-
-                if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['qty']))) {
-                    throw new \RuntimeException('Failed to update stock for item: ' . $item['name']);
-                }
+            if (! $this->productModel->reserveStockForItems(
+                $orderItems,
+                'order',
+                (int) $orderId,
+                (int) $this->session->get('user_id')
+            )) {
+                throw new \RuntimeException('Insufficient stock for one of the order items.');
             }
 
             $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
@@ -1727,15 +1722,13 @@ class Dashboard extends BaseController
         $db->transStart();
 
         try {
-            foreach (($order['items'] ?? []) as $item) {
-                $product = $this->productModel->getProductById((int) $item['id'], true);
-                if (! $product || (int) $product['stock'] < (int) $item['qty']) {
-                    throw new \RuntimeException('Insufficient stock for one of the order items.');
-                }
-
-                if (! $this->productModel->updateStock((int) $item['id'], -((int) $item['qty']))) {
-                    throw new \RuntimeException('Failed to update stock.');
-                }
+            if (! $this->productModel->reserveStockForItems(
+                (array) ($order['items'] ?? []),
+                'order',
+                (int) ($order['id'] ?? 0),
+                (int) $this->session->get('user_id')
+            )) {
+                throw new \RuntimeException('Insufficient stock for one of the order items.');
             }
 
             $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
@@ -1781,10 +1774,13 @@ class Dashboard extends BaseController
 
         try {
             if (($order['delivery_status'] ?? 'to_pay') === 'to_ship') {
-                foreach (($order['items'] ?? []) as $item) {
-                    if (! $this->productModel->updateStock((int) $item['id'], (int) $item['qty'])) {
-                        throw new \RuntimeException('Failed to restore stock for a cancelled order.');
-                    }
+                if (! $this->productModel->restoreStockForItems(
+                    (array) ($order['items'] ?? []),
+                    'order',
+                    (int) ($order['id'] ?? 0),
+                    (int) $this->session->get('user_id')
+                )) {
+                    throw new \RuntimeException('Failed to restore stock for a cancelled order.');
                 }
             }
 
