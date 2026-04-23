@@ -4,18 +4,21 @@ namespace App\Libraries;
 
 use App\Models\ActivityLogModel;
 use App\Models\UserSessionModel;
+use App\Libraries\SecurityNotificationService;
 
 class ActivityLogger
 {
     protected $activityLogModel;
     protected $userSessionModel;
     protected $request;
+    protected $securityNotificationService;
 
     public function __construct()
     {
         $this->activityLogModel = new ActivityLogModel();
         $this->userSessionModel = new UserSessionModel();
         $this->request = \Config\Services::request();
+        $this->securityNotificationService = new SecurityNotificationService();
     }
 
     /**
@@ -68,7 +71,7 @@ class ActivityLogger
         $ipAddress = $this->request->getIPAddress();
         $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
 
-        return $this->runSafeBool(static function () use ($userId, $message, $ipAddress, $userAgent, $details): bool {
+        $logged = $this->runSafeBool(static function () use ($userId, $message, $ipAddress, $userAgent, $details): bool {
             return (new ActivityLogModel())->logActivity(
                 $userId,
                 $message,
@@ -79,6 +82,19 @@ class ActivityLogger
                 'warning'
             );
         }, 'logSecurityAlert');
+
+        $this->runSafeBool(function () use ($message, $userId, $ipAddress, $userAgent, $details): bool {
+            $context = [
+                'user_id' => $userId,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+                'details' => $details,
+            ];
+
+            return $this->securityNotificationService->notifySuspiciousActivity($message, $context);
+        }, 'notifySecurityAlert');
+
+        return $logged;
     }
 
     /**
@@ -234,6 +250,28 @@ class ActivityLogger
                 'warning'
             );
         }, 'logAccountDeleted');
+    }
+
+    /**
+     * Log account modifications performed in user management flows.
+     */
+    public function logAccountModified(int $actorUserId, string $targetEmail, string $operation, array $changes = []): bool
+    {
+        $ipAddress = $this->request->getIPAddress();
+        $userAgent = method_exists($this->request, 'getUserAgent') ? $this->request->getUserAgent()->getAgentString() : 'CLI';
+        $details = json_encode($changes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return $this->runSafeBool(static function () use ($actorUserId, $targetEmail, $operation, $ipAddress, $userAgent, $details): bool {
+            return (new ActivityLogModel())->logActivity(
+                $actorUserId,
+                "Account {$targetEmail} {$operation}",
+                'PROFILE_UPDATE',
+                $ipAddress,
+                $userAgent,
+                $details,
+                'success'
+            );
+        }, 'logAccountModified');
     }
 
     /**

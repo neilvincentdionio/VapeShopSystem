@@ -57,53 +57,53 @@ class ActivityLogModel extends Model
     /**
      * Encrypt sensitive data before insert
      */
-    protected function encryptData(array $data)
+    protected function encryptData(array $event): array
     {
-        // Encrypt user_id if present
-        if (isset($data['user_id'])) {
-            $data['user_id'] = base64_encode($this->encrypter->encrypt($data['user_id']));
+        if (!isset($event['data']) || !is_array($event['data'])) {
+            return $event;
         }
 
-        // Encrypt action if present
-        if (isset($data['action'])) {
-            $data['action'] = base64_encode($this->encrypter->encrypt($data['action']));
+        $fieldsToEncrypt = ['user_id', 'action', 'ip_address', 'user_agent', 'details'];
+
+        foreach ($fieldsToEncrypt as $field) {
+            if (!array_key_exists($field, $event['data'])) {
+                continue;
+            }
+
+            $value = $event['data'][$field];
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $event['data'][$field] = base64_encode($this->encrypter->encrypt((string) $value));
         }
 
-        // Encrypt IP address if present
-        if (isset($data['ip_address'])) {
-            $data['ip_address'] = base64_encode($this->encrypter->encrypt($data['ip_address']));
-        }
-
-        // Encrypt user agent if present
-        if (isset($data['user_agent'])) {
-            $data['user_agent'] = base64_encode($this->encrypter->encrypt($data['user_agent']));
-        }
-
-        // Encrypt details if present
-        if (isset($data['details'])) {
-            $data['details'] = base64_encode($this->encrypter->encrypt($data['details']));
-        }
-
-        return $data;
+        return $event;
     }
 
     /**
      * Decrypt sensitive data after find
      */
-    protected function decryptData(array $data)
+    protected function decryptData(array $event): array
     {
-        // Handle single result
-        if (isset($data['id']) && !isset($data[0])) {
-            $data = $this->decryptSingleRecord($data);
-        }
-        // Handle multiple results
-        else if (isset($data[0])) {
-            foreach ($data as $key => $record) {
-                $data[$key] = $this->decryptSingleRecord($record);
-            }
+        if (!array_key_exists('data', $event) || $event['data'] === null) {
+            return $event;
         }
 
-        return $data;
+        if (is_array($event['data']) && isset($event['data'][0]) && is_array($event['data'][0])) {
+            foreach ($event['data'] as $key => $record) {
+                if (is_array($record)) {
+                    $event['data'][$key] = $this->decryptSingleRecord($record);
+                }
+            }
+            return $event;
+        }
+
+        if (is_array($event['data'])) {
+            $event['data'] = $this->decryptSingleRecord($event['data']);
+        }
+
+        return $event;
     }
 
     /**
@@ -114,45 +114,60 @@ class ActivityLogModel extends Model
         // Decrypt user_id if present
         if (!empty($record['user_id'])) {
             try {
-                $record['user_id'] = (int) $this->encrypter->decrypt(base64_decode($record['user_id']));
+                $decoded = base64_decode((string) $record['user_id'], true);
+                if ($decoded !== false) {
+                    $record['user_id'] = (int) $this->encrypter->decrypt($decoded);
+                }
             } catch (\Exception $e) {
-                $record['user_id'] = null;
+                // Keep legacy/plaintext values readable.
             }
         }
 
         // Decrypt action if present
         if (!empty($record['action'])) {
             try {
-                $record['action'] = $this->encrypter->decrypt(base64_decode($record['action']));
+                $decoded = base64_decode((string) $record['action'], true);
+                if ($decoded !== false) {
+                    $record['action'] = $this->encrypter->decrypt($decoded);
+                }
             } catch (\Exception $e) {
-                $record['action'] = '[DECRYPT_ERROR]';
+                // Keep legacy/plaintext values readable.
             }
         }
 
         // Decrypt IP address if present
         if (!empty($record['ip_address'])) {
             try {
-                $record['ip_address'] = $this->encrypter->decrypt(base64_decode($record['ip_address']));
+                $decoded = base64_decode((string) $record['ip_address'], true);
+                if ($decoded !== false) {
+                    $record['ip_address'] = $this->encrypter->decrypt($decoded);
+                }
             } catch (\Exception $e) {
-                $record['ip_address'] = '[DECRYPT_ERROR]';
+                // Keep legacy/plaintext values readable.
             }
         }
 
         // Decrypt user agent if present
         if (!empty($record['user_agent'])) {
             try {
-                $record['user_agent'] = $this->encrypter->decrypt(base64_decode($record['user_agent']));
+                $decoded = base64_decode((string) $record['user_agent'], true);
+                if ($decoded !== false) {
+                    $record['user_agent'] = $this->encrypter->decrypt($decoded);
+                }
             } catch (\Exception $e) {
-                $record['user_agent'] = '[DECRYPT_ERROR]';
+                // Keep legacy/plaintext values readable.
             }
         }
 
         // Decrypt details if present
         if (!empty($record['details'])) {
             try {
-                $record['details'] = $this->encrypter->decrypt(base64_decode($record['details']));
+                $decoded = base64_decode((string) $record['details'], true);
+                if ($decoded !== false) {
+                    $record['details'] = $this->encrypter->decrypt($decoded);
+                }
             } catch (\Exception $e) {
-                $record['details'] = '[DECRYPT_ERROR]';
+                // Keep legacy/plaintext values readable.
             }
         }
 
@@ -183,10 +198,18 @@ class ActivityLogModel extends Model
      */
     public function getUserLogs(int $userId, int $limit = 50): array
     {
-        return $this->where('user_id', $userId)
-                    ->orderBy('created_at', 'DESC')
-                    ->limit($limit)
-                    ->findAll();
+        // user_id is encrypted at rest, so filter after decryption.
+        $bufferSize = max($limit * 4, 100);
+        $rows = $this->orderBy('created_at', 'DESC')
+            ->limit($bufferSize)
+            ->findAll();
+
+        $filtered = array_values(array_filter(
+            $rows,
+            static fn(array $row): bool => (int) ($row['user_id'] ?? 0) === $userId
+        ));
+
+        return array_slice($filtered, 0, $limit);
     }
 
     /**

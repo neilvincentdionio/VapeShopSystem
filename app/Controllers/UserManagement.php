@@ -3,16 +3,19 @@
 namespace App\Controllers;
 
 use App\Models\UserModel;
+use App\Libraries\ActivityLogger;
 
 class UserManagement extends BaseController
 {
     protected $userModel;
     protected $session;
+    protected $activityLogger;
 
     public function __construct()
     {
         $this->userModel = new UserModel();
         $this->session = session();
+        $this->activityLogger = new ActivityLogger();
     }
 
     /**
@@ -199,6 +202,12 @@ class UserManagement extends BaseController
                         'approval_status' => 'approved',
                     ]
                 );
+                $this->activityLogger->logAccountModified(
+                    (int) ($this->session->get('user_id') ?? 0),
+                    (string) ($user['email'] ?? ''),
+                    'approved',
+                    ['target_user_id' => (int) $id]
+                );
             }
 
             $db->transComplete();
@@ -268,6 +277,12 @@ class UserManagement extends BaseController
                         'target_email' => $data['email'],
                         'target_role' => $data['role'],
                     ]
+                );
+                $this->activityLogger->logAccountModified(
+                    (int) ($this->session->get('user_id') ?? 0),
+                    (string) $data['email'],
+                    'created',
+                    ['target_user_id' => (int) $result, 'target_role' => (string) $data['role']]
                 );
             }
 
@@ -417,6 +432,12 @@ class UserManagement extends BaseController
                         'target_role' => $data['role'],
                     ]
                 );
+                $this->activityLogger->logAccountModified(
+                    (int) ($this->session->get('user_id') ?? 0),
+                    (string) $data['email'],
+                    'updated',
+                    ['target_user_id' => (int) $id, 'target_role' => (string) $data['role']]
+                );
 
                 $updatedUser = $this->userModel->find($id);
                 $nameUpdated = $updatedUser && $updatedUser['name'] === $data['name'];
@@ -541,6 +562,12 @@ class UserManagement extends BaseController
                         'target_email' => $user['email'] ?? null,
                         'target_role' => $user['role'] ?? null,
                     ]
+                );
+                $this->activityLogger->logAccountModified(
+                    (int) ($this->session->get('user_id') ?? 0),
+                    (string) ($user['email'] ?? ''),
+                    'deleted',
+                    ['target_user_id' => (int) $id, 'target_role' => (string) ($user['role'] ?? '')]
                 );
             }
 

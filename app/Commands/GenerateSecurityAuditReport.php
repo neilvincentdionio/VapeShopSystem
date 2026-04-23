@@ -3,6 +3,7 @@
 namespace App\Commands;
 
 use App\Libraries\SecurityAuditService;
+use App\Libraries\SecurityNotificationService;
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
 
@@ -39,10 +40,19 @@ class GenerateSecurityAuditReport extends BaseCommand
             return;
         }
 
+        $alerts = $report['alerts'] ?? [];
+        if ($alerts !== []) {
+            $notifier = new SecurityNotificationService();
+            $notifier->notifySuspiciousActivity(
+                'Periodic security report detected suspicious activity.',
+                ['window_hours' => $hours, 'alerts' => $alerts]
+            );
+        }
+
         CLI::write('Security audit report generated successfully.', 'green');
         CLI::write('Path: ' . $path, 'yellow');
         CLI::write('Window: ' . $hours . ' hour(s)', 'yellow');
-        CLI::write('Alerts: ' . count($report['alerts'] ?? []), 'yellow');
+        CLI::write('Alerts: ' . count($alerts), 'yellow');
     }
 }
 

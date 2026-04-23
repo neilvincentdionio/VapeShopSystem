@@ -6,6 +6,7 @@ use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
 use App\Models\OrderModel;
+use App\Libraries\SecurityAuditService;
 
 class Dashboard extends BaseController
 {
@@ -14,6 +15,7 @@ class Dashboard extends BaseController
     protected $userModel;
     protected $productModel;
     protected $orderModel;
+    protected $securityAuditService;
 
     public function __construct()
     {
@@ -22,6 +24,7 @@ class Dashboard extends BaseController
         $this->userModel = new UserModel();
         $this->productModel = new ProductModel();
         $this->orderModel = new OrderModel();
+        $this->securityAuditService = new SecurityAuditService();
     }
 
     /**
@@ -1933,13 +1936,25 @@ class Dashboard extends BaseController
      */
     private function getNotifications($ordersToday, $revenueToday)
     {
-        if ((int) $ordersToday <= 0) {
-            return [];
+        $notifications = [];
+
+        if ((int) $ordersToday > 0) {
+            $notifications[] = ['type' => 'success', 'message' => $ordersToday . ' order(s) recorded today.'];
+            $notifications[] = ['type' => 'info', 'message' => 'Today revenue: ' . $revenueToday];
         }
 
-        return [
-            ['type' => 'success', 'message' => $ordersToday . ' order(s) recorded today.'],
-            ['type' => 'info', 'message' => 'Today revenue: ' . $revenueToday],
-        ];
+        try {
+            $alerts = $this->securityAuditService->getSuspiciousAlerts(24);
+            if ($alerts !== []) {
+                $notifications[] = [
+                    'type' => 'warning',
+                    'message' => count($alerts) . ' security alert(s) detected in the last 24 hours.',
+                ];
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to load security notifications: {message}', ['message' => $e->getMessage()]);
+        }
+
+        return $notifications;
     }
 }

@@ -29,7 +29,7 @@ class SessionLogsController extends BaseController
     public function index()
     {
         // Check if user is admin
-        if (!session()->get('user_role') === 'admin') {
+        if ((string) session()->get('user_role') !== 'admin') {
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
@@ -70,7 +70,7 @@ class SessionLogsController extends BaseController
     public function getDetails($sessionId)
     {
         // Check if user is admin
-        if (!session()->get('user_role') === 'admin') {
+        if ((string) session()->get('user_role') !== 'admin') {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -96,7 +96,7 @@ class SessionLogsController extends BaseController
     public function endSession($sessionId)
     {
         // Check if user is admin
-        if (!session()->get('user_role') === 'admin') {
+        if ((string) session()->get('user_role') !== 'admin') {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -117,14 +117,15 @@ class SessionLogsController extends BaseController
             // Log the session termination
             $user = $this->userModel->find($session['user_id']);
             if ($user) {
-                $this->activityLogger->logActivity(
-                    $session['user_id'],
+                $agent = $this->request->getUserAgent();
+                $this->activityLogModel->logActivity(
+                    (int) session()->get('user_id'),
                     "Session terminated by admin: {$session['session_id']}",
-                    'SESSION_TERMINATED',
+                    'LOGOUT',
                     $this->request->getIPAddress(),
-                    $this->request->getUserAgent()->getAgentString(),
+                    $agent ? $agent->getAgentString() : 'CLI',
                     null,
-                    'warning'
+                    'success'
                 );
             }
             
@@ -140,7 +141,7 @@ class SessionLogsController extends BaseController
     public function cleanup()
     {
         // Check if user is admin
-        if (!session()->get('user_role') === 'admin') {
+        if ((string) session()->get('user_role') !== 'admin') {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 

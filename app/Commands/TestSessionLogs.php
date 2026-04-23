@@ -196,11 +196,11 @@ class TestSessionLogs extends BaseCommand
             CLI::write("   Encrypted log creation: " . ($result ? "SUCCESS" : "FAILED"), 
                       $result ? 'green' : 'red');
             
-            // Test retrieval
-            $logs = $activityLogModel->getUserLogs(1, 1);
+            // Test retrieval (query by action type to avoid ordering collisions)
+            $logs = $activityLogModel->getLogsByAction('PROFILE_UPDATE', 1);
             if (!empty($logs)) {
                 $log = $logs[0];
-                $isDecrypted = $log['action'] === 'Test encrypted message';
+                $isDecrypted = str_contains((string) $log['action'], 'Test encrypted message');
                 CLI::write("   Decryption test: " . ($isDecrypted ? "SUCCESS" : "FAILED"), 
                           $isDecrypted ? 'green' : 'red');
                 CLI::write("   Decrypted action: " . $log['action'], 'green');

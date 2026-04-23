@@ -348,13 +348,13 @@ class AdminController extends BaseController
         $result = $this->sessionModel->endSession($session['session_id']);
         
         if ($result) {
-            // Log the action
-            $this->activityLogger->logActivity(
-                session()->get('user_id'),
+            $agent = $this->request->getUserAgent();
+            $this->activityModel->logActivity(
+                (int) session()->get('user_id'),
                 "Admin ended session for user ID: {$session['user_id']}",
-                'SESSION_ENDED',
+                'LOGOUT',
                 $this->request->getIPAddress(),
-                $this->request->getUserAgent()->getAgentString(),
+                $agent ? $agent->getAgentString() : 'CLI',
                 "Session ID: {$session['session_id']}",
                 'success'
             );
