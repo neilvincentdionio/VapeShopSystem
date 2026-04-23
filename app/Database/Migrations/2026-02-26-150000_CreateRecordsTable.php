@@ -16,7 +16,7 @@ class CreateRecordsTable extends Migration
                 'auto_increment' => true,
             ],
             'record_type' => [
-                'type'       => "ENUM('purchase','inventory','expense')",
+                'type'       => "ENUM('purchase','inventory','expense','sales')",
                 'null'       => false,
                 'default'    => 'expense',
             ],

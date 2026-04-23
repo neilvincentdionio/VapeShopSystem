@@ -34,7 +34,7 @@ class RecordModel extends Model
     protected $afterFind = ['decorateRecords'];
 
     protected $validationRules = [
-        'record_type' => 'required|in_list[purchase,inventory,expense]',
+        'record_type' => 'required|in_list[purchase,inventory,expense,sales]',
         'record_date' => 'required|valid_date[Y-m-d]',
         'reference_number' => 'required|min_length[3]|max_length[100]',
         'title' => 'required|min_length[3]|max_length[255]',

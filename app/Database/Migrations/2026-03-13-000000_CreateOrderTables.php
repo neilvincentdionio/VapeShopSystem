@@ -174,7 +174,7 @@ class CreateOrderTables extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('order_id');
+        $this->forge->addUniqueKey('order_id', 'uq_order_payments_order_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
         $this->forge->createTable('order_payments');
@@ -234,7 +234,7 @@ class CreateOrderTables extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addKey('order_id');
+        $this->forge->addUniqueKey('order_id', 'uq_order_shipments_order_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
         $this->forge->createTable('order_shipments');

@@ -6,6 +6,7 @@ use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
 use App\Models\OrderModel;
+use App\Models\RecordModel;
 use App\Libraries\SecurityAuditService;
 
 class Dashboard extends BaseController
@@ -15,6 +16,7 @@ class Dashboard extends BaseController
     protected $userModel;
     protected $productModel;
     protected $orderModel;
+    protected $recordModel;
     protected $securityAuditService;
 
     public function __construct()
@@ -24,6 +26,7 @@ class Dashboard extends BaseController
         $this->userModel = new UserModel();
         $this->productModel = new ProductModel();
         $this->orderModel = new OrderModel();
+        $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
     }
 
@@ -1151,6 +1154,8 @@ class Dashboard extends BaseController
                 throw new \RuntimeException('Checkout processing failed.');
             }
 
+            $this->syncOrderToRecord((int) $orderId);
+
             return $this->response->setStatusCode(200)->setJSON([
                 'success' => true,
                 'message' => 'Payment processed successfully! Order completed and stock updated.',
@@ -1297,6 +1302,7 @@ class Dashboard extends BaseController
             }
 
             if ($result) {
+                $this->syncOrderToRecord($orderId);
                 return $this->response->setStatusCode(200)->setJSON([
                     'success' => true,
                     'message' => 'Delivery status updated successfully.',
@@ -1763,6 +1769,8 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/orders')->with('error', $e->getMessage());
         }
 
+        $this->syncOrderToRecord((int) ($order['id'] ?? 0));
+
         return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
     }
 
@@ -1806,6 +1814,8 @@ class Dashboard extends BaseController
             $db->transRollback();
             return redirect()->to('/customer/orders')->with('error', $e->getMessage());
         }
+
+        $this->syncOrderToRecord((int) ($order['id'] ?? 0));
 
         return redirect()->to('/customer/orders')->with('success', 'Order cancelled successfully.');
     }
@@ -1853,7 +1863,85 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/orders')->with('error', 'Failed to confirm order received.');
         }
 
+        $this->syncOrderToRecord($orderId);
+
         return redirect()->to('/customer/orders?tab=completed')->with('success', 'Order received successfully. Order is now completed.');
+    }
+
+    private function syncOrderToRecord(int $orderId): void
+    {
+        if ($orderId <= 0) {
+            return;
+        }
+
+        try {
+            if (!\Config\Database::connect()->tableExists('records')) {
+                return;
+            }
+
+            $order = $this->orderModel->getOrder($orderId);
+            if (!$order) {
+                return;
+            }
+
+            $referenceNumber = trim((string) ($order['reference_number'] ?? ''));
+            if ($referenceNumber === '') {
+                return;
+            }
+
+            $recordDate = (string) ($order['record_date'] ?? $order['date'] ?? date('Y-m-d'));
+            $recordDateTs = strtotime($recordDate);
+            $normalizedDate = $recordDateTs !== false ? date('Y-m-d', $recordDateTs) : date('Y-m-d');
+
+            $deliveryStatus = strtolower((string) ($order['delivery_status'] ?? 'to_pay'));
+            $recordStatus = 'pending';
+            if (in_array($deliveryStatus, ['cancelled', 'failed_delivery'], true)) {
+                $recordStatus = 'cancelled';
+            } elseif ($deliveryStatus === 'completed') {
+                $recordStatus = 'completed';
+            }
+
+            $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+            if (!in_array($paymentMethod, ['cash', 'card', 'gcash', 'bank_transfer'], true)) {
+                $paymentMethod = 'cash';
+            }
+
+            $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+            if (!in_array($paymentStatus, ['paid', 'partial', 'unpaid'], true)) {
+                $paymentStatus = 'unpaid';
+            }
+
+            $payload = [
+                'record_type' => 'sales',
+                'record_date' => $normalizedDate,
+                'reference_number' => $referenceNumber,
+                'title' => trim((string) ($order['title'] ?? 'Sales Order')),
+                'description' => trim((string) ($order['description'] ?? 'Auto-synced from Orders module')),
+                'quantity' => max(0, (int) ($order['quantity'] ?? 0)),
+                'unit_price' => max(0, (float) ($order['unit_price'] ?? 0)),
+                'payment_method' => $paymentMethod,
+                'payment_status' => $paymentStatus,
+                'status' => $recordStatus,
+                'notes' => trim((string) ($order['notes'] ?? '')),
+                'created_by' => (int) ($this->session->get('user_id') ?? $order['created_by'] ?? 0) ?: null,
+            ];
+
+            $existing = $this->recordModel
+                ->where('record_type', 'sales')
+                ->where('reference_number', $referenceNumber)
+                ->first();
+
+            if ($existing && isset($existing['id'])) {
+                $this->recordModel->update((int) $existing['id'], $payload);
+            } else {
+                $this->recordModel->insert($payload);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed syncing order {id} to records: {message}', [
+                'id' => $orderId,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function reorderItems($order)

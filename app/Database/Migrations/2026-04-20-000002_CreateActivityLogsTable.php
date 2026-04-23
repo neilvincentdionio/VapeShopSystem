@@ -61,6 +61,7 @@ class CreateActivityLogsTable extends Migration
         $this->forge->addKey('created_at');
         
         $this->forge->createTable('activity_logs');
+        $this->db->query('ALTER TABLE activity_logs ADD KEY idx_activity_logs_type_status_created (action_type, status, created_at)');
     }
 
     public function down()
