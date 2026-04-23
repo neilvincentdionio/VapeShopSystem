@@ -237,40 +237,52 @@
             border-color: #218838;
         }
 
-        .btn-info-soft {
-            background: #d8f3f9;
-            border: 1px solid #8fd7e6;
-            color: #0b6c84;
+        .btn-view {
+            background: #0ea5e9;
+            border-color: #0ea5e9;
+            color: #ffffff;
         }
 
-        .btn-info-soft:hover {
-            background: #c7ecf4;
-            border-color: #78cddd;
-            color: #075d73;
+        .btn-view:hover {
+            background: #0284c7;
+            border-color: #0284c7;
+            color: #ffffff;
         }
 
-        .btn-danger-soft {
-            background: #fde2e6;
-            border: 1px solid #f5b7c0;
-            color: #a32135;
+        .btn-edit {
+            background: #d48806;
+            border-color: #d48806;
+            color: #ffffff;
         }
 
-        .btn-danger-soft:hover {
-            background: #fbd3db;
-            border-color: #f09faa;
-            color: #8a1629;
+        .btn-edit:hover {
+            background: #b36f00;
+            border-color: #b36f00;
+            color: #ffffff;
         }
 
-        .btn-approve-soft {
-            background: #fff3cd;
-            border: 1px solid #ffe08a;
-            color: #7a5a00;
+        .btn-delete {
+            background: #dc3545;
+            border-color: #dc3545;
+            color: #ffffff;
         }
 
-        .btn-approve-soft:hover {
-            background: #ffe8a6;
-            border-color: #f6d56d;
-            color: #6a4d00;
+        .btn-delete:hover {
+            background: #b52a37;
+            border-color: #b52a37;
+            color: #ffffff;
+        }
+
+        .btn-approve {
+            background: #1f9d55;
+            border-color: #1f9d55;
+            color: #ffffff;
+        }
+
+        .btn-approve:hover {
+            background: #167a42;
+            border-color: #167a42;
+            color: #ffffff;
         }
 
         .users-table {
@@ -382,12 +394,16 @@
             padding: 0.4rem 0.75rem;
             font-size: 0.85rem;
             border-radius: 8px;
+            min-width: 52px;
+            text-align: center;
         }
 
         .actions button {
             padding: 0.4rem 0.75rem;
             font-size: 0.85rem;
             border-radius: 8px;
+            min-width: 52px;
+            text-align: center;
         }
 
         .alert {
@@ -520,23 +536,23 @@
                                     <div class="actions">
                                         <?php if ($user['role'] === 'customer'): ?>
                                             <a href="<?= site_url('user-management/view/' . $user['id']) ?>" 
-                                               class="btn btn-info-soft">
+                                               class="btn btn-view">
                                                 View
                                             </a>
                                         <?php endif; ?>
                                         <?php if ($user['role'] === 'customer' && $approvalStatus === 'pending'): ?>
                                             <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post">
                                                 <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-approve-soft">Approve</button>
+                                                <button type="submit" class="btn btn-approve">Approve</button>
                                             </form>
                                         <?php endif; ?>
                                         <a href="<?= site_url('user-management/edit/' . $user['id']) ?>" 
-                                           class="btn btn-info-soft">
+                                           class="btn btn-edit">
                                             Edit
                                         </a>
                                         <?php if ($user['role'] !== 'admin'): ?>
                                         <a href="<?= site_url('user-management/delete/' . $user['id']) ?>" 
-                                           class="btn btn-danger-soft">
+                                           class="btn btn-delete">
                                             Delete
                                         </a>
                                         <?php endif; ?>

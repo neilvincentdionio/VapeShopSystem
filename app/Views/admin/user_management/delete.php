@@ -158,13 +158,11 @@
         }
 
         .delete-container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             padding: 2rem;
             border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
         }
 
         .delete-header {
@@ -174,98 +172,92 @@
 
         .delete-header h1 {
             font-size: 1.8rem;
-            color: #ffffff;
+            color: #111827;
             margin-bottom: 0.5rem;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .delete-header .warning {
-            color: #ffc107;
+            color: #b45309;
             font-size: 1.1rem;
             margin-bottom: 1rem;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .user-info {
-            background: rgba(220, 53, 69, 0.2);
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
             padding: 1.5rem;
             border-radius: 15px;
             margin-bottom: 2rem;
         }
 
         .user-info h3 {
-            color: #ffffff;
+            color: #9f1239;
             margin-bottom: 1rem;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .user-info p {
             margin-bottom: 0.5rem;
-            color: #f8d7da;
+            color: #374151;
         }
 
         .user-info strong {
-            color: #ffffff;
+            color: #111827;
         }
 
         .confirmation-text {
             text-align: center;
             margin-bottom: 2rem;
             padding: 1rem;
-            background: rgba(255, 193, 7, 0.1);
-            border: 1px solid rgba(255, 193, 7, 0.2);
+            background: #fffbeb;
+            border: 1px solid #fde68a;
             border-radius: 10px;
         }
 
         .confirmation-text p {
-            color: #fff3cd;
+            color: #92400e;
             font-size: 1.1rem;
             line-height: 1.6;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .btn-danger {
-            background: rgba(220, 53, 69, 0.2);
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            color: #f8d7da;
+            background: #dc2626;
+            border: 1px solid #b91c1c;
+            color: #ffffff;
         }
 
         .btn-danger:hover {
-            background: rgba(220, 53, 69, 0.3);
-            border-color: rgba(220, 53, 69, 0.4);
+            background: #b91c1c;
+            border-color: #991b1b;
         }
 
         .btn {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #e5e7eb;
+            color: #111827;
+            border: 1px solid #d1d5db;
             border-radius: 10px;
             font-size: 1rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
-            backdrop-filter: blur(10px);
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
             margin-bottom: 1rem;
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: #d1d5db;
+            border-color: #9ca3af;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
 
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.25);
+            background: #e5e7eb;
         }
 
         .alert {
@@ -287,10 +279,9 @@
         }
 
         .back-link a {
-            color: #667eea;
+            color: #2563eb;
             text-decoration: none;
             font-size: 0.9rem;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .back-link a:hover {
@@ -328,7 +319,7 @@
         <div class="delete-container">
             <div class="delete-header">
                 <h1>Delete User Account</h1>
-                <div class="warning">⚠️ This action cannot be undone!</div>
+                <div class="warning">Warning: This action cannot be undone!</div>
             </div>
 
             <div class="user-info">
@@ -350,19 +341,19 @@
                 <?= csrf_field() ?>
                 
                 <button type="submit" class="btn btn-danger">
-                    🗑️ Yes, Delete This User Account
+                    Yes, Delete This User Account
                 </button>
             </form>
 
             <button type="button" class="btn btn-secondary" onclick="history.back()">
-                ← Cancel, Go Back
+                Back to Previous Page
             </button>
         </div>
     </div>
 
     <script>
         function confirmDelete() {
-            const confirmation = confirm('Are you absolutely sure you want to delete this user?\n\nThis will permanently remove:\n• User account and all data\n• Login history\n• System access\n\nThis action CANNOT be undone!');
+            const confirmation = confirm('Are you absolutely sure you want to delete this user?\n\nThis will permanently remove:\n- User account and all data\n- Login history\n- System access\n\nThis action CANNOT be undone!');
             
             if (!confirmation) {
                 return false;
