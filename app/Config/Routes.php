@@ -157,6 +157,15 @@ $routes->get('/backup/stats', 'BackupController::stats', ['filter' => ['auth:adm
 // Test route
 $routes->get('/admin/test', 'AdminController::test');
 
+// Simple test routes for debugging
+$routes->get('/test-dashboard', function() {
+    return "Dashboard test works!";
+});
+
+$routes->get('/test-products', function() {
+    return "Products test works!";
+});
+
 // Session and Activity Logs routes (Admin only)
 $routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' => 'auth:admin']);
 $routes->get('/admin/get-session-details/(.+)', 'AdminController::getSessionDetails/$1', ['filter' => 'auth:admin']);
@@ -182,3 +191,21 @@ $routes->post('/api/auth/mfa/resend', 'ApiAuth::resendMfa');
 $routes->post('/api/auth/refresh', 'ApiAuth::refresh');
 $routes->post('/api/auth/logout', 'ApiAuth::logout');
 $routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => ['jwtauth', 'permission:read']]);
+
+// Review and Rating routes
+$routes->get('/customer/review/form', 'Dashboard::reviewForm', ['filter' => 'auth']);
+$routes->post('/customer/review/submit', 'Dashboard::submitReview', ['filter' => 'auth']);
+$routes->post('/customer/review/helpful', 'Dashboard::markReviewHelpful', ['filter' => 'auth']);
+$routes->get('/customer/reviews/order/(:num)', 'Dashboard::getCustomerOrderReviews/$1', ['filter' => 'auth']);
+
+// Admin Dashboard routes
+$routes->get('/admin-dashboard', 'AdminDashboard::index', ['filter' => 'auth:admin']);
+$routes->get('/adminDashboard/getRevenueData', 'AdminDashboard::getRevenueData', ['filter' => 'auth:admin']);
+$routes->post('/adminDashboard/approveReview/(:num)', 'AdminDashboard::approveReview/$1', ['filter' => 'auth:admin']);
+$routes->post('/adminDashboard/rejectReview/(:num)', 'AdminDashboard::rejectReview/$1', ['filter' => 'auth:admin']);
+
+// Admin review management routes
+$routes->get('/admin/reviews/product/(:num)', 'Dashboard::getProductReviews/$1', ['filter' => 'auth:admin']);
+$routes->get('/admin/reviews/order/(:num)', 'Dashboard::getOrderReviews/$1');
+$routes->post('/admin/reviews/approve/(:num)', 'Dashboard::approveReview/$1', ['filter' => 'auth:admin']);
+$routes->post('/admin/reviews/reject/(:num)', 'Dashboard::rejectReview/$1', ['filter' => 'auth:admin']);
