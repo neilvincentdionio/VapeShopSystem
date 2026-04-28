@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            font-family: var(--main-font);
+            background: #ffffff;
+            min-height: 100vh; position: relative; color: #333333;
+        }
+        .navbar {
+            position: sticky; top: 0; z-index: 20;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .navbar-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 1.2rem; }
+        .navbar-brand {
+            color: #333333;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
+        .navbar-center { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
+        .navbar-menu { display: flex; align-items: center; gap: .75rem; flex-wrap: nowrap; }
+        .navbar-menu a, .nav-dropdown-btn {
+            color: #333333;
+            text-decoration: none;
+            padding: .5rem 1rem;
+            border-radius: 5px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: .95rem;
+            transition: all .3s;
+        }
+        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: #f8f9fa; color: #27c56f; }
+        .nav-dropdown { position: relative; }
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: .5rem;
+            min-width: 220px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content a { 
+            display: block; 
+            color: #333333; 
+            text-decoration: none; 
+            padding: .5rem 1rem; 
+            transition: background-color .3s; 
+        }
+        .nav-dropdown-content a:hover { 
+            background-color: #f8f9fa; 
+            color: #27c56f; 
+        }
+        .nav-right { display: flex; align-items: center; gap: .8rem; flex: 0 0 auto; }
+        .user-info { display: flex; align-items: center; gap: .55rem; color: #333333; }
+        .user-name {
+            max-width: 170px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: rgba(255,255,255,.2);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700;
+        }
+        .badge {
+            border: 1px solid rgba(255,255,255,.3);
+            padding: .2rem .5rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+        .nav-link { padding: .45rem .75rem; border-radius: 6px; }
+        .container { max-width: 760px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
+        .panel {
+            background: rgba(255,255,255,.1);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 16px;
+            padding: 1.2rem;
+            backdrop-filter: blur(18px);
+        }
+        .field {
+            margin-bottom: 1rem;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: .4rem;
+            color: #333333;
+            font-weight: 500;
+        }
+
+        .field input,
+        .field select,
+        .field textarea {
+            width: 100%;
+            padding: .55rem .7rem;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            background: #ffffff;
+            color: #333333;
+            font-family: inherit;
+        }
+        .field select option { color: #000; }
+        .error-list { margin-top: .8rem; color: #ffd2d2; }
+        .actions { margin-top: 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
+        .btn {
+            text-decoration: none;
+            padding: .55rem .85rem;
+            border-radius: 8px;
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-primary { background: #2f6fed; }
+        .btn-secondary { background: #6b7280; }
+        @media (max-width: 768px) {
+            .navbar-content { flex-direction: column; align-items: stretch; gap: .75rem; }
+            .navbar-center { justify-content: flex-start; }
+            .navbar-menu { flex-wrap: wrap; }
+            .nav-right { justify-content: space-between; }
+        }
+    </style>
+<?= $this->include('admin/partials/sidebar_styles') ?>
+</head>
+<body>
+    <?= $this->include('admin/partials/sidebar') ?>
+
+    <div class="container">
+        <div class="panel">
+            <h2><?= $is_edit ? 'Edit Record' : 'Add New Record' ?></h2>
+            <?php if (!empty($user_shop_name)): ?><p style="margin-top:.4rem;">Shop: <?= htmlspecialchars($user_shop_name) ?></p><?php endif; ?>
+
+            <?php if (!empty($errors)): ?>
+                <ul class="error-list">
+                    <?php foreach ($errors as $error): ?>
+                        <li><?= htmlspecialchars($error) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+
+            <form method="post" action="<?= $is_edit ? site_url('records/update/' . $record['id']) : site_url('records/store') ?>">
+                <?= csrf_field() ?>
+                <div class="field">
+                    <label>Date</label>
+                    <?php
+                        $currentDate = old('date', $record['date'] ?? ($record['record_date'] ?? date('Y-m-d')));
+                        $dateTs = strtotime((string) $currentDate);
+                        $dateValue = $dateTs !== false ? date('Y-m-d', $dateTs) : date('Y-m-d');
+                    ?>
+                    <input type="date" name="date" value="<?= htmlspecialchars($dateValue) ?>" required>
+                </div>
+                <div class="field">
+                    <label>Record Type</label>
+                    <?php $currentType = old('record_type', $record['record_type'] ?? 'purchase'); ?>
+                    <select name="record_type" required>
+                        <option value="purchase" <?= $currentType === 'purchase' ? 'selected' : '' ?>>Purchase</option>
+                        <option value="inventory" <?= $currentType === 'inventory' ? 'selected' : '' ?>>Inventory</option>
+                        <option value="expense" <?= $currentType === 'expense' ? 'selected' : '' ?>>Expense</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Reference Number</label>
+                    <input type="text" name="reference_number" value="<?= old('reference_number', $record['reference_number'] ?? '') ?>" required>
+                </div>
+                <div class="field">
+                    <label>Title</label>
+                    <input type="text" name="title" value="<?= old('title', $record['title'] ?? '') ?>" required>
+                </div>
+                <div class="field">
+                    <label>Description</label>
+                    <input type="text" name="description" value="<?= old('description', $record['description'] ?? '') ?>">
+                </div>
+                <div class="field">
+                    <label>Quantity</label>
+                    <input type="number" name="quantity" min="0" value="<?= old('quantity', $record['quantity'] ?? 0) ?>" required>
+                </div>
+                <div class="field">
+                    <label>Unit Price</label>
+                    <input type="number" name="unit_price" step="0.01" min="0" value="<?= old('unit_price', $record['unit_price'] ?? '0.00') ?>" required>
+                </div>
+                <div class="field">
+                    <label>Payment Method</label>
+                    <?php $currentMethod = old('payment_method', $record['payment_method'] ?? 'cash'); ?>
+                    <select name="payment_method">
+                        <option value="cash" <?= $currentMethod === 'cash' ? 'selected' : '' ?>>Cash</option>
+                        <option value="card" <?= $currentMethod === 'card' ? 'selected' : '' ?>>Card</option>
+                        <option value="gcash" <?= $currentMethod === 'gcash' ? 'selected' : '' ?>>GCash</option>
+                        <option value="bank_transfer" <?= $currentMethod === 'bank_transfer' ? 'selected' : '' ?>>Bank Transfer</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Payment Status</label>
+                    <?php $currentPaymentStatus = old('payment_status', $record['payment_status'] ?? 'unpaid'); ?>
+                    <select name="payment_status">
+                        <option value="paid" <?= $currentPaymentStatus === 'paid' ? 'selected' : '' ?>>Paid</option>
+                        <option value="partial" <?= $currentPaymentStatus === 'partial' ? 'selected' : '' ?>>Partial</option>
+                        <option value="unpaid" <?= $currentPaymentStatus === 'unpaid' ? 'selected' : '' ?>>Unpaid</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Status</label>
+                    <?php $currentStatus = old('status', $record['status'] ?? 'pending'); ?>
+                    <select name="status" required>
+                        <option value="pending" <?= $currentStatus === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="completed" <?= $currentStatus === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="cancelled" <?= $currentStatus === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Notes</label>
+                    <input type="text" name="notes" value="<?= old('notes', $record['notes'] ?? '') ?>">
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary"><?= $is_edit ? 'Update Record' : 'Save Record' ?></button>
+                    <a href="<?= site_url('records') ?>" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
+
+
+
+
+

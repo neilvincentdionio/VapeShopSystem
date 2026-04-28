@@ -1,0 +1,292 @@
+2026-04-08 18:39:47 - UserModel update called with ID: 2
+2026-04-08 18:39:47 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:39:47
+)
+
+2026-04-08 18:39:47 - UserModel update result: SUCCESS
+2026-04-08 18:39:47 - Parent update affected rows: 1
+2026-04-08 18:39:53 - UserModel update called with ID: 2
+2026-04-08 18:39:53 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:39:53
+)
+
+2026-04-08 18:39:53 - UserModel update result: SUCCESS
+2026-04-08 18:39:53 - Parent update affected rows: 1
+2026-04-08 18:40:10 - UserModel update called with ID: 2
+2026-04-08 18:40:10 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:40:10
+)
+
+2026-04-08 18:40:10 - UserModel update result: SUCCESS
+2026-04-08 18:40:10 - Parent update affected rows: 1
+2026-04-08 18:40:44 - UserModel update called with ID: 2
+2026-04-08 18:40:44 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:40:44
+)
+
+2026-04-08 18:40:44 - UserModel update result: SUCCESS
+2026-04-08 18:40:44 - Parent update affected rows: 1
+2026-04-08 18:41:00 - UserModel update called with ID: 2
+2026-04-08 18:41:00 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:41:00
+)
+
+2026-04-08 18:41:00 - UserModel update result: SUCCESS
+2026-04-08 18:41:00 - Parent update affected rows: 1
+2026-04-08 18:42:25 - UserModel update called with ID: 1
+2026-04-08 18:42:25 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:42:25
+)
+
+2026-04-08 18:42:25 - UserModel update result: SUCCESS
+2026-04-08 18:42:25 - Parent update affected rows: 1
+2026-04-08 18:45:30 - UserModel update called with ID: 2
+2026-04-08 18:45:30 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:45:30
+)
+
+2026-04-08 18:45:30 - UserModel update result: SUCCESS
+2026-04-08 18:45:30 - Parent update affected rows: 1
+2026-04-08 18:46:28 - UserModel update called with ID: 1
+2026-04-08 18:46:28 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 18:46:28
+)
+
+2026-04-08 18:46:28 - UserModel update result: SUCCESS
+2026-04-08 18:46:28 - Parent update affected rows: 1
+2026-04-08 19:15:13 - UserModel update called with ID: 2
+2026-04-08 19:15:13 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:15:13
+)
+
+2026-04-08 19:15:13 - UserModel update result: SUCCESS
+2026-04-08 19:15:13 - Parent update affected rows: 1
+2026-04-08 19:17:42 - UserModel update called with ID: 2
+2026-04-08 19:17:42 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:17:42
+)
+
+2026-04-08 19:17:42 - UserModel update result: SUCCESS
+2026-04-08 19:17:42 - Parent update affected rows: 1
+2026-04-08 19:20:19 - UserModel update called with ID: 2
+2026-04-08 19:20:19 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:20:19
+)
+
+2026-04-08 19:20:19 - UserModel update result: SUCCESS
+2026-04-08 19:20:19 - Parent update affected rows: 1
+2026-04-08 19:20:51 - UserModel update called with ID: 2
+2026-04-08 19:20:51 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:20:51
+)
+
+2026-04-08 19:20:51 - UserModel update result: SUCCESS
+2026-04-08 19:20:51 - Parent update affected rows: 1
+2026-04-08 19:24:37 - UserModel update called with ID: 1
+2026-04-08 19:24:37 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:24:37
+)
+
+2026-04-08 19:24:37 - UserModel update result: SUCCESS
+2026-04-08 19:24:37 - Parent update affected rows: 1
+2026-04-08 19:25:56 - UserModel update called with ID: 2
+2026-04-08 19:25:56 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:25:56
+)
+
+2026-04-08 19:25:56 - UserModel update result: SUCCESS
+2026-04-08 19:25:56 - Parent update affected rows: 1
+2026-04-08 19:39:22 - UserModel update called with ID: 2
+2026-04-08 19:39:22 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-08 19:39:22
+)
+
+2026-04-08 19:39:22 - UserModel update result: SUCCESS
+2026-04-08 19:39:22 - Parent update affected rows: 1
+2026-04-09 13:20:42 - UserModel update called with ID: 14
+2026-04-09 13:20:42 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 13:20:42
+)
+
+2026-04-09 13:20:43 - UserModel update result: SUCCESS
+2026-04-09 13:20:43 - Parent update affected rows: 1
+2026-04-09 13:21:00 - UserModel update called with ID: 1
+2026-04-09 13:21:00 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 13:21:00
+)
+
+2026-04-09 13:21:00 - UserModel update result: SUCCESS
+2026-04-09 13:21:00 - Parent update affected rows: 1
+2026-04-09 13:22:18 - UserModel update called with ID: 13
+2026-04-09 13:22:18 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 13:22:18
+)
+
+2026-04-09 13:22:18 - UserModel update result: SUCCESS
+2026-04-09 13:22:18 - Parent update affected rows: 1
+2026-04-09 13:28:21 - UserModel update called with ID: 13
+2026-04-09 13:28:21 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 13:28:21
+)
+
+2026-04-09 13:28:21 - UserModel update result: SUCCESS
+2026-04-09 13:28:21 - Parent update affected rows: 1
+2026-04-09 14:12:12 - UserModel update called with ID: 1
+2026-04-09 14:12:12 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 14:12:12
+)
+
+2026-04-09 14:12:12 - UserModel update result: SUCCESS
+2026-04-09 14:12:12 - Parent update affected rows: 1
+2026-04-09 14:12:56 - UserModel update called with ID: 13
+2026-04-09 14:12:56 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-09 14:12:56
+)
+
+2026-04-09 14:12:57 - UserModel update result: SUCCESS
+2026-04-09 14:12:57 - Parent update affected rows: 1
+2026-04-10 11:14:26 - UserModel update called with ID: 1
+2026-04-10 11:14:26 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 11:14:26
+)
+
+2026-04-10 11:14:26 - UserModel update result: SUCCESS
+2026-04-10 11:14:26 - Parent update affected rows: 1
+2026-04-10 11:26:20 - UserModel update called with ID: 2
+2026-04-10 11:26:20 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 11:26:20
+)
+
+2026-04-10 11:26:20 - UserModel update result: SUCCESS
+2026-04-10 11:26:20 - Parent update affected rows: 1
+2026-04-10 13:36:01 - UserModel update called with ID: 1
+2026-04-10 13:36:01 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 13:36:01
+)
+
+2026-04-10 13:36:01 - UserModel update result: SUCCESS
+2026-04-10 13:36:01 - Parent update affected rows: 1
+2026-04-10 15:14:17 - UserModel update called with ID: 1
+2026-04-10 15:14:17 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 15:14:17
+)
+
+2026-04-10 15:14:17 - UserModel update result: SUCCESS
+2026-04-10 15:14:17 - Parent update affected rows: 1
+2026-04-10 15:14:37 - UserModel update called with ID: 2
+2026-04-10 15:14:37 - UserModel update data: Array
+(
+    [login_attempts] => 0
+    [locked_until] => 
+    [last_login] => 2026-04-10 15:14:37
+)
+
+2026-04-10 15:14:37 - UserModel update result: SUCCESS
+2026-04-10 15:14:37 - Parent update affected rows: 1
+2026-04-10 16:01:32 - UserModel update called with ID: 2
+2026-04-10 16:01:32 - UserModel update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [phone_number] => +63 9365879409
+    [address_line] => 22 Vapor Street
+    [city] => 
+    [country] => Philippines
+    [barangay] => 
+    [province] => 
+    [postal_code] => 1100
+)
+
+2026-04-10 16:01:32 - UserModel update result: SUCCESS
+2026-04-10 16:01:32 - Parent update affected rows: 1
+2026-04-10 16:07:07 - UserModel update called with ID: 2
+2026-04-10 16:07:07 - UserModel update data: Array
+(
+    [name] => Customer
+    [email] => customer@vapeshop.com
+    [phone_number] => +63 9365879409
+    [address_line] => 22 Vapor Street
+    [city] => Iligan City
+    [country] => Philippines
+    [barangay] => Pala-o
+    [province] => Lanao del Norte
+    [postal_code] => 9200
+)
+
+2026-04-10 16:07:07 - UserModel update result: SUCCESS
+2026-04-10 16:07:07 - Parent update affected rows: 1
