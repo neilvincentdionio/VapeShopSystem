@@ -31,6 +31,9 @@
         margin-bottom: 2rem;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         border: 1px solid #e0e0e0;
+        position: sticky;
+        top: 80px;
+        z-index: 10;
     }
     
     .search-filter-row {
@@ -105,7 +108,7 @@
 
     .cart-sidebar {
         position: sticky;
-        top: 110px;
+        top: 180px;
         background: #ffffff;
         border: 1px solid #e0e0e0;
         border-radius: 16px;
@@ -483,7 +486,9 @@
 
     .checkout-modal-card {
         width: 100%;
-        max-width: 480px;
+        max-width: 560px;
+        max-height: 92vh;
+        overflow-y: auto;
         background: #ffffff;
         border: 1px solid #e0e0e0;
         border-radius: 16px;
@@ -541,6 +546,54 @@
         padding: 0.7rem 0.85rem;
         font-size: 0.9rem;
         outline: none;
+    }
+
+    .checkout-address-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: .9rem;
+        margin-bottom: .8rem;
+        background: #f8f9fa;
+    }
+
+    .checkout-address-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+    }
+
+    .checkout-address-grid .full {
+        grid-column: 1 / -1;
+    }
+
+    .checkout-location-row {
+        display: flex;
+        gap: .6rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: .75rem;
+    }
+
+    .btn-location {
+        border: 1px solid #27c56f;
+        background: rgba(39, 197, 111, 0.1);
+        color: #1d9f57;
+        border-radius: 8px;
+        padding: .6rem .8rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .location-status {
+        color: #666666;
+        font-size: .86rem;
+        line-height: 1.4;
+    }
+
+    @media (max-width: 560px) {
+        .checkout-address-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
     }
 
     .gcash-box {
@@ -793,6 +846,75 @@
                 <input class="checkout-input" type="text" id="popup_gcash_reference" name="gcash_reference" maxlength="50" placeholder="Enter GCash reference number">
             </div>
 
+            <div class="checkout-address-card">
+                <div class="checkout-field">
+                    <label class="checkout-label">Delivery Address</label>
+                    <div class="checkout-location-row" style="margin-top:0;">
+                        <label>
+                            <input type="radio" name="delivery_address_mode" value="manual" checked onchange="toggleDeliveryAddressMode()">
+                            Enter address
+                        </label>
+                        <label>
+                            <input type="radio" name="delivery_address_mode" value="saved_address" onchange="toggleDeliveryAddressMode()">
+                            Use My Address
+                        </label>
+                    </div>
+                </div>
+
+                <div id="manual_delivery_fields" class="checkout-address-grid">
+                    <div class="checkout-field full">
+                        <label class="checkout-label" for="delivery_address_line">Street Address</label>
+                        <input class="checkout-input" type="text" id="delivery_address_line" name="delivery_address_line" placeholder="Street / House No.">
+                    </div>
+
+                    <div class="checkout-field">
+                        <label class="checkout-label" for="delivery_country">Country</label>
+                        <select class="checkout-input" id="delivery_country" name="delivery_country">
+                            <option value="Philippines" selected>Philippines</option>
+                        </select>
+                    </div>
+
+                    <div class="checkout-field">
+                        <label class="checkout-label" for="delivery_province">Province</label>
+                        <select class="checkout-input" id="delivery_province" name="delivery_province">
+                            <option value="South Cotabato" selected>South Cotabato</option>
+                        </select>
+                    </div>
+
+                    <div class="checkout-field">
+                        <label class="checkout-label" for="delivery_city">City / Municipality</label>
+                        <select class="checkout-input" id="delivery_city" name="delivery_city">
+                            <option value="">Select City / Municipality</option>
+                        </select>
+                    </div>
+
+                    <div class="checkout-field">
+                        <label class="checkout-label" for="delivery_barangay">Barangay</label>
+                        <select class="checkout-input" id="delivery_barangay" name="delivery_barangay">
+                            <option value="">Select Barangay</option>
+                        </select>
+                    </div>
+
+                    <div class="checkout-field">
+                        <label class="checkout-label" for="delivery_postal_code">Postal Code</label>
+                        <input class="checkout-input" type="text" id="delivery_postal_code" name="delivery_postal_code" placeholder="Postal code">
+                    </div>
+                </div>
+
+                <div id="saved_address_fields" style="display:none;">
+                    <div class="location-status">
+                        <?= !empty($customer_delivery_address)
+                            ? 'Saved address: ' . esc($customer_delivery_address)
+                            : 'No saved address found. Please enter your delivery address manually.' ?>
+                    </div>
+                </div>
+
+                <div class="checkout-field" style="margin-top:.8rem;">
+                    <label class="checkout-label" for="delivery_description">Description</label>
+                    <textarea class="checkout-input" id="delivery_description" name="delivery_description" rows="3" maxlength="255" placeholder="Add delivery notes, landmarks, or instructions"></textarea>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary" style="width:100%;">Place Order</button>
         </form>
     </div>
@@ -805,6 +927,32 @@ const gcashMerchantNumber = '+639365879409';
 const gcashMerchantName = 'QuickPuff VapeShop';
 const checkoutTotal = <?= json_encode((float) ($cart_total ?? 0)) ?>;
 let currentGcashQrPayload = '';
+
+const deliveryAddressData = {
+    'South Cotabato': {
+        'General Santos City': [],
+        'Koronadal City': []
+    }
+};
+
+const deliveryBarangayOverrides = {
+    'General Santos City': [
+        'Apopong', 'Baluan', 'Bawing', 'Buayan', 'Bula', 'Calumpang', 'City Heights',
+        'Conel', 'Dadiangas East', 'Dadiangas North', 'Dadiangas South', 'Dadiangas West',
+        'Fatima', 'Katangawan', 'Labangal', 'Lagao', 'Ligaya', 'Mabuhay', 'Olympog',
+        'San Isidro', 'San Jose', 'Siguel', 'Sinawal', 'Tambler', 'Tinagacan', 'Upper Labay'
+    ],
+    'Koronadal City': [
+        'Avancena', 'Cacub', 'Caloocan', 'Carpenter Hill', 'Concepcion',
+        'General Paulino Santos', 'Mabini', 'Magsaysay', 'Morales', 'San Isidro',
+        'Santa Cruz', 'Zone I', 'Zone II', 'Zone III', 'Zone IV'
+    ]
+};
+
+const deliveryPostalCodes = {
+    'General Santos City': '9500',
+    'Koronadal City': '9506'
+};
 
 function showToast(message, type = 'processing', showSpinner = false) {
     // Remove existing toast if any
@@ -844,6 +992,7 @@ function processDirectOrder() {
 function openCheckoutModal() {
     const modal = document.getElementById('checkoutModal');
     if (!modal) return;
+    initDeliveryAddressFields();
     modal.classList.add('show');
 }
 
@@ -905,7 +1054,96 @@ function validateCheckoutModal() {
         }
     }
 
+    const addressMode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+    if (addressMode === 'manual') {
+        const requiredFields = [
+            ['delivery_address_line', 'Please enter your street address.'],
+            ['delivery_city', 'Please select your city or municipality.'],
+            ['delivery_barangay', 'Please select your barangay.'],
+            ['delivery_postal_code', 'Please enter your postal code.']
+        ];
+
+        for (const [fieldId, message] of requiredFields) {
+            const field = document.getElementById(fieldId);
+            if (!field || !(field.value || '').trim()) {
+                alert(message);
+                if (field) field.focus();
+                return false;
+            }
+        }
+    } else {
+        const savedAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
+        if (!savedAddress.trim()) {
+            alert('No saved address found. Please enter your delivery address manually.');
+            return false;
+        }
+    }
+
     return true;
+}
+
+function renderDeliveryOptions(select, values, placeholder, selectedValue = '') {
+    if (!select) return;
+    select.innerHTML = '';
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = placeholder;
+    select.appendChild(placeholderOption);
+
+    values.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        if (selectedValue === value) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+function initDeliveryAddressFields() {
+    const provinceSelect = document.getElementById('delivery_province');
+    const citySelect = document.getElementById('delivery_city');
+    if (!provinceSelect || !citySelect || citySelect.dataset.initialized === '1') {
+        return;
+    }
+
+    renderDeliveryOptions(provinceSelect, ['South Cotabato'], 'Select Province', 'South Cotabato');
+    renderDeliveryOptions(citySelect, Object.keys(deliveryAddressData['South Cotabato']), 'Select City / Municipality');
+    citySelect.dataset.initialized = '1';
+
+    citySelect.addEventListener('change', function () {
+        loadDeliveryBarangays();
+        updateDeliveryPostalCode();
+    });
+}
+
+function loadDeliveryBarangays() {
+    const city = document.getElementById('delivery_city')?.value || '';
+    const barangaySelect = document.getElementById('delivery_barangay');
+    const barangays = deliveryBarangayOverrides[city] || [];
+    renderDeliveryOptions(barangaySelect, barangays, 'Select Barangay');
+}
+
+function updateDeliveryPostalCode() {
+    const city = document.getElementById('delivery_city')?.value || '';
+    const postalInput = document.getElementById('delivery_postal_code');
+    if (postalInput && deliveryPostalCodes[city]) {
+        postalInput.value = deliveryPostalCodes[city];
+    }
+}
+
+function toggleDeliveryAddressMode() {
+    const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+    const manualFields = document.getElementById('manual_delivery_fields');
+    const savedAddressFields = document.getElementById('saved_address_fields');
+
+    if (manualFields) {
+        manualFields.style.display = mode === 'manual' ? 'grid' : 'none';
+    }
+    if (savedAddressFields) {
+        savedAddressFields.style.display = mode === 'saved_address' ? 'block' : 'none';
+    }
 }
 
 function addToCart(productId) {

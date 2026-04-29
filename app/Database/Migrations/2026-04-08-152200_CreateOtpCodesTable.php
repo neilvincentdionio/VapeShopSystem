@@ -56,7 +56,7 @@ class CreateOtpCodesTable extends Migration
         $this->forge->addKey('user_id');
         $this->forge->addKey('expiry_time');
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('otp_codes');
+        $this->forge->createTable('otp_codes', true);
     }
 
     public function down()

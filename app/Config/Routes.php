@@ -74,6 +74,10 @@ $routes->get('/customer/user-management', static function () {
     return redirect()->to('/dashboard')->with('error', 'Access denied.');
 }, ['filter' => 'auth']);
 
+// Rider dashboard routes (Rider only)
+$routes->get('/rider/dashboard', 'Dashboard::riderDashboard', ['filter' => 'auth:rider']);
+$routes->get('/rider/deliveries', 'Dashboard::riderDeliveries', ['filter' => 'auth:rider']);
+
 // User Management routes (protected by AuthFilter)
 $routes->get('/user-management', 'UserManagement::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
 $routes->get('/user-management/create', 'UserManagement::create', ['filter' => ['auth:admin', 'permission:manage_users']]);

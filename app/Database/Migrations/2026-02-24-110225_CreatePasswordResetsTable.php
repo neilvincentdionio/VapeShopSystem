@@ -43,7 +43,7 @@ class CreatePasswordResetsTable extends Migration
         $this->forge->addPrimaryKey('id');
         $this->forge->addKey(['email', 'token']); // Composite key
         $this->forge->addKey('expires_at');
-        $this->forge->createTable('password_resets');
+        $this->forge->createTable('password_resets', true);
     }
 
     public function down()

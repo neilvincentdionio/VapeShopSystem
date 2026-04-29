@@ -72,7 +72,7 @@ class CreateUsersTable extends Migration
         $this->forge->addKey('role');
         $this->forge->addKey('approval_status');
         $this->forge->addKey('is_active');
-        $this->forge->createTable('users');
+        $this->forge->createTable('users', true);
 
         $this->forge->addField([
             'user_id' => [
@@ -117,7 +117,7 @@ class CreateUsersTable extends Migration
 
         $this->forge->addKey('user_id', true);
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('user_profiles');
+        $this->forge->createTable('user_profiles', true);
 
         $this->forge->addField([
             'id' => [
@@ -182,7 +182,7 @@ class CreateUsersTable extends Migration
         $this->forge->addKey('user_id');
         $this->forge->addKey(['user_id', 'is_primary']);
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('user_addresses');
+        $this->forge->createTable('user_addresses', true);
     }
 
     public function down()

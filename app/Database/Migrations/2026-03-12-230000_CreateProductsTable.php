@@ -37,7 +37,7 @@ class CreateProductsTable extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->createTable('product_categories');
+        $this->forge->createTable('product_categories', true);
 
         $this->forge->addField([
             'id' => [
@@ -91,7 +91,7 @@ class CreateProductsTable extends Migration
         $this->forge->addKey('category_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('category_id', 'product_categories', 'id', 'RESTRICT', 'CASCADE');
-        $this->forge->createTable('products');
+        $this->forge->createTable('products', true);
 
         $this->forge->addField([
             'id' => [
@@ -154,7 +154,7 @@ class CreateProductsTable extends Migration
         $this->forge->addKey('created_at');
         $this->forge->addForeignKey('product_id', 'products', 'id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('created_by', 'users', 'id', 'SET NULL', 'CASCADE');
-        $this->forge->createTable('inventory_movements');
+        $this->forge->createTable('inventory_movements', true);
     }
 
     public function down()

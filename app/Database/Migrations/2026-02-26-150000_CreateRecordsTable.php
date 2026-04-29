@@ -92,7 +92,7 @@ class CreateRecordsTable extends Migration
         $this->forge->addKey('reference_number');
         $this->forge->addKey('created_by');
         $this->forge->addForeignKey('created_by', 'users', 'id', 'SET NULL', 'CASCADE');
-        $this->forge->createTable('records');
+        $this->forge->createTable('records', true);
     }
 
     public function down()

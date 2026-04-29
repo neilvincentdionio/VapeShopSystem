@@ -64,7 +64,7 @@ class CreateOrderTables extends Migration
         $this->forge->addKey('order_date');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('customer_id', 'users', 'id', 'SET NULL', 'CASCADE');
-        $this->forge->createTable('orders');
+        $this->forge->createTable('orders', true);
 
         $this->forge->addField([
             'id' => [
@@ -118,7 +118,7 @@ class CreateOrderTables extends Migration
         $this->forge->addKey('product_id');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('product_id', 'products', 'id', 'SET NULL', 'CASCADE');
-        $this->forge->createTable('order_items');
+        $this->forge->createTable('order_items', true);
 
         $this->forge->addField([
             'id' => [
@@ -177,7 +177,7 @@ class CreateOrderTables extends Migration
         $this->forge->addUniqueKey('order_id', 'uq_order_payments_order_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('order_payments');
+        $this->forge->createTable('order_payments', true);
 
         $this->forge->addField([
             'id' => [
@@ -237,7 +237,7 @@ class CreateOrderTables extends Migration
         $this->forge->addUniqueKey('order_id', 'uq_order_shipments_order_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('order_shipments');
+        $this->forge->createTable('order_shipments', true);
     }
 
     public function down()

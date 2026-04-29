@@ -531,6 +531,7 @@
                         <select id="role" name="role" required>
                             <option value="admin" <?= old('role', $user['role']) == 'admin' ? 'selected' : '' ?>>Admin</option>
                             <option value="customer" <?= old('role', $user['role']) == 'customer' ? 'selected' : '' ?>>Customer</option>
+                            <option value="rider" <?= old('role', $user['role']) == 'rider' ? 'selected' : '' ?>>Rider</option>
                         </select>
                     <?php endif; ?>
                 </div>

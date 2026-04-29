@@ -312,6 +312,58 @@ $activeDeliveries = count(array_filter(
             color: #333333;
         }
 
+        .search-sort-container {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            min-width: 200px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.4rem 0.8rem 0.4rem 2.2rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-box input:focus {
+            border-color: #00bcd4;
+            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 0.7rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .sort-select {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .sort-select:focus {
+            border-color: #00bcd4;
+            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.1);
+        }
+
         .card-actions {
             display: flex;
             align-items: center;
@@ -875,9 +927,32 @@ $activeDeliveries = count(array_filter(
             <div class="data-card-header">
                 <h3>Orders List</h3>
                 <div class="card-actions">
-                    <button class="btn btn-sm btn-outline" onclick="window.location.reload()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
+                    <div class="search-sort-container">
+                        <div class="search-box">
+                            <input type="text" 
+                                   id="orderSearch" 
+                                   placeholder="Search orders..." 
+                                   onkeyup="filterOrders()">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <select id="sortOptions" onchange="sortOrders()" class="sort-select">
+                            <option value="default">Sort by</option>
+                            <option value="date-desc">Newest First</option>
+                            <option value="date-asc">Oldest First</option>
+                            <option value="customer-asc">Customer (A-Z)</option>
+                            <option value="customer-desc">Customer (Z-A)</option>
+                            <option value="total-desc">Total (High to Low)</option>
+                            <option value="total-asc">Total (Low to High)</option>
+                            <option value="status-asc">Status (A-Z)</option>
+                            <option value="status-desc">Status (Z-A)</option>
+                            <option value="filter-cancelled">CANCELLED Orders</option>
+                            <option value="filter-pending">PENDING Orders</option>
+                            <option value="filter-completed">COMPLETED Orders</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline" onclick="window.location.reload()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="table-responsive">
@@ -894,6 +969,7 @@ $activeDeliveries = count(array_filter(
                         <th>Delivery Status</th>
                         <th>Tracking Number</th>
                         <th>Shipping Address</th>
+                        <th>Address Description</th>
                         <th>Contact Number</th>
                         <th>Actions</th>
                     </tr>
@@ -976,6 +1052,11 @@ $activeDeliveries = count(array_filter(
                             <td>
                                 <span class="shipping-text" title="<?= esc($order['shipping_address']) ?>">
                                     <?= esc($order['shipping_address'] ?: 'Not provided') ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="shipping-text" title="<?= esc($order['shipment_notes'] ?? '') ?>">
+                                    <?= esc(!empty($order['shipment_notes']) ? $order['shipment_notes'] : 'No description') ?>
                                 </span>
                             </td>
                             <td>
@@ -1186,6 +1267,181 @@ function updateDeliveryStatus(orderId, newStatus) {
             alert('An error occurred while updating the status.');
         });
     }
+}
+
+// Store original orders data
+let originalOrders = [];
+
+// Initialize orders data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    const tableBody = document.querySelector('.data-table tbody');
+    if (tableBody) {
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            if (!row.querySelector('.empty-state')) {
+                originalOrders.push({
+                    element: row,
+                    orderId: row.querySelector('td:nth-child(1)')?.textContent?.toLowerCase() || '',
+                    date: row.querySelector('td:nth-child(2)')?.textContent || '',
+                    customer: row.querySelector('td:nth-child(3)')?.textContent?.toLowerCase() || '',
+                    total: parseFloat(row.querySelector('td:nth-child(5)')?.textContent?.replace('₱', '').replace(',', '') || 0),
+                    status: row.querySelector('td:nth-child(7)')?.textContent?.toLowerCase() || '',
+                    deliveryStatus: row.querySelector('td:nth-child(8)')?.textContent?.toLowerCase() || ''
+                });
+            }
+        });
+    }
+});
+
+function filterOrders() {
+    const searchTerm = document.getElementById('orderSearch').value.toLowerCase();
+    const tableBody = document.querySelector('.data-table tbody');
+    
+    if (!tableBody) return;
+    
+    // Clear current table
+    tableBody.innerHTML = '';
+    
+    // Filter orders
+    const filteredOrders = originalOrders.filter(order => {
+        return order.orderId.includes(searchTerm) || 
+               order.customer.includes(searchTerm) ||
+               order.status.includes(searchTerm) ||
+               order.deliveryStatus.includes(searchTerm);
+    });
+    
+    // Display filtered orders
+    if (filteredOrders.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="12" class="text-center">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>No orders found</h3>
+                        <p>Try adjusting your search criteria.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    } else {
+        filteredOrders.forEach(order => {
+            tableBody.appendChild(order.element);
+        });
+    }
+}
+
+function sortOrders() {
+    const sortValue = document.getElementById('sortOptions').value;
+    const tableBody = document.querySelector('.data-table tbody');
+    
+    if (!tableBody) return;
+    
+    if (sortValue === 'default') {
+        // Reset to original order if default is selected
+        tableBody.innerHTML = '';
+        originalOrders.forEach(order => {
+            tableBody.appendChild(order.element);
+        });
+        return;
+    }
+    
+    // Always start with all original orders for filtering
+    let currentOrders = [...originalOrders];
+    
+    // Handle specific status filtering
+    if (sortValue.startsWith('filter-')) {
+        const statusFilter = sortValue.replace('filter-', '').toLowerCase();
+        console.log('Filtering by status:', statusFilter);
+        console.log('Total orders to check:', currentOrders.length);
+        
+        const statusOrders = currentOrders.filter(order => {
+            // Try multiple selectors to find the status element
+            const statusElement = order.element.querySelector('td:nth-child(7) .status-badge') || 
+                                 order.element.querySelector('td:nth-child(7) span') ||
+                                 order.element.querySelector('td:nth-child(7)');
+            
+            if (!statusElement) {
+                console.log('No status element found for order');
+                return false;
+            }
+            
+            // Get status text and trim it
+            const statusText = statusElement.textContent.trim().toLowerCase();
+            console.log('Order status text:', statusText);
+            
+            // Check CSS classes if they exist
+            const hasStatusClass = statusElement.classList && 
+                                  Array.from(statusElement.classList).some(cls => cls.includes(statusFilter));
+            
+            // Check if status matches by text content
+            let matchesByStatus = false;
+            if (statusFilter === 'pending') {
+                matchesByStatus = ['pending', 'unpaid', 'to_pay'].includes(statusText);
+            } else if (statusFilter === 'completed') {
+                matchesByStatus = statusText === 'completed';
+            } else if (statusFilter === 'cancelled') {
+                matchesByStatus = statusText === 'cancelled';
+            }
+            
+            const matches = hasStatusClass || matchesByStatus || statusText === statusFilter;
+            console.log('Order matches filter:', matches);
+            return matches;
+        });
+        
+        console.log('Filtered orders count:', statusOrders.length);
+        
+        // Reorder table with filtered status
+        tableBody.innerHTML = '';
+        if (statusOrders.length === 0) {
+            const statusName = statusFilter.toUpperCase();
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="12" class="text-center">
+                        <div class="empty-state">
+                            <i class="fas fa-filter"></i>
+                            <h3>No ${statusName} orders found</h3>
+                            <p>There are no orders with this status.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        } else {
+            statusOrders.forEach(order => {
+                tableBody.appendChild(order.element);
+            });
+        }
+        return;
+    }
+    
+    // Sort orders
+    currentOrders.sort((a, b) => {
+        switch(sortValue) {
+            case 'date-desc':
+                return new Date(b.date) - new Date(a.date);
+            case 'date-asc':
+                return new Date(a.date) - new Date(b.date);
+            case 'customer-asc':
+                return a.customer.localeCompare(b.customer);
+            case 'customer-desc':
+                return b.customer.localeCompare(a.customer);
+            case 'total-desc':
+                return b.total - a.total;
+            case 'total-asc':
+                return a.total - b.total;
+            case 'status-asc':
+                return a.status.localeCompare(b.status);
+            case 'status-desc':
+                return b.status.localeCompare(a.status);
+            default:
+                return 0;
+        }
+    });
+    
+    // Reorder table
+    tableBody.innerHTML = '';
+    currentOrders.forEach(order => {
+        tableBody.appendChild(order.element);
+    });
 }
 </script>
 

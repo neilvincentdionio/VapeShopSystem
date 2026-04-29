@@ -244,7 +244,7 @@ class UserManagement extends BaseController
             'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
             'email' => 'required|valid_email|is_unique[users.email]',
             'password' => 'required|min_length[8]',
-            'role' => 'required|in_list[admin,customer]'
+            'role' => 'required|in_list[admin,customer,rider]'
         ];
 
         if (!$this->validate($rules)) {
@@ -386,7 +386,7 @@ class UserManagement extends BaseController
 
         // Only validate role if not editing self
         if ($currentUserId != $id) {
-            $rules['role'] = 'required|in_list[admin,customer]';
+            $rules['role'] = 'required|in_list[admin,customer,rider]';
         }
 
         if (!$this->validate($rules)) {

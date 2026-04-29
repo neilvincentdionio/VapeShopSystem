@@ -37,7 +37,7 @@ class UserModel extends Model
         'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
         'email' => 'required|valid_email|is_unique[users.email,id,{id}]',
         'password' => 'permit_empty|min_length[8]',
-        'role' => 'permit_empty|in_list[admin,staff,customer]',
+        'role' => 'permit_empty|in_list[admin,staff,customer,rider]',
         'role_id' => 'permit_empty|integer',
         'shop_name' => 'permit_empty|max_length[150]',
         'approval_status' => 'permit_empty|in_list[pending,approved,rejected]',
@@ -513,7 +513,7 @@ class UserModel extends Model
         }
 
         if ($roleName !== '') {
-            $coreData['role'] = in_array($roleName, ['admin', 'staff', 'customer'], true) ? $roleName : 'customer';
+            $coreData['role'] = in_array($roleName, ['admin', 'staff', 'customer', 'rider'], true) ? $roleName : 'customer';
             if ($supportsRoleId) {
                 $resolvedRoleId = $this->getRoleIdByName($coreData['role']);
                 if ($resolvedRoleId !== null) {
@@ -592,6 +592,10 @@ class UserModel extends Model
 
             if ($role === 'staff') {
                 return in_array($targetPermission, ['read', 'write', 'update', 'view_products', 'create_products', 'update_products', 'manage_orders'], true);
+            }
+
+            if ($role === 'rider') {
+                return in_array($targetPermission, ['read', 'orders.read', 'orders.update'], true);
             }
 
             return false;

@@ -83,6 +83,29 @@ class Dashboard extends BaseController
     }
 
     /**
+     * Allow access only for authenticated rider users.
+     */
+    private function checkRiderAccess()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'rider') {
+            return redirect()->to('/dashboard')
+                ->with('error', 'Access denied. Rider area only.');
+        }
+
+        return true;
+    }
+
+    /**
      * Shared data for customer pages.
      *
      * @param array<string, mixed> $extra
@@ -105,6 +128,23 @@ class Dashboard extends BaseController
             'revenue_today' => $analyticsToday['revenue'] ?? '&#8369;0.00',
             'recent_orders' => $analyticsToday['orders'] ?? 0,
             'growth_rate' => $this->dashboardModel->getGrowthRate($userRole, $shopName),
+        ], $extra);
+    }
+
+    /**
+     * Shared data for rider pages.
+     *
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function getRiderPageData(string $pageTitle, string $activePage, array $extra = []): array
+    {
+        return array_merge([
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => (string) $this->session->get('user_role'),
+            'page_title' => $pageTitle,
+            'active_page' => $activePage,
         ], $extra);
     }
 
@@ -133,6 +173,10 @@ class Dashboard extends BaseController
 
         if ($userRole === 'customer') {
             return redirect()->to('/customer/home');
+        }
+
+        if ($userRole === 'rider') {
+            return redirect()->to('/rider/dashboard');
         }
 
         // Get dashboard analytics based on user role
@@ -186,6 +230,83 @@ class Dashboard extends BaseController
     }
 
     /**
+     * Rider dashboard page.
+     */
+    public function riderDashboard()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $deliveries = $this->getRiderDeliveries();
+        $today = date('Y-m-d');
+
+        $stats = [
+            'active' => 0,
+            'to_ship' => 0,
+            'to_receive' => 0,
+            'completed_today' => 0,
+        ];
+
+        foreach ($deliveries as $delivery) {
+            $status = (string) ($delivery['delivery_status'] ?? 'to_pay');
+            if (in_array($status, ['to_ship', 'to_receive', 'failed_delivery'], true)) {
+                $stats['active']++;
+            }
+            if ($status === 'to_ship') {
+                $stats['to_ship']++;
+            }
+            if ($status === 'to_receive') {
+                $stats['to_receive']++;
+            }
+            if ($status === 'completed' && str_starts_with((string) ($delivery['updated_at'] ?? ''), $today)) {
+                $stats['completed_today']++;
+            }
+        }
+
+        return view('rider/dashboard', $this->getRiderPageData('Rider Dashboard', 'dashboard', [
+            'stats' => $stats,
+            'deliveries' => array_slice($deliveries, 0, 5),
+        ]));
+    }
+
+    /**
+     * Rider delivery list page.
+     */
+    public function riderDeliveries()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        return view('rider/deliveries', $this->getRiderPageData('My Deliveries', 'deliveries', [
+            'deliveries' => $this->getRiderDeliveries(),
+        ]));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getRiderDeliveries(): array
+    {
+        $orders = $this->orderModel->getAdminOrders();
+        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed'];
+
+        $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses): bool {
+            return in_array((string) ($order['delivery_status'] ?? 'to_pay'), $deliveryStatuses, true);
+        }));
+
+        foreach ($deliveries as &$delivery) {
+            $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
+        }
+        unset($delivery);
+
+        return $deliveries;
+    }
+
+    /**
      * Customer products page.
      */
     public function customerProducts()
@@ -216,6 +337,7 @@ class Dashboard extends BaseController
 
         $ageAllowed = $this->canCustomerPurchase();
         $cart = $this->getCustomerCart();
+        $customer = $this->userModel->find((int) $this->session->get('user_id'));
 
         return view('customer/products', $this->getCustomerPageData('Products', 'products', [
             'products' => $products,
@@ -225,6 +347,7 @@ class Dashboard extends BaseController
             'age_allowed' => $ageAllowed,
             'cart_items' => $cart['items'],
             'cart_total' => $cart['total'],
+            'customer_delivery_address' => is_array($customer) ? $this->buildCustomerAddressString($customer) : '',
         ]));
     }
 
@@ -552,6 +675,12 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/checkout')->with('error', 'Customer account not found.');
         }
 
+        $deliveryAddress = $this->getCheckoutDeliveryAddress($customer);
+        if ($deliveryAddress === null) {
+            return redirect()->to('/customer/products')->with('error', 'Please enter a delivery address or use your saved address.');
+        }
+        $deliveryDescription = trim(strip_tags((string) ($this->request->getPost('delivery_description') ?? '')));
+
         $referenceNumber = $this->generateReceiptNumber();
         $orderItems = $this->mapCartItemsToOrderItems($cartItems);
         $db = \Config\Database::connect();
@@ -580,6 +709,8 @@ class Dashboard extends BaseController
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
                 'status' => 'to_pay',
+                'shipping_address' => $deliveryAddress,
+                'notes' => $deliveryDescription,
             ]);
         } elseif ($paymentMethod === 'gcash') {
             $gcashReference = trim((string) ($this->request->getPost('gcash_reference') ?? ''));
@@ -603,6 +734,8 @@ class Dashboard extends BaseController
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
                 'status' => 'to_ship',
+                'shipping_address' => $deliveryAddress,
+                'notes' => $deliveryDescription,
             ]);
         }
 
@@ -917,6 +1050,43 @@ class Dashboard extends BaseController
         return $shipmentData;
     }
 
+    private function getCheckoutDeliveryAddress(?array $customer = null): ?string
+    {
+        $mode = (string) ($this->request->getPost('delivery_address_mode') ?? 'manual');
+
+        if ($mode === 'saved_address') {
+            if ($customer === null) {
+                return null;
+            }
+
+            $savedAddress = $this->buildCustomerAddressString($customer);
+            return $savedAddress !== '' ? $savedAddress : null;
+        }
+
+        $fields = [
+            'delivery_address_line',
+            'delivery_barangay',
+            'delivery_city',
+            'delivery_province',
+            'delivery_postal_code',
+            'delivery_country',
+        ];
+
+        $parts = [];
+        foreach ($fields as $field) {
+            $value = trim((string) ($this->request->getPost($field) ?? ''));
+            if ($value !== '') {
+                $parts[] = strip_tags($value);
+            }
+        }
+
+        if (count($parts) < 6) {
+            return null;
+        }
+
+        return implode(', ', $parts);
+    }
+
     private function generateReceiptNumber(): string
     {
         $datePart = date('Ymd');
@@ -987,6 +1157,7 @@ class Dashboard extends BaseController
                 'delivery_status' => $deliveryStatus,
                 'tracking_number' => $order['tracking_number'],
                 'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?? 'Not provided'),
+                'shipment_notes' => $order['shipment_notes'] ?? '',
                 'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?? 'Not provided'),
                 'items' => $order['items'] ?? [],
                 'customer' => $customerInfo,

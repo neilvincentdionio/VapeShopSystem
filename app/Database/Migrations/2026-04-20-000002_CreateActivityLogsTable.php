@@ -60,12 +60,23 @@ class CreateActivityLogsTable extends Migration
         $this->forge->addKey('status');
         $this->forge->addKey('created_at');
         
-        $this->forge->createTable('activity_logs');
-        $this->db->query('ALTER TABLE activity_logs ADD KEY idx_activity_logs_type_status_created (action_type, status, created_at)');
+        $this->forge->createTable('activity_logs', true);
+
+        if (! $this->indexExists('activity_logs', 'idx_activity_logs_type_status_created')) {
+            $this->db->query('ALTER TABLE activity_logs ADD KEY idx_activity_logs_type_status_created (action_type, status, created_at)');
+        }
     }
 
     public function down()
     {
         $this->forge->dropTable('activity_logs');
+    }
+
+    private function indexExists(string $table, string $index): bool
+    {
+        $row = $this->db->query('SHOW INDEX FROM ' . $this->db->protectIdentifiers($table, true) . ' WHERE Key_name = ?', [$index])
+            ->getRowArray();
+
+        return is_array($row);
     }
 }

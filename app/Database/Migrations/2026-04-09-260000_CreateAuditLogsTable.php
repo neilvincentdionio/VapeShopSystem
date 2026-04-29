@@ -71,12 +71,23 @@ class CreateAuditLogsTable extends Migration
         // Add foreign key constraint
         $this->forge->addForeignKey('user_id', 'users', 'id', 'SET NULL', 'CASCADE');
         
-        $this->forge->createTable('audit_logs');
-        $this->db->query('ALTER TABLE audit_logs ADD KEY idx_audit_logs_resource_created (resource_type, resource_id, created_at)');
+        $this->forge->createTable('audit_logs', true);
+
+        if (! $this->indexExists('audit_logs', 'idx_audit_logs_resource_created')) {
+            $this->db->query('ALTER TABLE audit_logs ADD KEY idx_audit_logs_resource_created (resource_type, resource_id, created_at)');
+        }
     }
 
     public function down()
     {
         $this->forge->dropTable('audit_logs');
+    }
+
+    private function indexExists(string $table, string $index): bool
+    {
+        $row = $this->db->query('SHOW INDEX FROM ' . $this->db->protectIdentifiers($table, true) . ' WHERE Key_name = ?', [$index])
+            ->getRowArray();
+
+        return is_array($row);
     }
 }

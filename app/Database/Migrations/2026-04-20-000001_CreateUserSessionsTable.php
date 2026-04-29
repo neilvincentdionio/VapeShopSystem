@@ -72,7 +72,7 @@ class CreateUserSessionsTable extends Migration
         // Add foreign key constraint
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
         
-        $this->forge->createTable('user_sessions');
+        $this->forge->createTable('user_sessions', true);
     }
 
     public function down()

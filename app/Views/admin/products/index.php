@@ -357,6 +357,58 @@
             color: #333333;
         }
 
+        .search-sort-container {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            min-width: 200px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.4rem 0.8rem 0.4rem 2.2rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-box input:focus {
+            border-color: #27c56f;
+            box-shadow: 0 0 0 2px rgba(39, 197, 111, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 0.7rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .sort-select {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .sort-select:focus {
+            border-color: #27c56f;
+            box-shadow: 0 0 0 2px rgba(39, 197, 111, 0.1);
+        }
+
         .table-responsive {
             overflow-x: auto;
         }
@@ -647,9 +699,29 @@
             <div class="data-card-header">
                 <h3>Products List</h3>
                 <div class="card-actions">
-                    <button class="btn btn-sm btn-outline" onclick="window.location.reload()">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
+                    <div class="search-sort-container">
+                        <div class="search-box">
+                            <input type="text" 
+                                   id="productSearch" 
+                                   placeholder="Search products..." 
+                                   onkeyup="filterProducts()">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <select id="sortOptions" onchange="sortProducts()" class="sort-select">
+                            <option value="default">Sort by</option>
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="price-asc">Price (Low to High)</option>
+                            <option value="price-desc">Price (High to Low)</option>
+                            <option value="stock-asc">Stock (Low to High)</option>
+                            <option value="stock-desc">Stock (High to Low)</option>
+                            <option value="created-desc">Newest First</option>
+                            <option value="created-asc">Oldest First</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline" onclick="window.location.reload()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -765,6 +837,120 @@
         if (confirm('Are you sure you want to delete "' + name + '"? This action cannot be undone.')) {
             window.location.href = '<?= site_url('products/delete/') ?>' + id;
         }
+    }
+
+    // Store original products data
+    let originalProducts = [];
+    
+    // Initialize products data when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        const tableBody = document.querySelector('.data-table tbody');
+        if (tableBody) {
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                if (!row.querySelector('.empty-state')) {
+                    originalProducts.push({
+                        element: row,
+                        name: row.querySelector('td:nth-child(2)')?.textContent?.toLowerCase() || '',
+                        category: row.querySelector('td:nth-child(3)')?.textContent?.toLowerCase() || '',
+                        price: parseFloat(row.querySelector('td:nth-child(4)')?.textContent?.replace('₱', '').replace(',', '') || 0),
+                        stock: parseInt(row.querySelector('td:nth-child(5)')?.textContent || 0),
+                        created: row.querySelector('td:nth-child(7)')?.textContent || ''
+                    });
+                }
+            });
+        }
+    });
+
+    function filterProducts() {
+        const searchTerm = document.getElementById('productSearch').value.toLowerCase();
+        const tableBody = document.querySelector('.data-table tbody');
+        
+        if (!tableBody) return;
+        
+        // Clear current table
+        tableBody.innerHTML = '';
+        
+        // Filter products
+        const filteredProducts = originalProducts.filter(product => {
+            return product.name.includes(searchTerm) || 
+                   product.category.includes(searchTerm);
+        });
+        
+        // Display filtered products
+        if (filteredProducts.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center">
+                        <div class="empty-state">
+                            <i class="fas fa-search"></i>
+                            <h4>No products found</h4>
+                            <p>Try adjusting your search criteria.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        } else {
+            filteredProducts.forEach(product => {
+                tableBody.appendChild(product.element);
+            });
+        }
+    }
+
+    function sortProducts() {
+        const sortValue = document.getElementById('sortOptions').value;
+        const tableBody = document.querySelector('.data-table tbody');
+        
+        if (!tableBody || sortValue === 'default') {
+            // Reset to original order if default is selected
+            tableBody.innerHTML = '';
+            originalProducts.forEach(product => {
+                tableBody.appendChild(product.element);
+            });
+            return;
+        }
+        
+        // Get current visible products (after filtering)
+        const currentProducts = [];
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            if (!row.querySelector('.empty-state')) {
+                const originalProduct = originalProducts.find(p => p.element === row);
+                if (originalProduct) {
+                    currentProducts.push(originalProduct);
+                }
+            }
+        });
+        
+        // Sort products
+        currentProducts.sort((a, b) => {
+            switch(sortValue) {
+                case 'name-asc':
+                    return a.name.localeCompare(b.name);
+                case 'name-desc':
+                    return b.name.localeCompare(a.name);
+                case 'price-asc':
+                    return a.price - b.price;
+                case 'price-desc':
+                    return b.price - a.price;
+                case 'stock-asc':
+                    return a.stock - b.stock;
+                case 'stock-desc':
+                    return b.stock - a.stock;
+                case 'created-desc':
+                    return new Date(b.created) - new Date(a.created);
+                case 'created-asc':
+                    return new Date(a.created) - new Date(b.created);
+                default:
+                    return 0;
+            }
+        });
+        
+        // Reorder table
+        tableBody.innerHTML = '';
+        currentProducts.forEach(product => {
+            tableBody.appendChild(product.element);
+        });
     }
     </script>
 </body>

@@ -55,7 +55,7 @@ class CreateRefreshTokensTable extends Migration
         // Add foreign key constraint
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
         
-        $this->forge->createTable('refresh_tokens');
+        $this->forge->createTable('refresh_tokens', true);
     }
 
     public function down()
