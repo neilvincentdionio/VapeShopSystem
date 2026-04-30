@@ -77,6 +77,10 @@ $routes->get('/customer/user-management', static function () {
 // Rider dashboard routes (Rider only)
 $routes->get('/rider/dashboard', 'Dashboard::riderDashboard', ['filter' => 'auth:rider']);
 $routes->get('/rider/deliveries', 'Dashboard::riderDeliveries', ['filter' => 'auth:rider']);
+$routes->post('/dashboard/riderUpdateDeliveryStatus', 'Dashboard::riderUpdateDeliveryStatus', ['filter' => 'auth:rider']);
+$routes->post('/dashboard/submitDeliveryProof', 'Dashboard::submitDeliveryProof', ['filter' => 'auth:rider']);
+$routes->post('/dashboard/getDeliveryProof', 'Dashboard::getDeliveryProof', ['filter' => 'auth:admin']);
+$routes->get('/uploads/delivery_proofs/(:any)', 'Dashboard::serveDeliveryProof/$1');
 
 // User Management routes (protected by AuthFilter)
 $routes->get('/user-management', 'UserManagement::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
@@ -213,3 +217,7 @@ $routes->get('/admin/reviews/product/(:num)', 'Dashboard::getProductReviews/$1',
 $routes->get('/admin/reviews/order/(:num)', 'Dashboard::getOrderReviews/$1');
 $routes->post('/admin/reviews/approve/(:num)', 'Dashboard::approveReview/$1', ['filter' => 'auth:admin']);
 $routes->post('/admin/reviews/reject/(:num)', 'Dashboard::rejectReview/$1', ['filter' => 'auth:admin']);
+
+// Rider-Admin delivery workflow routes
+$routes->post('/dashboard/deliverOrderToRider', 'Dashboard::deliverOrderToRider', ['filter' => 'auth:admin']);
+$routes->get('/dashboard/getOrdersReadyForPickup', 'Dashboard::getOrdersReadyForPickup', ['filter' => 'auth:admin']);

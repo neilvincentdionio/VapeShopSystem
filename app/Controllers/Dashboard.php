@@ -149,6 +149,23 @@ class Dashboard extends BaseController
     }
 
     /**
+     * Get human-readable status label
+     */
+    public function getStatusLabel(string $status): string
+    {
+        $labels = [
+            'pending' => 'Pending',
+            'to_ship' => 'For Pickup',
+            'for_pickup' => 'For Pickup',
+            'in_progress' => 'In Progress',
+            'completed' => 'Delivered',
+            'failed' => 'Failed Delivery',
+        ];
+
+        return $labels[$status] ?? ucfirst(str_replace('_', ' ', $status));
+    }
+
+    /**
      * Show dashboard
      */
     public function index()
@@ -292,7 +309,7 @@ class Dashboard extends BaseController
     private function getRiderDeliveries(): array
     {
         $orders = $this->orderModel->getAdminOrders();
-        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed'];
+        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'ready_for_pickup', 'delivered_to_rider'];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses): bool {
             return in_array((string) ($order['delivery_status'] ?? 'to_pay'), $deliveryStatuses, true);
@@ -398,6 +415,297 @@ class Dashboard extends BaseController
             'cart_items' => $cartItems,
             'estimated_total' => $estimatedTotal,
         ]));
+    }
+
+    /**
+     * Customer: Update delivery status
+     */
+    public function riderUpdateDeliveryStatus()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = $this->request->getPost('order_id');
+        $status = $this->request->getPost('status');
+
+        if (!$orderId || !$status) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid request']);
+        }
+
+        try {
+            $riderId = (int) $this->session->get('user_id');
+            
+            if ($status === 'ready_for_pickup') {
+                $this->orderModel->markOrderReadyForPickup($orderId, $riderId);
+                return $this->response->setJSON(['success' => true, 'message' => 'Order marked as ready for pickup']);
+            }
+
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid status']);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Admin: Deliver order to rider
+     */
+    public function deliverOrderToRider()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin only.');
+        }
+
+        // Try to get order_id from POST JSON first, then from regular POST
+        $jsonInput = $this->request->getJSON();
+        $orderId = null;
+        
+        if ($jsonInput && isset($jsonInput->order_id)) {
+            $orderId = $jsonInput->order_id;
+        } else {
+            $orderId = $this->request->getPost('order_id');
+        }
+
+        if (!$orderId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order ID is required']);
+        }
+
+        try {
+            $this->orderModel->markOrderDeliveredToRider($orderId);
+            return $this->response->setJSON(['success' => true, 'message' => 'Order delivered to rider']);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Get orders ready for pickup (for admin side)
+     */
+    public function getOrdersReadyForPickup()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        try {
+            $orders = $this->orderModel->getOrdersReadyForPickup();
+            return $this->response->setJSON(['success' => true, 'orders' => $orders]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Submit delivery proof with image
+     */
+    public function submitDeliveryProof()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = $this->request->getPost('order_id');
+        $deliveryNotes = $this->request->getPost('delivery_notes');
+        $proofImage = $this->request->getFile('delivery_proof');
+
+        if (!$orderId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order ID is required']);
+        }
+
+        if (!$proofImage || !$proofImage->isValid()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Please select a valid image file']);
+        }
+
+        try {
+            // Validate image
+            if (!$proofImage->isValid() || !$proofImage->getSize() > 0) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Invalid image file']);
+            }
+
+            // Check file size (max 5MB)
+            if ($proofImage->getSize() > 5 * 1024 * 1024) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Image size must be less than 5MB']);
+            }
+
+            // Check file type
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+            if (!in_array($proofImage->getMimeType(), $allowedTypes)) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Only JPEG, PNG, and GIF images are allowed']);
+            }
+
+            // Generate unique filename
+            $filename = 'delivery_proof_' . $orderId . '_' . time() . '.' . $proofImage->getExtension();
+            
+            // Move file to uploads directory
+            $uploadPath = WRITEPATH . 'uploads/delivery_proofs/';
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+            
+            if ($proofImage->move($uploadPath, $filename)) {
+                // Save proof information to database and mark order as completed
+                $this->saveDeliveryProof($orderId, $filename, $deliveryNotes);
+                $this->markOrderAsCompleted($orderId);
+                
+                return $this->response->setJSON(['success' => true, 'message' => 'Delivery proof submitted successfully']);
+            } else {
+                return $this->response->setJSON(['success' => false, 'message' => 'Failed to upload image']);
+            }
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    private function saveDeliveryProof(int $orderId, string $filename, ?string $notes = null): void
+    {
+        $data = [
+            'order_id' => $orderId,
+            'rider_id' => $this->session->get('user_id'),
+            'proof_image' => $filename,
+            'notes' => $notes,
+            'submitted_at' => date('Y-m-d H:i:s')
+        ];
+
+        // Store proof information in order_shipments table
+        $db = \Config\Database::connect();
+        $db->table('order_shipments')
+            ->where('order_id', $orderId)
+            ->update([
+                'delivery_proof_image' => $filename,
+                'delivery_notes' => $notes,
+                'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+    }
+
+    private function markOrderAsCompleted(int $orderId): void
+    {
+        $db = \Config\Database::connect();
+        
+        // Update order status to completed
+        $db->table('orders')
+            ->where('id', $orderId)
+            ->update(['status' => 'completed']);
+        
+        // Update shipment status to completed
+        $db->table('order_shipments')
+            ->where('order_id', $orderId)
+            ->update([
+                'status' => 'completed',
+                'delivered_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+        
+        // Update payment status to paid
+        $db->table('order_payments')
+            ->where('order_id', $orderId)
+            ->update([
+                'status' => 'paid',
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+    }
+
+    /**
+     * Get delivery proof for admin viewing
+     */
+    public function getDeliveryProof()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        // Try to get order_id from POST JSON first, then from regular POST
+        $jsonInput = $this->request->getJSON();
+        $orderId = null;
+        
+        if ($jsonInput && isset($jsonInput->order_id)) {
+            $orderId = $jsonInput->order_id;
+        } else {
+            $orderId = $this->request->getPost('order_id');
+        }
+        
+        if (!$orderId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order ID is required']);
+        }
+
+        try {
+            $db = \Config\Database::connect();
+            $proof = $db->table('order_shipments')
+                ->select('delivery_proof_image, delivery_notes, delivery_proof_submitted_at')
+                ->where('order_id', $orderId)
+                ->where('delivery_proof_image IS NOT NULL')
+                ->get()
+                ->getRowArray();
+
+            if (!$proof) {
+                return $this->response->setJSON(['success' => false, 'message' => 'No delivery proof found']);
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'proof' => [
+                    'image' => $proof['delivery_proof_image'],
+                    'notes' => $proof['delivery_notes'],
+                    'submitted_at' => $proof['delivery_proof_submitted_at']
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Serve delivery proof images
+     */
+    public function serveDeliveryProof($filename = null)
+    {
+        if (!$filename) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'File not found']);
+        }
+
+        // Security: Validate filename format
+        if (!preg_match('/^delivery_proof_\d+_\d+\.(jpg|jpeg|png|gif)$/i', $filename)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Invalid filename']);
+        }
+
+        $filePath = WRITEPATH . 'uploads/delivery_proofs/' . $filename;
+        
+        if (!file_exists($filePath)) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'File not found']);
+        }
+
+        // Get file info
+        $fileInfo = new \CodeIgniter\Files\File($filePath);
+        $mimeType = $fileInfo->getMimeType();
+        
+        // Serve the file
+        return $this->response
+            ->setHeader('Content-Type', $mimeType)
+            ->setHeader('Content-Length', (string) $fileInfo->getSize())
+            ->setHeader('Cache-Control', 'private, max-age=3600')
+            ->setBody(file_get_contents($filePath));
     }
 
     /**
@@ -597,7 +905,7 @@ class Dashboard extends BaseController
                 'amount' => round($total, 2),
             ],
             $this->buildCustomerShipmentData($customer, [
-                'status' => 'to_pay',
+                'status' => 'to_ship',
             ])
         );
 
@@ -708,7 +1016,7 @@ class Dashboard extends BaseController
             ];
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
-                'status' => 'to_pay',
+                'status' => 'to_ship',
                 'shipping_address' => $deliveryAddress,
                 'notes' => $deliveryDescription,
             ]);
@@ -775,7 +1083,7 @@ class Dashboard extends BaseController
 
             $this->clearCustomerCart();
 
-            $redirectTab = $paymentMethod === 'cash_on_delivery' ? 'to_pay' : 'to_ship';
+            $redirectTab = 'to_ship';
             $successMessage = $paymentMethod === 'cash_on_delivery'
                 ? 'Order placed successfully. COD payment is pending.'
                 : 'GCash transaction successful. Your order is marked as paid.';

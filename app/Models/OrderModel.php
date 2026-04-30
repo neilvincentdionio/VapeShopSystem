@@ -184,6 +184,86 @@ class OrderModel extends Model
             ->getResultArray();
     }
 
+    public function getRiderDeliveryHistoryCount(int $riderId): int
+    {
+        return $this->db->table('orders o')
+            ->join('order_shipments s', 's.order_id = o.id', 'left')
+            ->where('s.assigned_rider_id', $riderId)
+            ->whereIn('s.status', ['completed', 'failed'])
+            ->countAllResults();
+    }
+
+    public function markOrderReadyForPickup(int $orderId, int $riderId): bool
+    {
+        $timestamp = date('Y-m-d H:i:s');
+        
+        // Check if shipment record exists
+        $existing = $this->db->table('order_shipments')
+            ->where('order_id', $orderId)
+            ->get()
+            ->getRowArray();
+        
+        if ($existing) {
+            // Update existing record
+            $this->db->table('order_shipments')
+                ->where('order_id', $orderId)
+                ->update([
+                    'status' => 'ready_for_pickup',
+                    'assigned_rider_id' => $riderId,
+                    'updated_at' => $timestamp
+                ]);
+        } else {
+            // Insert new record
+            $this->db->table('order_shipments')
+                ->insert([
+                    'order_id' => $orderId,
+                    'status' => 'ready_for_pickup',
+                    'assigned_rider_id' => $riderId,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp
+                ]);
+        }
+
+        return true;
+    }
+
+    public function markOrderDeliveredToRider(int $orderId): bool
+    {
+        $timestamp = date('Y-m-d H:i:s');
+        
+        $this->db->table('order_shipments')
+            ->where('order_id', $orderId)
+            ->update([
+                'status' => 'delivered_to_rider',
+                'updated_at' => $timestamp
+            ]);
+
+        return true;
+    }
+
+    public function getOrdersReadyForPickup(): array
+    {
+        return $this->db->table('orders o')
+            ->select('o.*, s.status as delivery_status, s.assigned_rider_id, u.name as rider_name')
+            ->join('order_shipments s', 's.order_id = o.id', 'left')
+            ->join('users u', 'u.id = s.assigned_rider_id', 'left')
+            ->where('s.status', 'ready_for_pickup')
+            ->get()
+            ->getResultArray();
+    }
+
+    public function getOrdersDeliveredToRider(int $riderId): array
+    {
+        return $this->db->table('orders o')
+            ->select('o.*, s.status as delivery_status, s.shipping_address, s.contact_number, s.tracking_number, s.notes as delivery_notes')
+            ->join('order_shipments s', 's.order_id = o.id', 'left')
+            ->join('users c', 'c.id = o.customer_id', 'left')
+            ->where('s.assigned_rider_id', $riderId)
+            ->where('s.status', 'delivered_to_rider')
+            ->get()
+            ->getResultArray();
+    }
+
     private function baseOrderQuery()
     {
         $itemsSubquery = '(SELECT oi.order_id, COALESCE(SUM(oi.quantity), 0) AS total_quantity, COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_amount FROM order_items oi GROUP BY oi.order_id)';

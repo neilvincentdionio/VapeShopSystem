@@ -17,7 +17,9 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
-            'failed_delivery' => 'Failed Delivery'
+            'failed_delivery' => 'Failed Delivery',
+            'ready_for_pickup' => 'Ready For Pickup',
+            'delivered_to_rider' => 'Delivered To Rider'
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -713,6 +715,27 @@ $activeDeliveries = count(array_filter(
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
         }
+        
+        .btn-view-proof {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-view-proof:hover {
+            background: #1976d2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+        }
 
         .btn-checkout,
         .btn-transit,
@@ -1040,8 +1063,13 @@ $activeDeliveries = count(array_filter(
                                 </div>
                             </td>
                             <td>
-                                <div class="order-status status-<?= esc($order['delivery_status'] ?? 'to_pay') ?>">
-                                    <?= getDeliveryStatusLabel($order['delivery_status'] ?? 'to_pay') ?>
+                                <?php 
+                                $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
+                                // Debug: Uncomment next line to see actual status
+                                // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
+                                ?>
+                                <div class="order-status status-<?= esc($deliveryStatus) ?>">
+                                    <?= getDeliveryStatusLabel($deliveryStatus) ?>
                                 </div>
                             </td>
                             <td>
@@ -1065,60 +1093,26 @@ $activeDeliveries = count(array_filter(
                                 </span>
                             </td>
                             <td>
-                                <div class="action-buttons">
-                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_pay'): ?>
-                                        <?php if (($order['payment_status'] ?? 'unpaid') !== 'paid'): ?>
-                                            <?php if (strtolower((string) ($order['payment_method'] ?? 'cash')) === 'cash'): ?>
-                                                <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
-                                                    <i class="fas fa-box"></i>
-                                                    Ship COD Order
-                                                </button>
-                                            <?php else: ?>
-                                                <a class="btn-checkout" href="<?= site_url('orders/checkout/' . $order['id']) ?>">
-                                                    <i class="fas fa-cash-register"></i>
-                                                    Collect Payment
-                                                </a>
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_ship')">
-                                                <i class="fas fa-box"></i>
-                                                Ready to Ship
-                                            </button>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_ship'): ?>
-                                        <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
-                                            <i class="fas fa-truck"></i>
-                                            Package in Transit
-                                        </button>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'to_receive'): ?>
-                                        <button class="btn-delivered" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
-                                            <i class="fas fa-check-circle"></i>
-                                            Package Delivered
-                                        </button>
-                                        <button class="btn-failed" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'failed_delivery')">
-                                            <i class="fas fa-exclamation-triangle"></i>
-                                            Failed Delivery
-                                        </button>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (($order['delivery_status'] ?? 'to_pay') === 'failed_delivery'): ?>
-                                        <button class="btn-transit" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'to_receive')">
-                                            <i class="fas fa-redo"></i>
-                                            Retry Delivery
-                                        </button>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (in_array($order['delivery_status'] ?? 'to_pay', ['to_ship', 'to_receive', 'failed_delivery'])): ?>
-                                        <button class="btn-delivery" onclick="openDeliveryModal(<?= $order['id'] ?>)">
-                                            <i class="fas fa-shipping-fast"></i>
-                                            Delivery Info
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
+                                <?php 
+                                $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
+                                // Debug: Show actual status (remove this line after fixing)
+                                // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
+                                ?>
+                                <?php if (in_array($deliveryStatus, ['cancelled', 'return_refund'])): ?>
+                                    <!-- Actions column is blank for Cancelled and Return/Refund orders -->
+                                <?php elseif ($deliveryStatus === 'ready_for_pickup'): ?>
+                                    <button class="action-btn btn-start" onclick="deliverToRider(<?= $order['id'] ?>)">
+                                        <i class="fas fa-motorcycle"></i> Deliver to rider
+                                    </button>
+                                <?php elseif ($deliveryStatus === 'completed'): ?>
+                                    <button class="action-btn btn-view-proof" onclick="viewDeliveryProof(<?= $order['id'] ?>)">
+                                        <i class="fas fa-image"></i> View Proof
+                                    </button>
+                                <?php else: ?>
+                                    <span class="status-badge" style="background: #fff3cd; color: #856404; border: none;">
+                                        <i class="fas fa-clock"></i> Waiting For Rider
+                                    </span>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -1268,6 +1262,103 @@ function updateDeliveryStatus(orderId, newStatus) {
         });
     }
 }
+
+function deliverToRider(orderId) {
+    if (!confirm('Are you sure you want to deliver this order to the rider?')) {
+        return;
+    }
+
+    fetch('<?= site_url('dashboard/deliverOrderToRider') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            order_id: orderId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Order delivered to rider successfully!');
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to deliver order to rider');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while delivering the order to rider');
+    });
+}
+
+function viewDeliveryProof(orderId) {
+    console.log('Viewing delivery proof for order:', orderId); // Debug log
+    
+    fetch('<?= site_url('dashboard/getDeliveryProof') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            order_id: parseInt(orderId)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Response:', data); // Debug log
+        if (data.success) {
+            showDeliveryProofModal(data.proof);
+        } else {
+            alert(data.message || 'Failed to load delivery proof');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while loading delivery proof');
+    });
+}
+
+function showDeliveryProofModal(proof) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Delivery Proof</h3>
+                    <span class="close" onclick="closeDeliveryProofModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div style="text-align: center; margin-bottom: 1rem;">
+                        <img src="<?= site_url('uploads/delivery_proofs/') ?>${proof.image}" 
+                             style="max-width: 100%; max-height: 400px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" 
+                             alt="Delivery Proof">
+                    </div>
+                    ${proof.notes ? `<div style="margin-top: 1rem;">
+                        <strong>Notes:</strong> ${proof.notes}
+                    </div>` : ''}
+                    <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+                        <strong>Submitted:</strong> ${new Date(proof.submitted_at).toLocaleString()}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeDeliveryProofModal() {
+    const modal = document.querySelector('.modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Auto-refresh functionality removed as requested
 
 // Store original orders data
 let originalOrders = [];
