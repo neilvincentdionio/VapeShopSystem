@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title><?= htmlspecialchars($page_title ?? 'Activity Logs') ?> - Quick Puff Vape Shop System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -646,7 +647,25 @@
         }
 
         function exportLogs(type = 'all') {
-            window.open(`${baseUrl}/admin/export-logs?type=${type}`, '_blank');
+            // Create a temporary form to submit the request with proper session
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = `${baseUrl}/admin/export-logs?type=${type}`;
+            form.target = '_blank';
+            
+            // Add any necessary CSRF token if present
+            const csrfToken = document.querySelector('meta[name="csrf-token"]');
+            if (csrfToken) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = csrfToken.getAttribute('name') || 'csrf_token';
+                input.value = csrfToken.getAttribute('content');
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function exportSecurityReport(format = 'csv') {
