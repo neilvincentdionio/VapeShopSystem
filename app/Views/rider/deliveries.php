@@ -112,6 +112,11 @@
         color: #333333;
     }
 
+    .deliveries-table td:last-child {
+        vertical-align: middle;
+        width: 180px;
+    }
+
     .muted {
         color: #666666;
         font-size: .9rem;
@@ -131,19 +136,21 @@
     }
 
     .action-btn {
-        padding: 0.4rem 0.8rem;
+        padding: 0.5rem 1rem;
         border: none;
-        border-radius: 4px;
+        border-radius: 8px;
         cursor: pointer;
         font-size: 0.85rem;
-        font-weight: 500;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 600;
+        font-family: var(--main-font, 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
         text-decoration: none;
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        justify-content: center;
+        gap: 0.5rem;
         margin-bottom: 0.25rem;
+        min-width: 145px;
     }
     
     .action-btn i {
@@ -180,15 +187,13 @@
     }
     
     .btn-delivered {
-        background: #e8f5e8;
-        color: #2e7d2e;
-        border: 1px solid #4caf50;
+        background: #4caf50;
+        color: white;
+        border: none;
     }
 
     .btn-delivered:hover {
-        background: #c8e6c9;
-        color: #1b5e20;
-        border: 1px solid #388e3c;
+        background: #388e3c;
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
     }
@@ -208,6 +213,21 @@
         padding: 2rem;
         text-align: center;
         color: #666666;
+    }
+
+    .action-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.35rem;
+        width: 145px;
+    }
+
+    .action-stack .status-badge,
+    .action-stack .action-btn {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
     }
 
     .delivery-empty-row td {
@@ -244,8 +264,9 @@
         'to_receive' => 'Out for Delivery',
         'completed' => 'Delivered',
         'failed_delivery' => 'Failed Delivery',
-        'ready_for_pickup' => 'Waiting for Admin',
-        'delivered_to_rider' => 'Order Delivered',
+        'ready_for_pickup' => 'Rider Assigned',
+        'accepted_by_rider' => 'Accepted by Rider',
+        'delivered_to_rider' => 'Picked Up',
     ];
 ?>
 
@@ -278,8 +299,9 @@
                 <option value="filter-to_receive">Out for Delivery</option>
                 <option value="filter-completed">Delivered</option>
                 <option value="filter-failed_delivery">Failed Delivery</option>
-                <option value="filter-ready_for_pickup">Waiting for Admin</option>
-                <option value="filter-delivered_to_rider">Order Delivered</option>
+                <option value="filter-ready_for_pickup">Rider Assigned</option>
+                <option value="filter-accepted_by_rider">Accepted by Rider</option>
+                <option value="filter-delivered_to_rider">Picked Up</option>
             </select>
         </div>
         <table class="deliveries-table">
@@ -311,31 +333,42 @@
                         <td class="muted"><?= esc($delivery['shipment_notes'] ?? 'None') ?></td>
                         <td><span class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></span></td>
                         <td>
+                            <div class="action-stack">
                             <?php if ($status === 'completed'): ?>
                                 <span class="status-badge" style="background: #e8f5e8; color: #2e7d2e; border: 1px solid #4caf50;">
                                     <i class="fas fa-check-circle"></i> Order Completed
                                 </span>
-                            <?php elseif ($status === 'delivered_to_rider'): ?>
-                                <button class="action-btn btn-delivered" onclick="showDeliveryProofForm(<?= $delivery['id'] ?>)">
-                                    <i class="fas fa-check-circle"></i> Order Delivered
-                                </button>
-                            <?php elseif ($status === 'failed_delivery' || $status === 'failed'): ?>
-                                <button class="action-btn btn-retry">
-                                    <i class="fas fa-redo"></i> Retry Deliver
-                                </button>
-                            <?php elseif ($status === 'ready_for_pickup'): ?>
-                                <span class="status-badge" style="background: #fff3cd; color: #856404; border: 1px solid #ffc107;">
-                                    <i class="fas fa-clock"></i> Waiting for Admin
-                                </span>
-                            <?php elseif ($status === 'to_ship' || $status === 'for_pickup'): ?>
-                                <button class="action-btn btn-pickup" onclick="markReadyForPickup(<?= $delivery['id'] ?>)">
-                                    <i class="fas fa-box"></i> Ready to Pickup
-                                </button>
                             <?php else: ?>
-                                <button class="action-btn btn-start">
-                                    <i class="fas fa-play"></i> Start Delivery
+                                <button type="button" class="action-btn btn-pickup" onclick="openOrderDetailsModal(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-eye"></i> View Details
                                 </button>
                             <?php endif; ?>
+                            <?php if ($status === 'ready_for_pickup'): ?>
+                                <button type="button" class="action-btn btn-start" onclick="acceptDelivery(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-check"></i> Accept Delivery
+                                </button>
+                            <?php elseif ($status === 'accepted_by_rider'): ?>
+                                <button type="button" class="action-btn btn-pickup" onclick="markPickedUp(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-box"></i> Mark Picked Up
+                                </button>
+                            <?php elseif ($status === 'delivered_to_rider'): ?>
+                                <button type="button" class="action-btn btn-start" onclick="startDelivery(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-play"></i> Start Delivery
+                                </button>
+                            <?php elseif ($status === 'failed_delivery' || $status === 'failed'): ?>
+                                <button type="button" class="action-btn btn-retry" onclick="retryDelivery(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-redo"></i> Retry Deliver
+                                </button>
+                            <?php elseif ($status === 'to_receive'): ?>
+                                <button type="button" class="action-btn btn-delivered" onclick="showDeliveryProofForm(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-check-circle"></i> Order Delivered
+                                </button>
+                            <?php elseif ($status === 'to_ship' || $status === 'for_pickup'): ?>
+                                <span class="status-badge" style="background: #fff3cd; color: #856404; border: 1px solid #ffc107;">
+                                    <i class="fas fa-clock"></i> Waiting for Rider Assignment
+                                </span>
+                            <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -370,6 +403,49 @@ function markReadyForPickup(orderId) {
             alert('An error occurred while updating the status');
         });
     }
+}
+
+function updateRiderDeliveryStatus(orderId, status, successMessage, confirmMessage = '') {
+    if (confirmMessage && !confirm(confirmMessage)) {
+        return;
+    }
+
+    fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `order_id=${orderId}&status=${encodeURIComponent(status)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(successMessage);
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update status');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating the status');
+    });
+}
+
+function startDelivery(orderId) {
+    updateRiderDeliveryStatus(orderId, 'to_receive', 'Delivery started.');
+}
+
+function retryDelivery(orderId) {
+    updateRiderDeliveryStatus(orderId, 'to_receive', 'Delivery retry started.', 'Retry this failed delivery now?');
+}
+
+function markPickedUp(orderId) {
+    updateRiderDeliveryStatus(orderId, 'delivered_to_rider', 'Order marked as picked up.');
+}
+
+function acceptDelivery(orderId) {
+    updateRiderDeliveryStatus(orderId, 'accepted_by_rider', 'Delivery accepted.');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -518,6 +594,16 @@ function sortDeliveries() {
     </div>
 </div>
 
+<div id="orderDetailsModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:760px;">
+        <div class="modal-header">
+            <h3>Order Details</h3>
+            <span class="close" onclick="closeOrderDetailsModal()">&times;</span>
+        </div>
+        <div class="modal-body" id="orderDetailsBody"></div>
+    </div>
+</div>
+
 <style>
 .modal {
     position: fixed;
@@ -632,9 +718,10 @@ function sortDeliveries() {
 
 <script>
 function showDeliveryProofForm(orderId) {
+    const form = document.getElementById('deliveryProofForm');
+    form.reset();
     document.getElementById('proofOrderId').value = orderId;
     document.getElementById('deliveryProofModal').style.display = 'block';
-    document.getElementById('deliveryProofForm').reset();
 }
 
 function closeDeliveryProofForm() {
@@ -647,6 +734,17 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
     
     const formData = new FormData(this);
     const orderId = document.getElementById('proofOrderId').value;
+    const submitButton = this.querySelector('.btn-submit');
+
+    if (!orderId) {
+        alert('Order ID is missing. Please close and reopen the proof form.');
+        return;
+    }
+
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Submitting...';
+    }
     
     fetch('<?= site_url('dashboard/submitDeliveryProof') ?>', {
         method: 'POST',
@@ -655,8 +753,8 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Delivery proof submitted successfully!');
             closeDeliveryProofForm();
+            alert('Delivery proof submitted successfully!');
             location.reload();
         } else {
             alert(data.message || 'Failed to submit delivery proof');
@@ -665,15 +763,69 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
     .catch(error => {
         console.error('Error:', error);
         alert('An error occurred while submitting delivery proof');
+    })
+    .finally(() => {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Submit Proof';
+        }
     });
 });
 
 // Close modal when clicking outside
 window.onclick = function(event) {
     const modal = document.getElementById('deliveryProofModal');
+    const detailsModal = document.getElementById('orderDetailsModal');
     if (event.target == modal) {
         closeDeliveryProofForm();
+    } else if (event.target == detailsModal) {
+        closeOrderDetailsModal();
     }
+}
+
+function openOrderDetailsModal(orderId) {
+    const modal = document.getElementById('orderDetailsModal');
+    const body = document.getElementById('orderDetailsBody');
+    body.innerHTML = '<p>Loading details...</p>';
+    modal.style.display = 'block';
+
+    fetch(`<?= site_url('dashboard/order-details-json') ?>/${orderId}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success || !data.order) {
+            body.innerHTML = `<p>${data.message || 'Unable to load details.'}</p>`;
+            return;
+        }
+        const o = data.order;
+        const items = (o.items || []).map(item => `
+            <div style="display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid #f0f0f0;">
+                <div>${item.name}<div style="font-size:.85rem;color:#666;">Qty: ${item.qty}</div></div>
+                <div><strong>₱${(item.unit_price * item.qty).toFixed(2)}</strong></div>
+            </div>
+        `).join('') || '<p>No items found.</p>';
+
+        body.innerHTML = `
+            <div style="display:grid;gap:.7rem;">
+                <div><strong>Order:</strong> ${o.reference_number}</div>
+                <div><strong>Customer:</strong> ${o.customer_name} ${o.customer_email ? `(${o.customer_email})` : ''}</div>
+                <div><strong>Address:</strong> ${o.shipping_address || 'Not provided'}</div>
+                <div><strong>Contact:</strong> ${o.contact_number || 'Not provided'}</div>
+                <div><strong>Notes:</strong> ${o.shipment_notes || 'None'}</div>
+                <div><strong>Status:</strong> ${String(o.delivery_status || '').replaceAll('_', ' ')}</div>
+                <div style="margin-top:.35rem;"><strong>Items</strong></div>
+                <div>${items}</div>
+            </div>
+        `;
+    })
+    .catch(() => {
+        body.innerHTML = '<p>An error occurred while loading details.</p>';
+    });
+}
+
+function closeOrderDetailsModal() {
+    document.getElementById('orderDetailsModal').style.display = 'none';
 }
 </script>
 

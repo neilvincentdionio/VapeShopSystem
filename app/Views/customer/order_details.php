@@ -7,8 +7,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
         $labels = [
             'all' => 'All Orders',
             'to_pay' => 'To Pay',
-            'to_ship' => 'To Ship',
-            'to_receive' => 'To Receive',
+            'to_ship' => 'Order Placed',
+            'ready_for_pickup' => 'Rider Assigned',
+            'accepted_by_rider' => 'Accepted by Rider',
+            'delivered_to_rider' => 'Picked Up',
+            'to_receive' => 'Out for Delivery',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
@@ -66,20 +69,32 @@ if (!function_exists('getDeliveryStatusLabel')) {
                         case 'to_ship':
                             $currentStage = 1;
                             break;
-                        case 'to_receive':
+                        case 'ready_for_pickup':
                             $currentStage = 2;
                             break;
-                        case 'completed':
+                        case 'accepted_by_rider':
                             $currentStage = 3;
+                            break;
+                        case 'delivered_to_rider':
+                            $currentStage = 4;
+                            break;
+                        case 'to_receive':
+                            $currentStage = 5;
+                            break;
+                        case 'completed':
+                            $currentStage = 6;
                             break;
                         default:
                             $currentStage = 0;
                     }
                     
                     $stages = [
-                        ['name' => 'Ordered', 'icon' => 'fa-clipboard', 'description' => 'Order placed successfully'],
-                        ['name' => 'Packed', 'icon' => 'fa-box', 'description' => 'Order packed and ready'],
-                        ['name' => 'In Transit', 'icon' => 'fa-truck', 'description' => 'Order is on the way'],
+                        ['name' => 'Order Placed', 'icon' => 'fa-clipboard', 'description' => 'Order received by the shop'],
+                        ['name' => 'Preparing', 'icon' => 'fa-box', 'description' => 'Order is being prepared'],
+                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'A rider was assigned'],
+                        ['name' => 'Accepted', 'icon' => 'fa-handshake', 'description' => 'Rider accepted the delivery job'],
+                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'Parcel picked up by rider'],
+                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'Rider is on the way'],
                         ['name' => 'Delivered', 'icon' => 'fa-home', 'description' => 'Order delivered successfully']
                     ];
                     ?>
@@ -126,6 +141,20 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <?php endif; ?>
                     <?php if (!empty($order['contact_number'])): ?>
                         <p><strong>Contact Number:</strong> <?= esc($order['contact_number']) ?></p>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($order['delivery_proof_image']) && in_array($order['delivery_status'], ['completed'], true)): ?>
+                <div class="tracking-info">
+                    <h3><i class="fas fa-image"></i> Proof of Delivery</h3>
+                    <p>
+                        <a href="<?= site_url('uploads/delivery_proofs/' . rawurlencode((string) $order['delivery_proof_image'])) ?>" target="_blank" rel="noopener">
+                            View delivery proof image
+                        </a>
+                    </p>
+                    <?php if (!empty($order['delivery_notes'])): ?>
+                        <p><strong>Rider Notes:</strong> <?= esc($order['delivery_notes']) ?></p>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -182,6 +211,9 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <?php if (in_array($order['delivery_status'], ['completed', 'cancelled'])): ?>
                     <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
                 <?php endif; ?>
+                <?php if ($order['delivery_status'] === 'completed'): ?>
+                    <button type="button" class="btn btn-secondary" onclick="openReviewModal(<?= (int) $order['id'] ?>, '<?= esc((string) ($order['reference_number'] ?? 'Order')) ?>')">Review</button>
+                <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
@@ -192,6 +224,40 @@ if (!function_exists('getDeliveryStatusLabel')) {
             <a href="<?= site_url('customer/orders') ?>" class="btn">Back to Orders</a>
         </div>
     <?php endif; ?>
+</div>
+
+<div id="reviewModal" class="modal review-modal" style="display:none;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="reviewModalTitle">Write a Review</h3>
+                <button type="button" class="close" onclick="closeReviewModal()">&times;</button>
+            </div>
+            <form method="post" action="<?= site_url('customer/review/submit') ?>" id="reviewFormModal">
+                <?= csrf_field() ?>
+                <input type="hidden" name="order_id" id="reviewOrderId">
+                <div class="form-group">
+                    <label for="reviewRating">Rating</label>
+                    <select id="reviewRating" name="rating" required>
+                        <option value="">Select rating</option>
+                        <option value="5">5 Stars</option>
+                        <option value="4">4 Stars</option>
+                        <option value="3">3 Stars</option>
+                        <option value="2">2 Stars</option>
+                        <option value="1">1 Star</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reviewText">Review</label>
+                    <textarea id="reviewText" name="review_text" rows="4" maxlength="1000" placeholder="Share your feedback about this order..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn">Submit Review</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -593,6 +659,76 @@ if (!function_exists('getDeliveryStatusLabel')) {
         gap: 1rem;
         flex-wrap: wrap;
     }
+
+    .review-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        z-index: 1300;
+    }
+
+    .review-modal .modal-dialog {
+        min-height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .review-modal .modal-content {
+        width: min(100%, 560px);
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 10px 28px rgba(0,0,0,.2);
+    }
+
+    .review-modal .modal-header {
+        padding: 1rem 1rem .75rem;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .review-modal .close {
+        border: none;
+        background: transparent;
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #666;
+    }
+
+    #reviewFormModal {
+        padding: 1rem;
+    }
+
+    #reviewFormModal .form-group {
+        margin-bottom: .85rem;
+    }
+
+    #reviewFormModal label {
+        display: block;
+        margin-bottom: .3rem;
+        font-weight: 600;
+    }
+
+    #reviewFormModal select,
+    #reviewFormModal textarea {
+        width: 100%;
+        border: 1px solid #d7dce1;
+        border-radius: 8px;
+        padding: .65rem;
+        font-size: .95rem;
+    }
+
+    #reviewFormModal .form-actions {
+        display: flex;
+        gap: .5rem;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
     
     .btn {
         display: inline-flex;
@@ -664,5 +800,38 @@ if (!function_exists('getDeliveryStatusLabel')) {
         }
     }
 </style>
+
+<script>
+function openReviewModal(orderId, referenceNumber) {
+    document.getElementById('reviewOrderId').value = orderId;
+    document.getElementById('reviewModalTitle').textContent = `Review: ${referenceNumber}`;
+    document.getElementById('reviewRating').value = '';
+    document.getElementById('reviewText').value = '';
+    document.getElementById('reviewModal').style.display = 'block';
+
+    fetch(`<?= site_url('customer/reviews/order') ?>/${orderId}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data && data.success && data.review) {
+            document.getElementById('reviewRating').value = String(data.review.rating ?? '');
+            document.getElementById('reviewText').value = data.review.review_text ?? '';
+        }
+    })
+    .catch(() => {});
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+}
+
+window.addEventListener('click', function (event) {
+    const modal = document.getElementById('reviewModal');
+    if (event.target === modal) {
+        closeReviewModal();
+    }
+});
+</script>
 
 <?= $this->include('customer/partials/footer') ?>

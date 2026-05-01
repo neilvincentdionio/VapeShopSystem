@@ -77,8 +77,10 @@ $routes->get('/customer/user-management', static function () {
 // Rider dashboard routes (Rider only)
 $routes->get('/rider/dashboard', 'Dashboard::riderDashboard', ['filter' => 'auth:rider']);
 $routes->get('/rider/deliveries', 'Dashboard::riderDeliveries', ['filter' => 'auth:rider']);
+$routes->get('/dashboard/live-update-token', 'Dashboard::liveUpdateToken', ['filter' => 'auth']);
 $routes->post('/dashboard/riderUpdateDeliveryStatus', 'Dashboard::riderUpdateDeliveryStatus', ['filter' => 'auth:rider']);
 $routes->post('/dashboard/submitDeliveryProof', 'Dashboard::submitDeliveryProof', ['filter' => 'auth:rider']);
+$routes->post('/dashboard/assignRiderToOrder', 'Dashboard::assignRiderToOrder', ['filter' => 'auth:admin']);
 $routes->post('/dashboard/getDeliveryProof', 'Dashboard::getDeliveryProof', ['filter' => 'auth:admin']);
 $routes->get('/uploads/delivery_proofs/(:any)', 'Dashboard::serveDeliveryProof/$1');
 
@@ -152,6 +154,8 @@ $routes->post('/orders/save-delivery-info', 'Dashboard::saveDeliveryInfo', ['fil
 
 // Admin order details page
 $routes->get('/admin/order-details/(:num)', 'Dashboard::viewAdminOrderDetails/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->get('/rider/order-details/(:num)', 'Dashboard::viewRiderOrderDetails/$1', ['filter' => 'auth:rider']);
+$routes->get('/dashboard/order-details-json/(:num)', 'Dashboard::orderDetailsJson/$1', ['filter' => 'auth']);
 
 // Backup Management routes (Admin only)
 $routes->get('/backup', 'BackupController::index', ['filter' => ['auth:admin', 'permission:manage_backups']]);

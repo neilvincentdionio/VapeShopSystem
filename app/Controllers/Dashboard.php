@@ -6,6 +6,7 @@ use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
 use App\Models\OrderModel;
+use App\Models\OrderReviewModel;
 use App\Models\RecordModel;
 use App\Libraries\SecurityAuditService;
 
@@ -17,6 +18,7 @@ class Dashboard extends BaseController
     protected $productModel;
     protected $orderModel;
     protected $recordModel;
+    protected $orderReviewModel;
     protected $securityAuditService;
 
     public function __construct()
@@ -26,6 +28,7 @@ class Dashboard extends BaseController
         $this->userModel = new UserModel();
         $this->productModel = new ProductModel();
         $this->orderModel = new OrderModel();
+        $this->orderReviewModel = new OrderReviewModel();
         $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
     }
@@ -103,6 +106,67 @@ class Dashboard extends BaseController
         }
 
         return true;
+    }
+
+    public function liveUpdateToken()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $userRole = (string) $this->session->get('user_role');
+        $userId = (int) $this->session->get('user_id');
+        $db = \Config\Database::connect();
+
+        try {
+            $ordersTs = 0;
+            $shipmentsTs = 0;
+            $paymentsTs = 0;
+
+            if ($userRole === 'admin') {
+                $ordersTs = (int) (($db->query("SELECT COALESCE(UNIX_TIMESTAMP(MAX(updated_at)), 0) AS ts FROM orders")->getRowArray()['ts'] ?? 0));
+                $shipmentsTs = (int) (($db->query("SELECT COALESCE(UNIX_TIMESTAMP(MAX(updated_at)), 0) AS ts FROM order_shipments")->getRowArray()['ts'] ?? 0));
+                $paymentsTs = (int) (($db->query("SELECT COALESCE(UNIX_TIMESTAMP(MAX(updated_at)), 0) AS ts FROM order_payments")->getRowArray()['ts'] ?? 0));
+            } elseif ($userRole === 'rider') {
+                $shipmentsTs = (int) (($db->query(
+                    "SELECT COALESCE(UNIX_TIMESTAMP(MAX(updated_at)), 0) AS ts FROM order_shipments WHERE assigned_rider_id = ?",
+                    [$userId]
+                )->getRowArray()['ts'] ?? 0));
+            } else {
+                // Customer and other authenticated users: track own orders and related shipments/payments.
+                $ordersTs = (int) (($db->query(
+                    "SELECT COALESCE(UNIX_TIMESTAMP(MAX(updated_at)), 0) AS ts FROM orders WHERE customer_id = ?",
+                    [$userId]
+                )->getRowArray()['ts'] ?? 0));
+                $shipmentsTs = (int) (($db->query(
+                    "SELECT COALESCE(UNIX_TIMESTAMP(MAX(s.updated_at)), 0) AS ts
+                     FROM order_shipments s
+                     JOIN orders o ON o.id = s.order_id
+                     WHERE o.customer_id = ?",
+                    [$userId]
+                )->getRowArray()['ts'] ?? 0));
+                $paymentsTs = (int) (($db->query(
+                    "SELECT COALESCE(UNIX_TIMESTAMP(MAX(p.updated_at)), 0) AS ts
+                     FROM order_payments p
+                     JOIN orders o ON o.id = p.order_id
+                     WHERE o.customer_id = ?",
+                    [$userId]
+                )->getRowArray()['ts'] ?? 0));
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'token' => implode(':', [$ordersTs, $shipmentsTs, $paymentsTs]),
+                'role' => $userRole,
+                'checked_at' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Unable to check updates',
+            ]);
+        }
     }
 
     /**
@@ -309,7 +373,7 @@ class Dashboard extends BaseController
     private function getRiderDeliveries(): array
     {
         $orders = $this->orderModel->getAdminOrders();
-        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'ready_for_pickup', 'delivered_to_rider'];
+        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses): bool {
             return in_array((string) ($order['delivery_status'] ?? 'to_pay'), $deliveryStatuses, true);
@@ -427,8 +491,8 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $orderId = $this->request->getPost('order_id');
-        $status = $this->request->getPost('status');
+        $orderId = (int) $this->request->getPost('order_id');
+        $status = (string) $this->request->getPost('status');
 
         if (!$orderId || !$status) {
             return $this->response->setJSON(['success' => false, 'message' => 'Invalid request']);
@@ -436,16 +500,105 @@ class Dashboard extends BaseController
 
         try {
             $riderId = (int) $this->session->get('user_id');
-            
-            if ($status === 'ready_for_pickup') {
-                $this->orderModel->markOrderReadyForPickup($orderId, $riderId);
-                return $this->response->setJSON(['success' => true, 'message' => 'Order marked as ready for pickup']);
+            $shipment = $this->orderModel->getShipmentByOrderId($orderId);
+            if (! $shipment) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
             }
 
-            return $this->response->setJSON(['success' => false, 'message' => 'Invalid status']);
+            if ((int) ($shipment['assigned_rider_id'] ?? 0) !== $riderId) {
+                return $this->response->setJSON(['success' => false, 'message' => 'This order is not assigned to you']);
+            }
+
+            $currentStatus = (string) ($shipment['status'] ?? 'to_pay');
+
+            if ($status === 'accepted_by_rider') {
+                if ($currentStatus !== 'ready_for_pickup') {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order is not ready for acceptance']);
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'accepted_by_rider', []);
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Delivery accepted successfully' : 'Unable to accept delivery',
+                ]);
+            }
+
+            if ($status === 'delivered_to_rider') {
+                if ($currentStatus !== 'accepted_by_rider') {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Please accept the delivery before pickup']);
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'delivered_to_rider', [
+                    'picked_up_at' => date('Y-m-d H:i:s'),
+                ]);
+
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Order picked up successfully' : 'Unable to update pickup status',
+                ]);
+            }
+
+            if ($status === 'to_receive') {
+                if (! in_array($currentStatus, ['delivered_to_rider', 'failed_delivery'], true)) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order cannot start delivery from current state']);
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'to_receive', []);
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Delivery started' : 'Unable to start delivery',
+                ]);
+            }
+
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid status transition']);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
         }
+    }
+
+    public function assignRiderToOrder()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $payload = $this->request->getJSON(true) ?? [];
+        $orderId = (int) ($payload['order_id'] ?? $this->request->getPost('order_id'));
+        $riderId = (int) ($payload['rider_id'] ?? $this->request->getPost('rider_id'));
+
+        if ($orderId <= 0 || $riderId <= 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order and rider are required']);
+        }
+
+        $rider = $this->userModel->find($riderId);
+        if (! $rider || (string) ($rider['role'] ?? '') !== 'rider') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid rider selected']);
+        }
+
+        $shipment = $this->orderModel->getShipmentByOrderId($orderId);
+        if (! $shipment) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
+        }
+
+        $currentStatus = (string) ($shipment['status'] ?? 'to_pay');
+        if (in_array($currentStatus, ['completed', 'cancelled'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Completed/cancelled orders cannot be reassigned']);
+        }
+        if (in_array($currentStatus, ['to_receive', 'delivered_to_rider'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Rider cannot be reassigned after pickup/start delivery']);
+        }
+
+        $updated = $this->orderModel->assignRiderToOrder($orderId, $riderId);
+        if (! $updated) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign rider']);
+        }
+
+        return $this->response->setJSON(['success' => true, 'message' => 'Rider assigned successfully']);
     }
 
     /**
@@ -521,7 +674,7 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $orderId = $this->request->getPost('order_id');
+        $orderId = (int) $this->request->getPost('order_id');
         $deliveryNotes = $this->request->getPost('delivery_notes');
         $proofImage = $this->request->getFile('delivery_proof');
 
@@ -560,9 +713,37 @@ class Dashboard extends BaseController
             }
             
             if ($proofImage->move($uploadPath, $filename)) {
-                // Save proof information to database and mark order as completed
-                $this->saveDeliveryProof($orderId, $filename, $deliveryNotes);
-                $this->markOrderAsCompleted($orderId);
+                $shipment = $this->orderModel->getShipmentByOrderId($orderId);
+                $riderId = (int) $this->session->get('user_id');
+                if (! $shipment) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
+                }
+                if ((int) ($shipment['assigned_rider_id'] ?? 0) !== $riderId) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'You are not assigned to this order']);
+                }
+                if ((string) ($shipment['status'] ?? '') !== 'to_receive') {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order must be out for delivery before completion']);
+                }
+
+                $updated = $this->orderModel->updateOrder(
+                    $orderId,
+                    ['status' => 'completed'],
+                    [],
+                    [
+                        'status' => 'completed',
+                        'delivery_proof_image' => $filename,
+                        'delivery_notes' => $deliveryNotes,
+                        'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
+                        'completed_at' => date('Y-m-d H:i:s'),
+                        'delivered_at' => date('Y-m-d H:i:s'),
+                    ]
+                );
+
+                if (! $updated) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Failed to complete delivery']);
+                }
+
+                $this->syncOrderToRecord($orderId);
                 
                 return $this->response->setJSON(['success' => true, 'message' => 'Delivery proof submitted successfully']);
             } else {
@@ -571,55 +752,6 @@ class Dashboard extends BaseController
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
         }
-    }
-
-    private function saveDeliveryProof(int $orderId, string $filename, ?string $notes = null): void
-    {
-        $data = [
-            'order_id' => $orderId,
-            'rider_id' => $this->session->get('user_id'),
-            'proof_image' => $filename,
-            'notes' => $notes,
-            'submitted_at' => date('Y-m-d H:i:s')
-        ];
-
-        // Store proof information in order_shipments table
-        $db = \Config\Database::connect();
-        $db->table('order_shipments')
-            ->where('order_id', $orderId)
-            ->update([
-                'delivery_proof_image' => $filename,
-                'delivery_notes' => $notes,
-                'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
-    }
-
-    private function markOrderAsCompleted(int $orderId): void
-    {
-        $db = \Config\Database::connect();
-        
-        // Update order status to completed
-        $db->table('orders')
-            ->where('id', $orderId)
-            ->update(['status' => 'completed']);
-        
-        // Update shipment status to completed
-        $db->table('order_shipments')
-            ->where('order_id', $orderId)
-            ->update([
-                'status' => 'completed',
-                'delivered_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
-        
-        // Update payment status to paid
-        $db->table('order_payments')
-            ->where('order_id', $orderId)
-            ->update([
-                'status' => 'paid',
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
     }
 
     /**
@@ -1452,6 +1584,8 @@ class Dashboard extends BaseController
             $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
             $displayStatus = in_array($deliveryStatus, ['completed', 'cancelled'], true) ? $deliveryStatus : 'pending';
             $normalizedPayment = $this->normalizeOrderPayment($order);
+            $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
+            $assignedRider = $assignedRiderId > 0 ? $this->userModel->find($assignedRiderId) : null;
 
             $orderDetails[] = [
                 'id' => $order['id'],
@@ -1469,8 +1603,17 @@ class Dashboard extends BaseController
                 'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?? 'Not provided'),
                 'items' => $order['items'] ?? [],
                 'customer' => $customerInfo,
+                'assigned_rider_id' => $assignedRiderId,
+                'assigned_rider_name' => $assignedRider['name'] ?? null,
+                'delivery_proof_image' => $order['delivery_proof_image'] ?? null,
+                'delivery_proof_submitted_at' => $order['delivery_proof_submitted_at'] ?? null,
             ];
         }
+
+        $riders = array_values(array_filter(
+            $this->userModel->findAll(),
+            static fn (array $user): bool => (string) ($user['role'] ?? '') === 'rider'
+        ));
 
         $data = [
             'user_name' => $this->session->get('user_name'),
@@ -1479,6 +1622,7 @@ class Dashboard extends BaseController
             'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Orders Management',
             'orders' => $orderDetails,
+            'riders' => $riders,
         ];
 
         return view('admin/orders/index', $data);
@@ -1718,7 +1862,7 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $validStatuses = ['to_pay', 'to_ship', 'to_receive', 'completed', 'failed_delivery'];
+        $validStatuses = ['to_pay', 'to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider', 'to_receive', 'completed', 'failed_delivery'];
         if (!in_array($newStatus, $validStatuses)) {
             return $this->response->setStatusCode(400)->setJSON([
                 'success' => false,
@@ -1754,6 +1898,21 @@ class Dashboard extends BaseController
 
         $customer = $this->userModel->find((int) ($order['created_by'] ?? 0));
         $shipmentData = $this->buildCustomerShipmentData($customer, []);
+
+        $currentDeliveryStatus = (string) ($order['delivery_status'] ?? 'to_pay');
+        if (
+            $newStatus === 'delivered_to_rider'
+            && $currentDeliveryStatus !== 'accepted_by_rider'
+        ) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'success' => false,
+                'message' => 'Pickup can only be marked after rider accepts the delivery.',
+            ]);
+        }
+        if ($newStatus === 'delivered_to_rider') {
+            $shipmentData['picked_up_at'] = date('Y-m-d H:i:s');
+        }
+
         if ($newStatus === 'to_ship' && empty($order['tracking_number'])) {
             $shipmentData['tracking_number'] = $this->generateTrackingNumber();
         }
@@ -1982,6 +2141,88 @@ class Dashboard extends BaseController
         ];
 
         return view('admin/orders/order_details', $data);
+    }
+
+    public function viewRiderOrderDetails($orderId)
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $order = $this->orderModel->getOrder((int) $orderId);
+        if (! $order) {
+            return redirect()->to('/rider/deliveries')->with('error', 'Order not found.');
+        }
+
+        $riderId = (int) $this->session->get('user_id');
+        $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
+        if ($assignedRiderId !== $riderId) {
+            return redirect()->to('/rider/deliveries')->with('error', 'Access denied for this order.');
+        }
+
+        return view('rider/order_details', $this->getRiderPageData('Order Details', 'deliveries', [
+            'order' => $order,
+            'items' => $order['items'] ?? [],
+        ]));
+    }
+
+    public function orderDetailsJson($orderId)
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $id = (int) $orderId;
+        if ($id <= 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid order']);
+        }
+
+        $order = $this->orderModel->getOrder($id);
+        if (! $order) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+        }
+
+        $role = (string) $this->session->get('user_role');
+        $userId = (int) $this->session->get('user_id');
+
+        if ($role === 'rider') {
+            if ((int) ($order['assigned_rider_id'] ?? 0) !== $userId) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            }
+        } elseif ($role === 'customer') {
+            if ((int) ($order['created_by'] ?? 0) !== $userId) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            }
+        } elseif ($role !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $customerInfo = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'order' => [
+                'id' => (int) ($order['id'] ?? 0),
+                'reference_number' => (string) ($order['reference_number'] ?? ''),
+                'delivery_status' => (string) ($order['delivery_status'] ?? 'to_pay'),
+                'date' => (string) ($order['date'] ?? ''),
+                'total_amount' => (float) ($order['total_amount'] ?? 0),
+                'shipping_address' => (string) ($order['shipping_address'] ?? ($customerInfo['address'] ?? 'Not provided')),
+                'contact_number' => (string) ($order['contact_number'] ?? ($customerInfo['phone'] ?? 'Not provided')),
+                'shipment_notes' => (string) ($order['shipment_notes'] ?? ''),
+                'customer_name' => (string) ($customerInfo['name'] ?? 'Customer'),
+                'customer_email' => (string) ($customerInfo['email'] ?? ''),
+                'items' => array_values(array_map(static function ($item) {
+                    return [
+                        'name' => (string) ($item['name'] ?? 'Product'),
+                        'qty' => (int) ($item['qty'] ?? 0),
+                        'unit_price' => (float) ($item['unit_price'] ?? 0),
+                    ];
+                }, (array) ($order['items'] ?? []))),
+            ],
+        ]);
     }
 
     /**
@@ -2442,9 +2683,130 @@ class Dashboard extends BaseController
 
     private function reviewOrder($order)
     {
-        // For now, redirect to orders with a message
-        // In a real implementation, this would go to a review page
-        return redirect()->to('/customer/orders')->with('info', 'Review feature coming soon!');
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
+        }
+
+        if (($order['delivery_status'] ?? '') !== 'completed') {
+            return redirect()->to('/customer/orders')->with('error', 'You can only review completed orders.');
+        }
+
+        return redirect()->to('/customer/review/form?order_id=' . $orderId);
+    }
+
+    public function reviewForm()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = (int) $this->request->getGet('order_id');
+        if ($orderId <= 0) {
+            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
+        }
+
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order || (int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        if (($order['delivery_status'] ?? '') !== 'completed') {
+            return redirect()->to('/customer/orders')->with('error', 'Only completed orders can be reviewed.');
+        }
+
+        $customerId = (int) $this->session->get('user_id');
+        $existingReview = $this->orderReviewModel->getCustomerReviewForOrder($orderId, $customerId);
+
+        return view('customer/review_form', $this->getCustomerPageData('Write a Review', 'orders', [
+            'order' => $order,
+            'existingReview' => $existingReview,
+        ]));
+    }
+
+    public function submitReview()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = (int) $this->request->getPost('order_id');
+        $rating = (int) $this->request->getPost('rating');
+        $reviewText = trim((string) $this->request->getPost('review_text'));
+        $customerId = (int) $this->session->get('user_id');
+
+        if ($orderId <= 0) {
+            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
+        }
+
+        if ($rating < 1 || $rating > 5) {
+            return redirect()->back()->withInput()->with('error', 'Rating must be between 1 and 5 stars.');
+        }
+
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order || (int) ($order['created_by'] ?? 0) !== $customerId) {
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        if (($order['delivery_status'] ?? '') !== 'completed') {
+            return redirect()->to('/customer/orders')->with('error', 'Only completed orders can be reviewed.');
+        }
+
+        $payload = [
+            'order_id' => $orderId,
+            'customer_id' => $customerId,
+            'rating' => $rating,
+            'review_text' => $reviewText !== '' ? mb_substr($reviewText, 0, 1000) : null,
+        ];
+
+        $existing = $this->orderReviewModel->getCustomerReviewForOrder($orderId, $customerId);
+        if ($existing && isset($existing['id'])) {
+            $saved = $this->orderReviewModel->update((int) $existing['id'], $payload);
+        } else {
+            $saved = (bool) $this->orderReviewModel->insert($payload);
+        }
+
+        if (! $saved) {
+            return redirect()->back()->withInput()->with('error', 'Failed to save review. Please try again.');
+        }
+
+        return redirect()->to('/customer/orders?tab=completed')->with('success', 'Thank you! Your review has been submitted.');
+    }
+
+    public function getCustomerOrderReviews($orderId = null)
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $id = (int) $orderId;
+        $customerId = (int) $this->session->get('user_id');
+        if ($id <= 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid order']);
+        }
+
+        $review = $this->orderReviewModel->getCustomerReviewForOrder($id, $customerId);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'review' => $review,
+        ]);
+    }
+
+    public function markReviewHelpful()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Feature available for public product reviews.',
+        ]);
     }
 
     /**

@@ -12,14 +12,15 @@ if (!function_exists('getDeliveryStatusLabel')) {
     function getDeliveryStatusLabel($status) {
         $labels = [
             'to_pay' => 'To Pay',
-            'to_ship' => 'To Ship',
-            'to_receive' => 'To Receive',
+            'to_ship' => 'Order Placed',
+            'to_receive' => 'Out for Delivery',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
             'failed_delivery' => 'Failed Delivery',
-            'ready_for_pickup' => 'Ready For Pickup',
-            'delivered_to_rider' => 'Delivered To Rider'
+            'ready_for_pickup' => 'Rider Assigned',
+            'accepted_by_rider' => 'Accepted by Rider',
+            'delivered_to_rider' => 'Picked Up'
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -431,6 +432,11 @@ $activeDeliveries = count(array_filter(
             vertical-align: top;
         }
 
+        .data-table td:last-child {
+            vertical-align: middle;
+            width: 210px;
+        }
+
         .data-table tr:hover {
             background: #f8f9fa;
         }
@@ -737,11 +743,51 @@ $activeDeliveries = count(array_filter(
             box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
         }
 
+        .action-btn {
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: var(--main-font);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .action-btn + .action-btn {
+            margin-top: .35rem;
+        }
+
+        .action-meta {
+            margin-top: 0;
+        }
+
+        .action-cell {
+            display: flex;
+            flex-direction: column;
+            gap: .35rem;
+            align-items: stretch;
+        }
+
+        .action-cell .status-badge,
+        .action-cell .action-btn,
+        .action-cell .action-meta {
+            width: 100%;
+        }
+
         .btn-checkout,
         .btn-transit,
         .btn-delivered,
         .btn-delivery,
-        .btn-failed {
+        .btn-failed,
+        .btn-view-proof {
             width: 100%;
             justify-content: center;
             margin-bottom: 0;
@@ -1093,26 +1139,43 @@ $activeDeliveries = count(array_filter(
                                 </span>
                             </td>
                             <td>
+                                <div class="action-cell">
                                 <?php 
                                 $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
                                 // Debug: Show actual status (remove this line after fixing)
                                 // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
                                 ?>
-                                <?php if (in_array($deliveryStatus, ['cancelled', 'return_refund'])): ?>
-                                    <!-- Actions column is blank for Cancelled and Return/Refund orders -->
-                                <?php elseif ($deliveryStatus === 'ready_for_pickup'): ?>
-                                    <button class="action-btn btn-start" onclick="deliverToRider(<?= $order['id'] ?>)">
-                                        <i class="fas fa-motorcycle"></i> Deliver to rider
+                                <?php if ($deliveryStatus !== 'completed'): ?>
+                                    <button type="button" class="action-btn btn-view-proof" onclick="openOrderDetailsModal(<?= (int) $order['id'] ?>)">
+                                        <i class="fas fa-eye"></i> View Details
                                     </button>
+                                <?php endif; ?>
+                                <?php if ($deliveryStatus === 'to_ship' || $deliveryStatus === 'ready_for_pickup' || $deliveryStatus === 'accepted_by_rider'): ?>
+                                    <button class="action-btn btn-checkout" onclick="assignRider(<?= (int) $order['id'] ?>, <?= (int) ($order['assigned_rider_id'] ?? 0) ?>)">
+                                        <i class="fas fa-motorcycle"></i> <?= ($deliveryStatus === 'to_ship') ? 'Assign Rider' : 'Reassign Rider' ?>
+                                    </button>
+                                    <?php if (!empty($order['assigned_rider_name'])): ?>
+                                        <div class="muted action-meta">Assigned: <?= esc($order['assigned_rider_name']) ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($deliveryStatus === 'accepted_by_rider'): ?>
+                                        <button class="action-btn btn-delivered" onclick="updateDeliveryStatus(<?= (int) $order['id'] ?>, 'delivered_to_rider')">
+                                            <i class="fas fa-box"></i> Mark as Picked Up
+                                        </button>
+                                    <?php endif; ?>
                                 <?php elseif ($deliveryStatus === 'completed'): ?>
                                     <button class="action-btn btn-view-proof" onclick="viewDeliveryProof(<?= $order['id'] ?>)">
                                         <i class="fas fa-image"></i> View Proof
                                     </button>
+                                <?php elseif (in_array($deliveryStatus, ['cancelled', 'return_refund'], true)): ?>
+                                    <span class="status-badge" style="background: #f1f3f5; color: #6c757d; border: none;">
+                                        <i class="fas fa-info-circle"></i> No further action
+                                    </span>
                                 <?php else: ?>
                                     <span class="status-badge" style="background: #fff3cd; color: #856404; border: none;">
-                                        <i class="fas fa-clock"></i> Waiting For Rider
+                                        <i class="fas fa-clock"></i> In Delivery Progress
                                     </span>
                                 <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -1172,7 +1235,24 @@ $activeDeliveries = count(array_filter(
     </div>
 </div>
 
+<div id="orderDetailsModal" class="modal" style="display:none;">
+    <div class="modal-dialog">
+        <div class="modal-content" style="max-width:760px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-receipt"></i> Order Details</h3>
+                <button class="close" onclick="closeOrderDetailsModal()">&times;</button>
+            </div>
+            <div id="orderDetailsBody" class="modal-body"></div>
+        </div>
+    </div>
+</div>
+
 <script>
+const availableRiders = <?= json_encode(array_values(array_map(
+    static fn ($rider) => ['id' => (int) ($rider['id'] ?? 0), 'name' => (string) ($rider['name'] ?? 'Rider')],
+    $riders ?? []
+)), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+
 function openDeliveryModal(orderId) {
     document.getElementById('deliveryOrderId').value = orderId;
     document.getElementById('deliveryModal').style.display = 'block';
@@ -1263,33 +1343,47 @@ function updateDeliveryStatus(orderId, newStatus) {
     }
 }
 
-function deliverToRider(orderId) {
-    if (!confirm('Are you sure you want to deliver this order to the rider?')) {
+function assignRider(orderId, currentRiderId = 0) {
+    if (!Array.isArray(availableRiders) || availableRiders.length === 0) {
+        alert('No rider accounts available.');
         return;
     }
 
-    fetch('<?= site_url('dashboard/deliverOrderToRider') ?>', {
+    const options = availableRiders.map((r) => `${r.id}: ${r.name}`).join('\n');
+    const input = prompt(`Enter Rider ID to assign:\n\n${options}`, currentRiderId > 0 ? String(currentRiderId) : '');
+    if (!input) {
+        return;
+    }
+
+    const riderId = parseInt(input, 10);
+    if (!Number.isInteger(riderId) || riderId <= 0) {
+        alert('Invalid rider ID.');
+        return;
+    }
+
+    fetch('<?= site_url('dashboard/assignRiderToOrder') ?>', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
-            order_id: orderId
+            order_id: orderId,
+            rider_id: riderId
         })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Order delivered to rider successfully!');
+            alert('Rider assigned successfully!');
             location.reload();
         } else {
-            alert(data.message || 'Failed to deliver order to rider');
+            alert(data.message || 'Failed to assign rider');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('An error occurred while delivering the order to rider');
+        alert('An error occurred while assigning rider');
     });
 }
 
@@ -1534,6 +1628,100 @@ function sortOrders() {
         tableBody.appendChild(order.element);
     });
 }
+
+function openOrderDetailsModal(orderId) {
+    const modal = document.getElementById('orderDetailsModal');
+    const body = document.getElementById('orderDetailsBody');
+    body.innerHTML = '<p>Loading details...</p>';
+    modal.style.display = 'block';
+
+    fetch(`<?= site_url('dashboard/order-details-json') ?>/${orderId}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success || !data.order) {
+            body.innerHTML = `<p>${data.message || 'Unable to load details.'}</p>`;
+            return;
+        }
+
+        const o = data.order;
+        const items = (o.items || []).map(item => `
+            <div style="display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid #f0f0f0;">
+                <div>${item.name}<div style="font-size:.85rem;color:#666;">Qty: ${item.qty}</div></div>
+                <div><strong>₱${(item.unit_price * item.qty).toFixed(2)}</strong></div>
+            </div>
+        `).join('') || '<p>No items found.</p>';
+
+        body.innerHTML = `
+            <div style="display:grid;gap:.7rem;">
+                <div><strong>Order:</strong> ${o.reference_number}</div>
+                <div><strong>Customer:</strong> ${o.customer_name} ${o.customer_email ? `(${o.customer_email})` : ''}</div>
+                <div><strong>Address:</strong> ${o.shipping_address || 'Not provided'}</div>
+                <div><strong>Contact:</strong> ${o.contact_number || 'Not provided'}</div>
+                <div><strong>Notes:</strong> ${o.shipment_notes || 'None'}</div>
+                <div><strong>Status:</strong> ${String(o.delivery_status || '').replaceAll('_', ' ')}</div>
+                <div style="margin-top:.35rem;"><strong>Items</strong></div>
+                <div>${items}</div>
+            </div>
+        `;
+    })
+    .catch(() => {
+        body.innerHTML = '<p>An error occurred while loading details.</p>';
+    });
+}
+
+function closeOrderDetailsModal() {
+    document.getElementById('orderDetailsModal').style.display = 'none';
+}
+
+(() => {
+    const endpoint = '<?= site_url('dashboard/live-update-token') ?>';
+    let lastToken = null;
+    let inFlight = false;
+
+    async function checkForUpdates() {
+        if (document.hidden || inFlight) {
+            return;
+        }
+
+        inFlight = true;
+        try {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                cache: 'no-store'
+            });
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+            if (!data || !data.success || !data.token) {
+                return;
+            }
+
+            if (lastToken === null) {
+                lastToken = data.token;
+                return;
+            }
+
+            if (data.token !== lastToken) {
+                window.location.reload();
+            }
+        } catch (error) {
+            console.debug('Live update check failed:', error);
+        } finally {
+            inFlight = false;
+        }
+    }
+
+    setTimeout(checkForUpdates, 2000);
+    setInterval(checkForUpdates, 7000);
+    window.addEventListener('focus', checkForUpdates);
+})();
 </script>
 
 </body>

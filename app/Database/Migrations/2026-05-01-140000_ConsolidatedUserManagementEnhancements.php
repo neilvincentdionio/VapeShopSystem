@@ -4,10 +4,22 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class ExpandSensitiveUserFieldsForEncryption extends Migration
+class ConsolidatedUserManagementEnhancements extends Migration
 {
     public function up()
     {
+        // 1. Add rider role to users table
+        if ($this->db->tableExists('users')) {
+            $this->forge->modifyColumn('users', [
+                'role' => [
+                    'type'    => "ENUM('admin','customer','rider')",
+                    'null'    => false,
+                    'default' => 'customer',
+                ],
+            ]);
+        }
+
+        // 2. Expand sensitive user fields for encryption
         if ($this->db->tableExists('user_profiles')) {
             $this->forge->modifyColumn('user_profiles', [
                 'phone_number' => [
@@ -49,6 +61,22 @@ class ExpandSensitiveUserFieldsForEncryption extends Migration
 
     public function down()
     {
+        // 1. Remove rider role from users table
+        if ($this->db->tableExists('users')) {
+            $this->db->table('users')
+                ->where('role', 'rider')
+                ->update(['role' => 'customer']);
+
+            $this->forge->modifyColumn('users', [
+                'role' => [
+                    'type'    => "ENUM('admin','customer')",
+                    'null'    => false,
+                    'default' => 'customer',
+                ],
+            ]);
+        }
+
+        // 2. Revert sensitive user fields to original types
         if ($this->db->tableExists('user_profiles')) {
             $this->forge->modifyColumn('user_profiles', [
                 'phone_number' => [

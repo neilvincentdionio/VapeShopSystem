@@ -210,6 +210,7 @@ class OrderModel extends Model
                 ->update([
                     'status' => 'ready_for_pickup',
                     'assigned_rider_id' => $riderId,
+                    'assigned_at' => $existing['assigned_at'] ?? $timestamp,
                     'updated_at' => $timestamp
                 ]);
         } else {
@@ -219,6 +220,7 @@ class OrderModel extends Model
                     'order_id' => $orderId,
                     'status' => 'ready_for_pickup',
                     'assigned_rider_id' => $riderId,
+                    'assigned_at' => $timestamp,
                     'created_at' => $timestamp,
                     'updated_at' => $timestamp
                 ]);
@@ -235,6 +237,7 @@ class OrderModel extends Model
             ->where('order_id', $orderId)
             ->update([
                 'status' => 'delivered_to_rider',
+                'picked_up_at' => $timestamp,
                 'updated_at' => $timestamp
             ]);
 
@@ -250,6 +253,26 @@ class OrderModel extends Model
             ->where('s.status', 'ready_for_pickup')
             ->get()
             ->getResultArray();
+    }
+
+    public function assignRiderToOrder(int $orderId, int $riderId): bool
+    {
+        $timestamp = date('Y-m-d H:i:s');
+
+        return $this->updateDeliveryStatus($orderId, 'ready_for_pickup', [
+            'assigned_rider_id' => $riderId,
+            'assigned_at' => $timestamp,
+        ]);
+    }
+
+    public function getShipmentByOrderId(int $orderId): ?array
+    {
+        $row = $this->db->table('order_shipments')
+            ->where('order_id', $orderId)
+            ->get()
+            ->getRowArray();
+
+        return $row ?: null;
     }
 
     public function getOrdersDeliveredToRider(int $riderId): array
@@ -274,7 +297,8 @@ class OrderModel extends Model
                 'COALESCE(i.total_quantity, 0) AS quantity, COALESCE(i.total_amount, 0) AS total_amount, ' .
                 "COALESCE(p.method, 'cash') AS payment_method, COALESCE(p.status, 'unpaid') AS payment_status, " .
                 'p.amount_received, p.change_amount, ' .
-                "COALESCE(s.status, 'to_pay') AS delivery_status, s.tracking_number, s.shipping_address, s.contact_number, s.shipped_at, s.delivered_at, s.notes AS shipment_notes",
+                "COALESCE(s.status, 'to_pay') AS delivery_status, s.tracking_number, s.shipping_address, s.contact_number, s.shipped_at, s.delivered_at, s.notes AS shipment_notes, " .
+                's.assigned_rider_id, s.assigned_at, s.picked_up_at, s.completed_at, s.delivery_proof_image, s.delivery_notes, s.delivery_proof_submitted_at',
                 false
             )
             ->select('CASE WHEN COALESCE(i.total_quantity, 0) > 0 THEN ROUND(COALESCE(i.total_amount, 0) / i.total_quantity, 2) ELSE 0 END AS unit_price', false)
@@ -353,11 +377,18 @@ class OrderModel extends Model
 
         $payload = array_merge([
             'status' => $existing['status'] ?? 'to_pay',
+            'assigned_rider_id' => $existing['assigned_rider_id'] ?? null,
+            'assigned_at' => $existing['assigned_at'] ?? null,
+            'picked_up_at' => $existing['picked_up_at'] ?? null,
             'tracking_number' => $existing['tracking_number'] ?? null,
             'shipping_address' => $existing['shipping_address'] ?? null,
             'contact_number' => $existing['contact_number'] ?? null,
             'shipped_at' => $existing['shipped_at'] ?? null,
             'delivered_at' => $existing['delivered_at'] ?? null,
+            'completed_at' => $existing['completed_at'] ?? null,
+            'delivery_proof_image' => $existing['delivery_proof_image'] ?? null,
+            'delivery_notes' => $existing['delivery_notes'] ?? null,
+            'delivery_proof_submitted_at' => $existing['delivery_proof_submitted_at'] ?? null,
             'notes' => $existing['notes'] ?? null,
         ], $shipmentData, [
             'updated_at' => $timestamp,
