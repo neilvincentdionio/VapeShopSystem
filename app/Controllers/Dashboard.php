@@ -373,7 +373,7 @@ class Dashboard extends BaseController
     private function getRiderDeliveries(): array
     {
         $orders = $this->orderModel->getAdminOrders();
-        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
+        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses): bool {
             return in_array((string) ($order['delivery_status'] ?? 'to_pay'), $deliveryStatuses, true);
@@ -538,10 +538,67 @@ class Dashboard extends BaseController
                     return $this->response->setJSON(['success' => false, 'message' => 'Order cannot start delivery from current state']);
                 }
 
-                $result = $this->orderModel->updateDeliveryStatus($orderId, 'to_receive', []);
+                $activeDelivery = \Config\Database::connect()
+                    ->table('order_shipments')
+                    ->select('order_id, tracking_number')
+                    ->where('assigned_rider_id', $riderId)
+                    ->where('status', 'to_receive')
+                    ->where('order_id !=', $orderId)
+                    ->get()
+                    ->getRowArray();
+
+                if (! empty($activeDelivery)) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'You already have an active delivery in progress. Finish the current delivery first before starting another one.',
+                    ]);
+                }
+
+                $lat = $this->parseCoordinate($this->request->getPost('rider_latitude'));
+                $lng = $this->parseCoordinate($this->request->getPost('rider_longitude'));
+                $locationData = [];
+                if ($lat !== null && $lng !== null) {
+                    $locationData = [
+                        'rider_latitude' => $lat,
+                        'rider_longitude' => $lng,
+                        'last_location_updated_at' => date('Y-m-d H:i:s'),
+                    ];
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'to_receive', $locationData);
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Delivery started' : 'Unable to start delivery',
+                ]);
+            }
+
+            if ($status === 'failed_delivery') {
+                if (! in_array($currentStatus, ['accepted_by_rider', 'delivered_to_rider', 'to_receive'], true)) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Delivery cannot be cancelled from current state']);
+                }
+
+                $cancelReason = trim((string) $this->request->getPost('cancel_reason'));
+                $notesPrefix = 'RIDER_CANCELLED';
+                $existingNotes = trim((string) ($shipment['notes'] ?? ''));
+                $reasonText = $cancelReason !== '' ? $cancelReason : 'No reason provided';
+                $cancelNoteLine = $notesPrefix . ': ' . $reasonText . ' (' . date('Y-m-d H:i:s') . ')';
+                $updatedNotes = $existingNotes !== '' ? ($existingNotes . "\n" . $cancelNoteLine) : $cancelNoteLine;
+
+                $lat = $this->parseCoordinate($this->request->getPost('rider_latitude'));
+                $lng = $this->parseCoordinate($this->request->getPost('rider_longitude'));
+                $payload = [
+                    'notes' => $updatedNotes,
+                    'last_location_updated_at' => date('Y-m-d H:i:s'),
+                ];
+                if ($lat !== null && $lng !== null) {
+                    $payload['rider_latitude'] = $lat;
+                    $payload['rider_longitude'] = $lng;
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'failed_delivery', $payload);
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Delivery cancelled successfully' : 'Unable to cancel delivery',
                 ]);
             }
 
@@ -671,6 +728,8 @@ class Dashboard extends BaseController
 
         $orderId = (int) $this->request->getPost('order_id');
         $deliveryNotes = $this->request->getPost('delivery_notes');
+        $finalLat = $this->parseCoordinate($this->request->getPost('final_rider_latitude'));
+        $finalLng = $this->parseCoordinate($this->request->getPost('final_rider_longitude'));
         $proofImage = $this->request->getFile('delivery_proof');
 
         if (!$orderId) {
@@ -682,6 +741,18 @@ class Dashboard extends BaseController
         }
 
         try {
+            $shipment = $this->orderModel->getShipmentByOrderId($orderId);
+            $riderId = (int) $this->session->get('user_id');
+            if (! $shipment) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
+            }
+            if ((int) ($shipment['assigned_rider_id'] ?? 0) !== $riderId) {
+                return $this->response->setJSON(['success' => false, 'message' => 'You are not assigned to this order']);
+            }
+            if ((string) ($shipment['status'] ?? '') !== 'to_receive') {
+                return $this->response->setJSON(['success' => false, 'message' => 'Order must be out for delivery before completion']);
+            }
+
             // Validate image
             if (!$proofImage->isValid() || !$proofImage->getSize() > 0) {
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid image file']);
@@ -698,6 +769,21 @@ class Dashboard extends BaseController
                 return $this->response->setJSON(['success' => false, 'message' => 'Only JPEG, PNG, and GIF images are allowed']);
             }
 
+            $effectiveLat = $finalLat ?? (isset($shipment['rider_latitude']) ? (float) $shipment['rider_latitude'] : null);
+            $effectiveLng = $finalLng ?? (isset($shipment['rider_longitude']) ? (float) $shipment['rider_longitude'] : null);
+            if ($effectiveLat === null || $effectiveLng === null) {
+                return $this->response->setJSON(['success' => false, 'message' => 'GPS location unavailable. Please enable location and try again.']);
+            }
+            $deliveryLat = isset($shipment['delivery_latitude']) ? (float) $shipment['delivery_latitude'] : null;
+            $deliveryLng = isset($shipment['delivery_longitude']) ? (float) $shipment['delivery_longitude'] : null;
+            if ($deliveryLat !== null && $deliveryLng !== null) {
+                $meters = $this->calculateDistanceMeters($effectiveLat, $effectiveLng, $deliveryLat, $deliveryLng);
+                $maxMeters = (float) (getenv('DELIVERY_COMPLETION_MAX_DISTANCE_METERS') ?: 500);
+                if ($meters > $maxMeters) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'You are too far from customer location to complete this delivery']);
+                }
+            }
+
             // Generate unique filename
             $filename = 'delivery_proof_' . $orderId . '_' . time() . '.' . $proofImage->getExtension();
             
@@ -708,33 +794,26 @@ class Dashboard extends BaseController
             }
             
             if ($proofImage->move($uploadPath, $filename)) {
-                $shipment = $this->orderModel->getShipmentByOrderId($orderId);
-                $riderId = (int) $this->session->get('user_id');
-                if (! $shipment) {
-                    return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
-                }
-                if ((int) ($shipment['assigned_rider_id'] ?? 0) !== $riderId) {
-                    return $this->response->setJSON(['success' => false, 'message' => 'You are not assigned to this order']);
-                }
-                if ((string) ($shipment['status'] ?? '') !== 'to_receive') {
-                    return $this->response->setJSON(['success' => false, 'message' => 'Order must be out for delivery before completion']);
-                }
-
                 $updated = $this->orderModel->updateOrder(
                     $orderId,
-                    ['status' => 'completed'],
+                    [],
                     [],
                     [
-                        'status' => 'completed',
+                        'status' => 'delivered',
                         'delivery_proof_image' => $filename,
                         'delivery_notes' => $deliveryNotes,
                         'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
-                        'completed_at' => date('Y-m-d H:i:s'),
                         'delivered_at' => date('Y-m-d H:i:s'),
+                        'final_rider_latitude' => $effectiveLat,
+                        'final_rider_longitude' => $effectiveLng,
+                        'delivered_latitude' => $effectiveLat,
+                        'delivered_longitude' => $effectiveLng,
+                        'last_location_updated_at' => date('Y-m-d H:i:s'),
                     ]
                 );
 
                 if (! $updated) {
+                    @unlink($uploadPath . $filename);
                     return $this->response->setJSON(['success' => false, 'message' => 'Failed to complete delivery']);
                 }
 
@@ -1135,10 +1214,12 @@ class Dashboard extends BaseController
         if (count($cart['items']) === 0) {
             return redirect()->to('/customer/products')->with('error', 'Your cart is empty.');
         }
+        $customer = $this->userModel->find((int) $this->session->get('user_id'));
 
         return view('customer/checkout', $this->getCustomerPageData('Checkout', 'cart', [
             'cart_items' => $cart['items'],
             'estimated_total' => $cart['total'],
+            'customer_delivery_address' => is_array($customer) ? $this->buildCustomerAddressString($customer) : '',
         ]));
     }
 
@@ -1175,9 +1256,12 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/checkout')->with('error', 'Customer account not found.');
         }
 
-        $deliveryAddress = $this->getCheckoutDeliveryAddress($customer);
-        if ($deliveryAddress === null) {
+        $deliveryData = $this->getCheckoutDeliveryData($customer);
+        if ($deliveryData === null) {
             return redirect()->to('/customer/products')->with('error', 'Please enter a delivery address or use your saved address.');
+        }
+        if (!isset($deliveryData['delivery_latitude'], $deliveryData['delivery_longitude'])) {
+            return redirect()->to('/customer/checkout')->with('error', 'Please confirm your exact delivery location on the map.');
         }
         $deliveryDescription = trim(strip_tags((string) ($this->request->getPost('delivery_description') ?? '')));
 
@@ -1209,9 +1293,13 @@ class Dashboard extends BaseController
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
                 'status' => 'to_ship',
-                'shipping_address' => $deliveryAddress,
+                'shipping_address' => (string) $deliveryData['shipping_address'],
+                'delivery_address' => (string) $deliveryData['shipping_address'],
+                'delivery_latitude' => $deliveryData['delivery_latitude'],
+                'delivery_longitude' => $deliveryData['delivery_longitude'],
                 'notes' => $deliveryDescription,
             ]);
+            $shipmentData = array_merge($shipmentData, $this->getStoreShipmentData());
         } elseif ($paymentMethod === 'gcash') {
             $gcashReference = trim((string) ($this->request->getPost('gcash_reference') ?? ''));
             if ($gcashReference === '' || strlen($gcashReference) < 6) {
@@ -1234,9 +1322,13 @@ class Dashboard extends BaseController
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
                 'status' => 'to_ship',
-                'shipping_address' => $deliveryAddress,
+                'shipping_address' => (string) $deliveryData['shipping_address'],
+                'delivery_address' => (string) $deliveryData['shipping_address'],
+                'delivery_latitude' => $deliveryData['delivery_latitude'],
+                'delivery_longitude' => $deliveryData['delivery_longitude'],
                 'notes' => $deliveryDescription,
             ]);
+            $shipmentData = array_merge($shipmentData, $this->getStoreShipmentData());
         }
 
         $db->transStart();
@@ -1634,9 +1726,11 @@ class Dashboard extends BaseController
         return $shipmentData;
     }
 
-    private function getCheckoutDeliveryAddress(?array $customer = null): ?string
+    private function getCheckoutDeliveryData(?array $customer = null): ?array
     {
         $mode = (string) ($this->request->getPost('delivery_address_mode') ?? 'manual');
+        $lat = $this->parseCoordinate($this->request->getPost('delivery_latitude'));
+        $lng = $this->parseCoordinate($this->request->getPost('delivery_longitude'));
 
         if ($mode === 'saved_address') {
             if ($customer === null) {
@@ -1644,7 +1738,15 @@ class Dashboard extends BaseController
             }
 
             $savedAddress = $this->buildCustomerAddressString($customer);
-            return $savedAddress !== '' ? $savedAddress : null;
+            if ($savedAddress === '') {
+                return null;
+            }
+
+            return [
+                'shipping_address' => $savedAddress,
+                'delivery_latitude' => $lat,
+                'delivery_longitude' => $lng,
+            ];
         }
 
         $fields = [
@@ -1668,7 +1770,156 @@ class Dashboard extends BaseController
             return null;
         }
 
-        return implode(', ', $parts);
+        return [
+            'shipping_address' => implode(', ', $parts),
+            'delivery_latitude' => $lat,
+            'delivery_longitude' => $lng,
+        ];
+    }
+
+    private function parseCoordinate($value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        return (float) $value;
+    }
+
+    private function calculateDistanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371000.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) * sin($dLat / 2)
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) * sin($dLng / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        return $earthRadius * $c;
+    }
+
+    private function getStoreShipmentData(): array
+    {
+        $defaultLat = 6.1352000;
+        $defaultLng = 125.2179000;
+        $defaultAddress = 'Bula, General Santos City, South Cotabato, Philippines';
+
+        $lat = $this->parseCoordinate(getenv('STORE_LATITUDE') ?: null) ?? $defaultLat;
+        $lng = $this->parseCoordinate(getenv('STORE_LONGITUDE') ?: null) ?? $defaultLng;
+        $address = trim((string) (getenv('STORE_ADDRESS') ?: ''));
+
+        return [
+            'store_latitude' => $lat,
+            'store_longitude' => $lng,
+            'store_address' => $address !== '' ? $address : $defaultAddress,
+        ];
+    }
+
+    public function updateRiderLocation()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = (int) $this->request->getPost('order_id');
+        $lat = $this->parseCoordinate($this->request->getPost('rider_latitude'));
+        $lng = $this->parseCoordinate($this->request->getPost('rider_longitude'));
+        if ($orderId <= 0 || $lat === null || $lng === null) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid location payload']);
+        }
+
+        $shipment = $this->orderModel->getShipmentByOrderId($orderId);
+        $riderId = (int) $this->session->get('user_id');
+        if (! $shipment || (int) ($shipment['assigned_rider_id'] ?? 0) !== $riderId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Not authorized for this order']);
+        }
+
+        $status = (string) ($shipment['status'] ?? '');
+        if (!in_array($status, ['to_receive', 'delivered_to_rider', 'accepted_by_rider'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Location updates are only allowed during active delivery']);
+        }
+
+        $ok = $this->orderModel->updateOrder($orderId, [], [], [
+            'rider_latitude' => $lat,
+            'rider_longitude' => $lng,
+            'last_location_updated_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON(['success' => (bool) $ok]);
+    }
+
+    public function orderTracking($orderId)
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $order = $this->orderModel->getOrder((int) $orderId);
+        if (! $order) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+        }
+
+        $role = (string) $this->session->get('user_role');
+        $userId = (int) $this->session->get('user_id');
+
+        if ($role === 'customer' && (int) ($order['created_by'] ?? 0) !== $userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+        if ($role === 'rider' && (int) ($order['assigned_rider_id'] ?? 0) !== $userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+        if (!in_array($role, ['admin', 'customer', 'rider'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $rider = null;
+        if (!empty($order['assigned_rider_id'])) {
+            $r = $this->userModel->find((int) $order['assigned_rider_id']);
+            if ($r) {
+                $rider = [
+                    'name' => (string) ($r['name'] ?? 'Rider'),
+                    'contact' => (string) ($r['phone_number'] ?? $r['phone'] ?? ''),
+                ];
+            }
+        }
+
+        $status = (string) ($order['delivery_status'] ?? 'to_pay');
+        $allowCustomerLiveRider = in_array($status, ['delivered_to_rider', 'to_receive', 'delivered', 'completed'], true);
+        $riderLat = isset($order['rider_latitude']) ? (float) $order['rider_latitude'] : null;
+        $riderLng = isset($order['rider_longitude']) ? (float) $order['rider_longitude'] : null;
+        if ($role === 'customer' && ! $allowCustomerLiveRider) {
+            $riderLat = null;
+            $riderLng = null;
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'tracking' => [
+                'order_id' => (int) ($order['id'] ?? 0),
+                'status' => $status,
+                'phase' => in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true) ? 'pickup' : (in_array($status, ['delivered_to_rider', 'to_receive', 'delivered'], true) ? 'delivery' : 'none'),
+                'delivery_address' => (string) ($order['delivery_address'] ?? $order['shipping_address'] ?? ''),
+                'delivery_latitude' => isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null,
+                'delivery_longitude' => isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null,
+                'store_address' => (string) ($order['store_address'] ?? ''),
+                'store_latitude' => isset($order['store_latitude']) ? (float) $order['store_latitude'] : null,
+                'store_longitude' => isset($order['store_longitude']) ? (float) $order['store_longitude'] : null,
+                'rider_latitude' => $riderLat,
+                'rider_longitude' => $riderLng,
+                'last_location_updated_at' => $order['last_location_updated_at'] ?? null,
+                'rider' => $rider,
+                'proof_image' => $order['delivery_proof_image'] ?? null,
+                'proof_notes' => $order['delivery_notes'] ?? null,
+                'proof_submitted_at' => $order['delivery_proof_submitted_at'] ?? null,
+                'final_rider_latitude' => isset($order['final_rider_latitude']) ? (float) $order['final_rider_latitude'] : null,
+                'final_rider_longitude' => isset($order['final_rider_longitude']) ? (float) $order['final_rider_longitude'] : null,
+            ],
+        ]);
     }
 
     private function generateReceiptNumber(): string
@@ -2076,6 +2327,22 @@ class Dashboard extends BaseController
             $shipmentData['tracking_number'] = $this->generateTrackingNumber();
         }
 
+        if ($newStatus === 'completed') {
+            if (($order['delivery_status'] ?? '') !== 'delivered') {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'Admin can confirm received only after rider marks order as delivered.',
+                ]);
+            }
+            if (empty($order['delivery_proof_image'])) {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'Delivery proof is required before admin confirmation.',
+                ]);
+            }
+            $shipmentData['completed_at'] = date('Y-m-d H:i:s');
+        }
+
         try {
             // COD: mark as paid only when parcel is delivered.
             if ($newStatus === 'completed' && $isCodOrder && ($order['payment_status'] ?? 'unpaid') !== 'paid') {
@@ -2319,6 +2586,7 @@ class Dashboard extends BaseController
         if ($assignedRiderId !== $riderId) {
             return redirect()->to('/rider/deliveries')->with('error', 'Access denied for this order.');
         }
+        $order['customer'] = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
 
         return view('rider/order_details', $this->getRiderPageData('Order Details', 'deliveries', [
             'order' => $order,
@@ -2371,6 +2639,14 @@ class Dashboard extends BaseController
                 'shipping_address' => (string) ($order['shipping_address'] ?? ($customerInfo['address'] ?? 'Not provided')),
                 'contact_number' => (string) ($order['contact_number'] ?? ($customerInfo['phone'] ?? 'Not provided')),
                 'shipment_notes' => (string) ($order['shipment_notes'] ?? ''),
+                'delivery_latitude' => isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null,
+                'delivery_longitude' => isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null,
+                'rider_latitude' => isset($order['rider_latitude']) ? (float) $order['rider_latitude'] : null,
+                'rider_longitude' => isset($order['rider_longitude']) ? (float) $order['rider_longitude'] : null,
+                'last_location_updated_at' => $order['last_location_updated_at'] ?? null,
+                'store_address' => (string) ($order['store_address'] ?? ''),
+                'store_latitude' => isset($order['store_latitude']) ? (float) $order['store_latitude'] : null,
+                'store_longitude' => isset($order['store_longitude']) ? (float) $order['store_longitude'] : null,
                 'customer_name' => (string) ($customerInfo['name'] ?? 'Customer'),
                 'customer_email' => (string) ($customerInfo['email'] ?? ''),
                 'items' => array_values(array_map(static function ($item) {
@@ -2701,9 +2977,10 @@ class Dashboard extends BaseController
 
     private function confirmOrderReceived($order)
     {
-        if ($order['delivery_status'] !== 'to_receive') {
-            return redirect()->to('/customer/orders')->with('error', 'Order cannot be confirmed.');
+        if (($order['delivery_status'] ?? '') !== 'delivered') {
+            return redirect()->to('/customer/orders')->with('error', 'Order cannot be confirmed yet.');
         }
+
         $orderId = (int) ($order['id'] ?? 0);
         if ($orderId <= 0) {
             return redirect()->to('/customer/orders')->with('error', 'Invalid order.');

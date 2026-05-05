@@ -29,7 +29,11 @@ class OrderModel extends Model
             ->orderBy('o.created_at', 'DESC');
 
         if ($deliveryStatus !== null && $deliveryStatus !== 'all') {
-            $builder->where("COALESCE(s.status, 'to_pay') = " . $this->db->escape($deliveryStatus), null, false);
+            if ($deliveryStatus === 'to_receive') {
+                $builder->where("COALESCE(s.status, 'to_pay') IN ('delivered_to_rider','to_receive','delivered')", null, false);
+            } else {
+                $builder->where("COALESCE(s.status, 'to_pay') = " . $this->db->escape($deliveryStatus), null, false);
+            }
         }
 
         return $this->attachItems($builder->get()->getResultArray());
@@ -58,9 +62,12 @@ class OrderModel extends Model
 
         foreach ($rows as $row) {
             $status = (string) ($row['delivery_status'] ?? 'to_pay');
+            if (in_array($status, ['delivered_to_rider', 'delivered', 'to_receive'], true)) {
+                $status = 'to_receive';
+            }
             $count = (int) ($row['count'] ?? 0);
             if (array_key_exists($status, $counts)) {
-                $counts[$status] = $count;
+                $counts[$status] += $count;
             }
             $counts['all'] += $count;
         }
@@ -323,7 +330,9 @@ class OrderModel extends Model
                 "COALESCE(p.method, 'cash') AS payment_method, CASE WHEN COALESCE(s.status, o.status) = 'completed' THEN 'paid' ELSE COALESCE(p.status, 'unpaid') END AS payment_status, " .
                 'p.amount_received, p.change_amount, ' .
                 "COALESCE(s.status, 'to_pay') AS delivery_status, s.tracking_number, s.shipping_address, s.contact_number, s.shipped_at, s.delivered_at, s.notes AS shipment_notes, " .
-                's.assigned_rider_id, s.assigned_at, s.picked_up_at, s.completed_at, s.delivery_proof_image, s.delivery_notes, s.delivery_proof_submitted_at',
+                's.assigned_rider_id, s.assigned_at, s.picked_up_at, s.completed_at, s.delivery_proof_image, s.delivery_notes, s.delivery_proof_submitted_at, ' .
+                's.delivery_latitude, s.delivery_longitude, s.delivery_address, s.rider_latitude, s.rider_longitude, s.last_location_updated_at, s.final_rider_latitude, s.final_rider_longitude, ' .
+                's.store_latitude, s.store_longitude, s.store_address, s.delivered_latitude, s.delivered_longitude',
                 false
             )
             ->select('CASE WHEN COALESCE(i.total_quantity, 0) > 0 THEN ROUND(COALESCE(i.total_amount, 0) / i.total_quantity, 2) ELSE 0 END AS unit_price', false)
@@ -414,6 +423,19 @@ class OrderModel extends Model
             'delivery_proof_image' => $existing['delivery_proof_image'] ?? null,
             'delivery_notes' => $existing['delivery_notes'] ?? null,
             'delivery_proof_submitted_at' => $existing['delivery_proof_submitted_at'] ?? null,
+            'delivery_latitude' => $existing['delivery_latitude'] ?? null,
+            'delivery_longitude' => $existing['delivery_longitude'] ?? null,
+            'delivery_address' => $existing['delivery_address'] ?? null,
+            'rider_latitude' => $existing['rider_latitude'] ?? null,
+            'rider_longitude' => $existing['rider_longitude'] ?? null,
+            'last_location_updated_at' => $existing['last_location_updated_at'] ?? null,
+            'final_rider_latitude' => $existing['final_rider_latitude'] ?? null,
+            'final_rider_longitude' => $existing['final_rider_longitude'] ?? null,
+            'store_latitude' => $existing['store_latitude'] ?? null,
+            'store_longitude' => $existing['store_longitude'] ?? null,
+            'store_address' => $existing['store_address'] ?? null,
+            'delivered_latitude' => $existing['delivered_latitude'] ?? null,
+            'delivered_longitude' => $existing['delivered_longitude'] ?? null,
             'notes' => $existing['notes'] ?? null,
         ], $shipmentData, [
             'updated_at' => $timestamp,

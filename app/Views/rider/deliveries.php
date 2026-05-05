@@ -1,5 +1,7 @@
 <?= $this->include('rider/partials/header') ?>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
     .page-header,
@@ -267,6 +269,7 @@
         'ready_for_pickup' => 'Rider Assigned',
         'accepted_by_rider' => 'Accepted by Rider',
         'delivered_to_rider' => 'Picked Up',
+        'delivered' => 'Delivered',
     ];
 ?>
 
@@ -319,7 +322,7 @@
             <tbody>
                 <?php foreach ($deliveries as $delivery): ?>
                     <?php $status = (string) ($delivery['delivery_status'] ?? 'to_ship'); ?>
-                    <tr data-delivery-status="<?= esc($status) ?>">
+                    <tr data-delivery-status="<?= esc($status) ?>" data-order-id="<?= (int) ($delivery['id'] ?? 0) ?>">
                         <td>
                             <strong><?= esc($delivery['reference_number'] ?? ('Order #' . ($delivery['id'] ?? ''))) ?></strong>
                             <div class="muted"><?= esc(date('M d, Y', strtotime((string) ($delivery['created_at'] ?? 'now')))) ?></div>
@@ -334,13 +337,16 @@
                         <td><span class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></span></td>
                         <td>
                             <div class="action-stack">
-                            <?php if ($status === 'completed'): ?>
+                            <?php if (in_array($status, ['completed', 'delivered'], true)): ?>
                                 <span class="status-badge" style="background: #e8f5e8; color: #2e7d2e; border: 1px solid #4caf50;">
                                     <i class="fas fa-check-circle"></i> Order Completed
                                 </span>
                             <?php else: ?>
                                 <button type="button" class="action-btn btn-pickup" onclick="openOrderDetailsModal(<?= (int) $delivery['id'] ?>)">
                                     <i class="fas fa-eye"></i> View Details
+                                </button>
+                                <button type="button" class="action-btn btn-pickup" onclick="openRouteMap(<?= (int) $delivery['id'] ?>)">
+                                    <i class="fas fa-map"></i> View Map
                                 </button>
                             <?php endif; ?>
                             <?php if ($status === 'ready_for_pickup'): ?>
@@ -393,7 +399,7 @@ function markReadyForPickup(orderId) {
         .then(data => {
             if (data.success) {
                 // Reload the page to show the updated status badge
-                location.reload();
+                reloadDeliveriesPage();
             } else {
                 alert(data.message || 'Failed to update status');
             }
@@ -421,7 +427,7 @@ function updateRiderDeliveryStatus(orderId, status, successMessage, confirmMessa
     .then(data => {
         if (data.success) {
             alert(successMessage);
-            location.reload();
+            reloadDeliveriesPage();
         } else {
             alert(data.message || 'Failed to update status');
         }
@@ -433,7 +439,114 @@ function updateRiderDeliveryStatus(orderId, status, successMessage, confirmMessa
 }
 
 function startDelivery(orderId) {
-    updateRiderDeliveryStatus(orderId, 'to_receive', 'Delivery started.');
+    if (hasOtherActiveDelivery(orderId)) {
+        alert('You cannot run two deliveries at the same time. Please complete your current Out for Delivery order before starting a new one.');
+        return;
+    }
+
+    if (!navigator.geolocation) {
+        updateRiderDeliveryStatus(orderId, 'to_receive', 'Delivery started.');
+        return;
+    }
+    navigator.geolocation.getCurrentPosition((position) => {
+        const body = `order_id=${orderId}&status=to_receive&rider_latitude=${encodeURIComponent(position.coords.latitude)}&rider_longitude=${encodeURIComponent(position.coords.longitude)}`;
+        fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                startLocationTracking(orderId);
+                alert('Delivery started.');
+                reloadDeliveriesPage();
+            } else {
+                alert(data.message || 'Failed to update status');
+            }
+        });
+    }, () => {
+        updateRiderDeliveryStatus(orderId, 'to_receive', 'Delivery started.');
+    });
+}
+
+function hasOtherActiveDelivery(orderId) {
+    const activeRows = Array.from(document.querySelectorAll('tr[data-delivery-status="to_receive"]'));
+    return activeRows.some((row) => parseInt(row.dataset.orderId || '0', 10) !== parseInt(orderId, 10));
+}
+
+let pendingCancelOrderId = null;
+function openDeliveryCancelPrompt(orderId, message) {
+    pendingCancelOrderId = parseInt(orderId || '0', 10);
+    const modal = document.getElementById('deliveryCancelPromptModal');
+    const messageEl = document.getElementById('deliveryCancelPromptMessage');
+    const confirmBtn = document.getElementById('deliveryCancelPromptConfirmBtn');
+    if (messageEl) {
+        messageEl.textContent = message || 'Do you want to cancel this delivery?';
+    }
+    if (confirmBtn) {
+        confirmBtn.onclick = function() {
+            const id = pendingCancelOrderId;
+            closeDeliveryCancelPrompt();
+            if (id > 0) {
+                cancelDelivery(id);
+            }
+        };
+    }
+    if (modal) {
+        modal.style.display = 'block';
+    }
+}
+
+function closeDeliveryCancelPrompt() {
+    const modal = document.getElementById('deliveryCancelPromptModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    pendingCancelOrderId = null;
+}
+
+function startLocationTracking(orderId) {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.watchPosition((position) => {
+        const body = `order_id=${orderId}&rider_latitude=${encodeURIComponent(position.coords.latitude)}&rider_longitude=${encodeURIComponent(position.coords.longitude)}`;
+        fetch('<?= site_url('dashboard/updateRiderLocation') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        }).catch(() => {});
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
+}
+
+function startActiveDeliveriesLocationLoop() {
+    if (!navigator.geolocation) {
+        return;
+    }
+
+    const activeOrderIds = Array.from(document.querySelectorAll('tr[data-delivery-status="to_receive"]'))
+        .map((row) => parseInt(row.dataset.orderId || '0', 10))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (activeOrderIds.length === 0) {
+        return;
+    }
+
+    const pushLocation = (lat, lng) => {
+        activeOrderIds.forEach((orderId) => {
+            const body = `order_id=${orderId}&rider_latitude=${encodeURIComponent(lat)}&rider_longitude=${encodeURIComponent(lng)}`;
+            fetch('<?= site_url('dashboard/updateRiderLocation') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body
+            }).catch(() => {});
+        });
+    };
+
+    navigator.geolocation.getCurrentPosition((position) => {
+        pushLocation(position.coords.latitude, position.coords.longitude);
+    }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
+
+    navigator.geolocation.watchPosition((position) => {
+        pushLocation(position.coords.latitude, position.coords.longitude);
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
 }
 
 function retryDelivery(orderId) {
@@ -446,6 +559,58 @@ function markPickedUp(orderId) {
 
 function acceptDelivery(orderId) {
     updateRiderDeliveryStatus(orderId, 'accepted_by_rider', 'Delivery accepted.');
+}
+
+function cancelDelivery(orderId) {
+    const reason = prompt('Enter cancellation reason (optional):', '');
+    if (reason === null) {
+        return;
+    }
+
+    const doSubmit = (lat = '', lng = '') => {
+        const params = new URLSearchParams();
+        params.set('order_id', String(orderId));
+        params.set('status', 'failed_delivery');
+        if (reason.trim()) {
+            params.set('cancel_reason', reason.trim());
+        }
+        if (lat !== '' && lng !== '') {
+            params.set('rider_latitude', String(lat));
+            params.set('rider_longitude', String(lng));
+        }
+
+        fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Delivery cancelled.');
+                reloadDeliveriesPage();
+            } else {
+                alert(data.message || 'Failed to cancel delivery');
+            }
+        })
+        .catch(() => {
+            alert('An error occurred while cancelling delivery');
+        });
+    };
+
+    if (!confirm('Cancel this delivery?')) {
+        return;
+    }
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            doSubmit(position.coords.latitude, position.coords.longitude);
+        }, () => {
+            doSubmit();
+        }, { enableHighAccuracy: true, timeout: 4000, maximumAge: 15000 });
+    } else {
+        doSubmit();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -468,6 +633,9 @@ document.addEventListener('DOMContentLoaded', function() {
             statusKey: row.dataset.deliveryStatus || ''
         });
     });
+
+    startActiveDeliveriesLocationLoop();
+    restoreRiderDeliveriesUiState();
 });
 
 function getFilteredDeliveries() {
@@ -589,6 +757,7 @@ function sortDeliveries() {
                     <button type="button" class="btn-cancel" onclick="closeDeliveryProofForm()">Cancel</button>
                     <button type="submit" class="btn-submit">Submit Proof</button>
                 </div>
+                <div id="proofSubmitStatus" style="margin-top:.55rem;font-size:.85rem;color:#666;"></div>
             </form>
         </div>
     </div>
@@ -601,6 +770,37 @@ function sortDeliveries() {
             <span class="close" onclick="closeOrderDetailsModal()">&times;</span>
         </div>
         <div class="modal-body" id="orderDetailsBody"></div>
+    </div>
+</div>
+
+<div id="routeMapModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:860px;">
+        <div class="modal-header">
+            <h3>Delivery Route</h3>
+            <span class="close" onclick="closeRouteMap()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="routeMapLabel" style="font-weight:700;margin-bottom:.5rem;"></div>
+            <div id="routeMapCanvas" style="height:360px;border:1px solid #e0e0e0;border-radius:8px;"></div>
+            <div id="routeMapMeta" style="margin-top:.5rem;color:#555;"></div>
+            <div id="routeMapDirections" style="margin-top:.6rem; max-height:180px; overflow:auto; border:1px solid #e0e0e0; border-radius:8px; padding:.55rem .65rem; font-size:.9rem; color:#333;"></div>
+        </div>
+    </div>
+</div>
+
+<div id="deliveryCancelPromptModal" class="modal" style="display:none;">
+    <div class="modal-content delivery-action-modal">
+        <div class="modal-header">
+            <h3>Delivery Action</h3>
+            <span class="close" onclick="closeDeliveryCancelPrompt()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p id="deliveryCancelPromptMessage" style="margin-top:0;">Do you want to cancel this delivery?</p>
+            <div class="form-actions">
+                <button type="button" class="btn-cancel" onclick="closeDeliveryCancelPrompt()">Keep Order</button>
+                <button type="button" class="btn-submit" id="deliveryCancelPromptConfirmBtn">Cancel Delivery</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -714,6 +914,33 @@ function sortDeliveries() {
 .btn-submit:hover {
     background: #219653;
 }
+
+.delivery-action-modal {
+    width: min(92vw, 760px);
+    max-width: 760px;
+}
+
+.delivery-action-modal .modal-body {
+    padding: 24px 24px 22px;
+}
+
+.delivery-action-modal #deliveryCancelPromptMessage {
+    font-size: 1rem;
+    line-height: 1.65;
+    color: #2f2f2f;
+}
+
+.delivery-action-modal .form-actions {
+    margin-top: 16px;
+    gap: 12px;
+}
+
+.delivery-action-modal .btn-cancel,
+.delivery-action-modal .btn-submit {
+    min-width: 130px;
+    padding: 11px 18px;
+    font-size: 0.95rem;
+}
 </style>
 
 <script>
@@ -721,11 +948,18 @@ function showDeliveryProofForm(orderId) {
     const form = document.getElementById('deliveryProofForm');
     form.reset();
     document.getElementById('proofOrderId').value = orderId;
+    const statusHint = document.getElementById('proofSubmitStatus');
+    if (statusHint) statusHint.textContent = '';
     document.getElementById('deliveryProofModal').style.display = 'block';
 }
 
 function closeDeliveryProofForm() {
+    const statusHint = document.getElementById('proofSubmitStatus');
+    if (statusHint) statusHint.textContent = '';
     document.getElementById('deliveryProofModal').style.display = 'none';
+    if (typeof window.__triggerLiveReloadCheck === 'function') {
+        window.__triggerLiveReloadCheck();
+    }
 }
 
 // Handle form submission
@@ -734,7 +968,48 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
     
     const formData = new FormData(this);
     const orderId = document.getElementById('proofOrderId').value;
+    const appendAndSubmit = () => {
+        fetch('<?= site_url('dashboard/submitDeliveryProof') ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeDeliveryProofForm();
+                alert('Delivery proof submitted successfully!');
+                reloadDeliveriesPage();
+            } else {
+                const message = data.message || 'Failed to submit delivery proof';
+                alert(message);
+                const lower = String(message).toLowerCase();
+                if (lower.includes('too far from customer location')) {
+                    const orderToCancel = parseInt(orderId || '0', 10);
+                    if (orderToCancel > 0) {
+                        openDeliveryCancelPrompt(
+                            orderToCancel,
+                            'You are still too far from the customer location. Do you want to cancel this delivery now?'
+                        );
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while submitting delivery proof');
+        })
+        .finally(() => {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Proof';
+            }
+            if (statusHint) {
+                statusHint.textContent = '';
+            }
+        });
+    };
     const submitButton = this.querySelector('.btn-submit');
+    const statusHint = document.getElementById('proofSubmitStatus');
 
     if (!orderId) {
         alert('Order ID is missing. Please close and reopen the proof form.');
@@ -745,41 +1020,43 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
         submitButton.disabled = true;
         submitButton.textContent = 'Submitting...';
     }
+    if (statusHint) {
+        statusHint.textContent = 'Uploading proof...';
+    }
     
-    fetch('<?= site_url('dashboard/submitDeliveryProof') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            closeDeliveryProofForm();
-            alert('Delivery proof submitted successfully!');
-            location.reload();
-        } else {
-            alert(data.message || 'Failed to submit delivery proof');
+    if (navigator.geolocation) {
+        if (statusHint) {
+            statusHint.textContent = 'Getting GPS location (up to 4 seconds)...';
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while submitting delivery proof');
-    })
-    .finally(() => {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = 'Submit Proof';
-        }
-    });
+        navigator.geolocation.getCurrentPosition((pos) => {
+            formData.append('final_rider_latitude', String(pos.coords.latitude));
+            formData.append('final_rider_longitude', String(pos.coords.longitude));
+            if (statusHint) {
+                statusHint.textContent = 'Uploading proof...';
+            }
+            appendAndSubmit();
+        }, () => {
+            if (statusHint) {
+                statusHint.textContent = 'GPS unavailable, submitting using last known location...';
+            }
+            appendAndSubmit();
+        }, { enableHighAccuracy: true, timeout: 4000, maximumAge: 15000 });
+    } else {
+        appendAndSubmit();
+    }
 });
 
 // Close modal when clicking outside
 window.onclick = function(event) {
     const modal = document.getElementById('deliveryProofModal');
     const detailsModal = document.getElementById('orderDetailsModal');
+    const cancelPromptModal = document.getElementById('deliveryCancelPromptModal');
     if (event.target == modal) {
         closeDeliveryProofForm();
     } else if (event.target == detailsModal) {
         closeOrderDetailsModal();
+    } else if (event.target == cancelPromptModal) {
+        closeDeliveryCancelPrompt();
     }
 }
 
@@ -811,6 +1088,7 @@ function openOrderDetailsModal(orderId) {
                 <div><strong>Order:</strong> ${o.reference_number}</div>
                 <div><strong>Customer:</strong> ${o.customer_name} ${o.customer_email ? `(${o.customer_email})` : ''}</div>
                 <div><strong>Address:</strong> ${o.shipping_address || 'Not provided'}</div>
+                <div><strong>Coordinates:</strong> ${o.delivery_latitude && o.delivery_longitude ? `${o.delivery_latitude}, ${o.delivery_longitude}` : 'Not set'}</div>
                 <div><strong>Contact:</strong> ${o.contact_number || 'Not provided'}</div>
                 <div><strong>Notes:</strong> ${o.shipment_notes || 'None'}</div>
                 <div><strong>Status:</strong> ${String(o.delivery_status || '').replaceAll('_', ' ')}</div>
@@ -826,7 +1104,217 @@ function openOrderDetailsModal(orderId) {
 
 function closeOrderDetailsModal() {
     document.getElementById('orderDetailsModal').style.display = 'none';
+    if (typeof window.__triggerLiveReloadCheck === 'function') {
+        window.__triggerLiveReloadCheck();
+    }
+}
+
+let routeMap = null;
+let routeLayer = null;
+let riderLiveWatchId = null;
+let routeGuideLine = null;
+let activeRouteOrderId = null;
+
+function reloadDeliveriesPage() {
+    try {
+        if (typeof window.__beforeLiveReload === 'function') {
+            window.__beforeLiveReload();
+        }
+    } catch (e) {}
+    location.reload();
+}
+function openRouteMap(orderId) {
+    activeRouteOrderId = Number(orderId) || null;
+    const modal = document.getElementById('routeMapModal');
+    modal.style.display = 'block';
+    fetch(`<?= site_url('dashboard/order-details-json') ?>/${orderId}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    }).then(r => r.json()).then(data => {
+        if (!data.success || !data.order) return;
+        const o = data.order;
+        const pickupPhase = ['ready_for_pickup', 'accepted_by_rider'].includes(String(o.delivery_status || ''));
+        const targetLat = pickupPhase ? o.store_latitude : o.delivery_latitude;
+        const targetLng = pickupPhase ? o.store_longitude : o.delivery_longitude;
+        const label = pickupPhase ? 'Going to Pickup (Store)' : 'Out for Delivery (Customer)';
+        document.getElementById('routeMapLabel').textContent = label;
+        if (!targetLat || !targetLng) {
+            document.getElementById('routeMapMeta').textContent = 'Destination coordinates are not set.';
+            return;
+        }
+        if (!routeMap) {
+            routeMap = L.map('routeMapCanvas').setView([targetLat, targetLng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(routeMap);
+        } else {
+            routeMap.invalidateSize();
+            routeMap.setView([targetLat, targetLng], 13);
+        }
+        if (routeLayer) {
+            routeLayer.forEach((l) => routeMap.removeLayer(l));
+        }
+        if (routeGuideLine) {
+            routeMap.removeLayer(routeGuideLine);
+            routeGuideLine = null;
+        }
+        routeLayer = [];
+        routeLayer.push(L.marker([targetLat, targetLng]).addTo(routeMap).bindPopup(pickupPhase ? 'Pickup Location' : 'Customer Location'));
+
+        let riderMarker = null;
+        const setRiderMarker = async (lat, lng, pushBackend = false) => {
+            if (!riderMarker) {
+                riderMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: 'rider-motor-icon',
+                        html: '<div style="font-size:20px;line-height:20px;">🏍️</div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(routeMap).bindPopup('Your current location');
+                routeLayer.push(riderMarker);
+            } else {
+                riderMarker.setLatLng([lat, lng]);
+            }
+
+            const km = haversineKm(lat, lng, Number(targetLat), Number(targetLng));
+            const eta = Math.max(2, Math.round((km / 25) * 60));
+            document.getElementById('routeMapMeta').textContent = `Your distance to destination: ${km.toFixed(2)} km | ETA: ~${eta} min`;
+            routeMap.fitBounds(L.latLngBounds([[lat, lng], [targetLat, targetLng]]).pad(0.18));
+            await drawRoadGuide(lat, lng, Number(targetLat), Number(targetLng));
+
+            if (pushBackend) {
+                const body = `order_id=${orderId}&rider_latitude=${encodeURIComponent(lat)}&rider_longitude=${encodeURIComponent(lng)}`;
+                fetch('<?= site_url('dashboard/updateRiderLocation') ?>', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body
+                }).catch(() => {});
+            }
+        };
+
+        if (o.rider_latitude && o.rider_longitude) {
+            setRiderMarker(Number(o.rider_latitude), Number(o.rider_longitude), false);
+        } else {
+            document.getElementById('routeMapMeta').textContent = 'Getting your current rider location...';
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const rLat = pos.coords.latitude;
+                const rLng = pos.coords.longitude;
+                setRiderMarker(rLat, rLng, true);
+            });
+
+            if (riderLiveWatchId !== null) {
+                navigator.geolocation.clearWatch(riderLiveWatchId);
+            }
+            riderLiveWatchId = navigator.geolocation.watchPosition((pos) => {
+                setRiderMarker(pos.coords.latitude, pos.coords.longitude, true);
+            }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+        }
+    }).catch(() => {});
+}
+function closeRouteMap() {
+    document.getElementById('routeMapModal').style.display = 'none';
+    activeRouteOrderId = null;
+    if (riderLiveWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(riderLiveWatchId);
+        riderLiveWatchId = null;
+    }
+    if (typeof window.__triggerLiveReloadCheck === 'function') {
+        window.__triggerLiveReloadCheck();
+    }
+}
+
+function persistRiderDeliveriesUiState() {
+    const payload = {
+        ts: Date.now(),
+        routeMapOpen: document.getElementById('routeMapModal')?.style.display === 'block',
+        routeOrderId: activeRouteOrderId
+    };
+    sessionStorage.setItem('rider_deliveries_ui_state', JSON.stringify(payload));
+}
+
+function restoreRiderDeliveriesUiState() {
+    const raw = sessionStorage.getItem('rider_deliveries_ui_state');
+    if (!raw) return;
+    sessionStorage.removeItem('rider_deliveries_ui_state');
+    try {
+        const state = JSON.parse(raw);
+        if (!state || !state.routeMapOpen || !state.routeOrderId) return;
+        if (Date.now() - Number(state.ts || 0) > 25000) return;
+        setTimeout(() => openRouteMap(Number(state.routeOrderId)), 500);
+    } catch (e) {}
+}
+
+window.__beforeLiveReload = persistRiderDeliveriesUiState;
+window.__suspendLiveReload = function() {
+    const modals = ['deliveryProofModal', 'orderDetailsModal', 'routeMapModal', 'deliveryCancelPromptModal'];
+    return modals.some((id) => {
+        const el = document.getElementById(id);
+        return el && el.style.display === 'block';
+    });
+};
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatManeuver(step) {
+    const m = step?.maneuver || {};
+    const type = String(m.type || '').replaceAll('_', ' ').trim();
+    const mod = String(m.modifier || '').replaceAll('_', ' ').trim();
+    const name = String(step?.name || '').trim();
+    const base = type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Continue';
+    if (mod && name) return `${base} ${mod} to ${name}`;
+    if (name) return `${base} to ${name}`;
+    if (mod) return `${base} ${mod}`;
+    return base;
+}
+
+async function drawRoadGuide(fromLat, fromLng, toLat, toLng) {
+    const panel = document.getElementById('routeMapDirections');
+    if (panel) {
+        panel.textContent = 'Loading road guide...';
+    }
+
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data || data.code !== 'Ok' || !Array.isArray(data.routes) || data.routes.length === 0) {
+            throw new Error('No route');
+        }
+
+        const route = data.routes[0];
+        const coords = (route.geometry?.coordinates || []).map((c) => [c[1], c[0]]);
+        if (routeGuideLine) {
+            routeMap.removeLayer(routeGuideLine);
+        }
+        routeGuideLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.9 }).addTo(routeMap);
+
+        const steps = (route.legs?.[0]?.steps || []).slice(0, 12);
+        if (panel) {
+            if (steps.length === 0) {
+                panel.textContent = 'Road guide unavailable. Using direct line fallback.';
+            } else {
+                panel.innerHTML = steps.map((s, i) => `${i + 1}. ${formatManeuver(s)} (${Math.max(1, Math.round((s.distance || 0))) }m)`).join('<br>');
+            }
+        }
+    } catch (e) {
+        if (routeGuideLine) {
+            routeMap.removeLayer(routeGuideLine);
+            routeGuideLine = null;
+        }
+        routeGuideLine = L.polyline([[fromLat, fromLng], [toLat, toLng]], { color: '#27c56f', dashArray: '8 8', weight: 4 }).addTo(routeMap);
+        if (panel) {
+            panel.textContent = 'Road routing service unavailable. Showing direct guide line.';
+        }
+    }
 }
 </script>
 
 <?= $this->include('rider/partials/footer') ?>
+

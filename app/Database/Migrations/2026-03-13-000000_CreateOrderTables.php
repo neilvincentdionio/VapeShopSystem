@@ -223,6 +223,72 @@ class CreateOrderTables extends Migration
                 'type' => 'TEXT',
                 'null' => true,
             ],
+            // Delivery location fields
+            'delivery_latitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'delivery_longitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'delivery_address' => [
+                'type' => 'TEXT',
+                'null' => true,
+            ],
+            // Store location fields
+            'store_latitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'store_longitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'store_address' => [
+                'type' => 'TEXT',
+                'null' => true,
+            ],
+            // Delivered location fields
+            'delivered_latitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'delivered_longitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            // Rider tracking fields
+            'rider_latitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'rider_longitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'final_rider_latitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'final_rider_longitude' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,7',
+                'null' => true,
+            ],
+            'last_location_updated_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => false,

@@ -1,4 +1,6 @@
 <?= $this->include('admin/partials/header') ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <?php
 // Helper function to get delivery status labels
@@ -8,6 +10,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_pay' => 'To Pay',
             'to_ship' => 'To Ship',
             'to_receive' => 'To Receive',
+            'delivered' => 'Delivered (Awaiting Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund'
@@ -95,6 +98,9 @@ if (!function_exists('extractGcashReference')) {
                         case 'completed':
                             $currentStage = 3;
                             break;
+                        case 'delivered':
+                            $currentStage = 3;
+                            break;
                         default:
                             $currentStage = 0;
                     }
@@ -141,6 +147,18 @@ if (!function_exists('extractGcashReference')) {
                     <?php if (!empty($order['contact_number'])): ?>
                         <p><strong>Contact Number:</strong> <?= esc($order['contact_number']) ?></p>
                     <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])): ?>
+                <div class="shipping-info">
+                    <h3><i class="fas fa-map"></i> Delivery Location Context</h3>
+                    <div id="admin_delivery_map" style="height:300px;border:1px solid #e0e0e0;border-radius:10px;"></div>
+                    <p style="margin-top:.6rem;">
+                        Store: <?= !empty($order['store_address']) ? esc($order['store_address']) : 'Not set' ?><br>
+                        Customer pin: <?= esc($order['delivery_latitude']) ?>, <?= esc($order['delivery_longitude']) ?><br>
+                        Rider last location:
+                        <?= !empty($order['rider_latitude']) && !empty($order['rider_longitude']) ? esc($order['rider_latitude'] . ', ' . $order['rider_longitude']) : 'No live rider position yet' ?>
+                    </p>
                 </div>
             <?php endif; ?>
 
@@ -223,6 +241,16 @@ if (!function_exists('extractGcashReference')) {
                         Order has been delivered
                     </div>
                 <?php endif; ?>
+                <?php if ($order['delivery_status'] === 'delivered'): ?>
+                    <div class="completed-notice" style="background:#fff3cd;color:#856404;">
+                        <i class="fas fa-user-check"></i>
+                        Waiting for customer confirmation
+                    </div>
+                    <button class="btn-checkout" onclick="updateDeliveryStatus(<?= $order['id'] ?>, 'completed')">
+                        <i class="fas fa-user-check"></i>
+                        Confirm Received (Admin)
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
@@ -236,6 +264,17 @@ if (!function_exists('extractGcashReference')) {
 </div>
 
 <script>
+<?php if (!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])): ?>
+const adminMap = L.map('admin_delivery_map').setView([<?= esc((string) $order['delivery_latitude']) ?>, <?= esc((string) $order['delivery_longitude']) ?>], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(adminMap);
+L.marker([<?= esc((string) $order['delivery_latitude']) ?>, <?= esc((string) $order['delivery_longitude']) ?>]).addTo(adminMap).bindPopup('Customer location');
+<?php if (!empty($order['store_latitude']) && !empty($order['store_longitude'])): ?>
+L.marker([<?= esc((string) $order['store_latitude']) ?>, <?= esc((string) $order['store_longitude']) ?>]).addTo(adminMap).bindPopup('Store pickup location');
+<?php endif; ?>
+<?php if (!empty($order['rider_latitude']) && !empty($order['rider_longitude'])): ?>
+L.marker([<?= esc((string) $order['rider_latitude']) ?>, <?= esc((string) $order['rider_longitude']) ?>]).addTo(adminMap).bindPopup('Rider location');
+<?php endif; ?>
+<?php endif; ?>
 function updateDeliveryStatus(orderId, newStatus) {
     if (confirm('Are you sure you want to update the delivery status?')) {
         fetch('<?= site_url('orders/update-delivery-status') ?>', {

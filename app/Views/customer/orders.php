@@ -12,6 +12,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'accepted_by_rider' => 'Accepted by Rider',
             'delivered_to_rider' => 'Picked Up',
             'to_receive' => 'Out for Delivery',
+            'delivered' => 'Delivered (Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
@@ -709,13 +710,18 @@ window.addEventListener('beforeunload', function() {
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                         <?php endif; ?>
                         
-                        <?php if ($order['delivery_status'] === 'to_ship'): ?>
+                        <?php if (in_array($order['delivery_status'], ['to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'], true)): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn">Track Order</a>
-                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
+                            <?php if ($order['delivery_status'] === 'to_ship'): ?>
+                                <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
+                            <?php endif; ?>
                         <?php endif; ?>
                         
                         <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Order Received</a>
+                            <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
+                        <?php endif; ?>
+                        <?php if ($order['delivery_status'] === 'delivered'): ?>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Delivery</a>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                         
@@ -730,7 +736,7 @@ window.addEventListener('beforeunload', function() {
                             </button>
                         <?php endif; ?>
                         
-                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship'])): ?>
+                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship', 'to_receive', 'delivered'])): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                     </div>

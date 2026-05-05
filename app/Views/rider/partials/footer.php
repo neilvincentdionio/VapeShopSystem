@@ -10,9 +10,34 @@
     const endpoint = '<?= site_url('dashboard/live-update-token') ?>';
     let lastToken = null;
     let inFlight = false;
+    let pendingReload = false;
+
+    function isReloadSuspended() {
+        if (typeof window.__suspendLiveReload === 'function') {
+            try {
+                return !!window.__suspendLiveReload();
+            } catch (e) {
+                console.debug('Suspend hook failed:', e);
+            }
+        }
+        return false;
+    }
 
     async function checkForUpdates() {
         if (document.hidden || inFlight) {
+            return;
+        }
+
+        if (pendingReload && !isReloadSuspended()) {
+            if (typeof window.__beforeLiveReload === 'function') {
+                try {
+                    window.__beforeLiveReload();
+                } catch (e) {
+                    console.debug('Before reload hook failed:', e);
+                }
+            }
+            pendingReload = false;
+            window.location.reload();
             return;
         }
 
@@ -40,6 +65,20 @@
             }
 
             if (data.token !== lastToken) {
+                if (isReloadSuspended()) {
+                    pendingReload = true;
+                    lastToken = data.token;
+                    return;
+                }
+
+                if (typeof window.__beforeLiveReload === 'function') {
+                    try {
+                        window.__beforeLiveReload();
+                    } catch (e) {
+                        console.debug('Before reload hook failed:', e);
+                    }
+                }
+                pendingReload = false;
                 window.location.reload();
             }
         } catch (error) {
@@ -49,6 +88,7 @@
         }
     }
 
+    window.__triggerLiveReloadCheck = checkForUpdates;
     setTimeout(checkForUpdates, 2000);
     setInterval(checkForUpdates, 7000);
     window.addEventListener('focus', checkForUpdates);

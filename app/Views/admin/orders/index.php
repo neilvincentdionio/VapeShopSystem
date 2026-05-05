@@ -14,6 +14,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_pay' => 'To Pay',
             'to_ship' => 'Order Placed',
             'to_receive' => 'Out for Delivery',
+            'delivered' => 'Delivered (Awaiting Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
@@ -1145,7 +1146,7 @@ $activeDeliveries = count(array_filter(
                                 // Debug: Show actual status (remove this line after fixing)
                                 // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
                                 ?>
-                                <?php if ($deliveryStatus !== 'completed'): ?>
+                                <?php if (!in_array($deliveryStatus, ['completed', 'delivered'], true)): ?>
                                     <button type="button" class="action-btn btn-view-proof" onclick="openOrderDetailsModal(<?= (int) $order['id'] ?>)">
                                         <i class="fas fa-eye"></i> View Details
                                     </button>
@@ -1162,10 +1163,15 @@ $activeDeliveries = count(array_filter(
                                             <i class="fas fa-box"></i> Mark as Picked Up
                                         </button>
                                     <?php endif; ?>
-                                <?php elseif ($deliveryStatus === 'completed'): ?>
+                                <?php elseif (in_array($deliveryStatus, ['completed', 'delivered'], true)): ?>
                                     <button class="action-btn btn-view-proof" onclick="viewDeliveryProof(<?= $order['id'] ?>)">
                                         <i class="fas fa-image"></i> View Proof
                                     </button>
+                                    <?php if ($deliveryStatus === 'delivered'): ?>
+                                        <button class="action-btn btn-delivered" onclick="updateDeliveryStatus(<?= (int) $order['id'] ?>, 'completed')">
+                                            <i class="fas fa-user-check"></i> Confirm Received
+                                        </button>
+                                    <?php endif; ?>
                                 <?php elseif (in_array($deliveryStatus, ['cancelled', 'return_refund'], true)): ?>
                                     <span class="status-badge" style="background: #f1f3f5; color: #6c757d; border: none;">
                                         <i class="fas fa-info-circle"></i> No further action
@@ -1658,6 +1664,7 @@ function openOrderDetailsModal(orderId) {
                 <div><strong>Order:</strong> ${o.reference_number}</div>
                 <div><strong>Customer:</strong> ${o.customer_name} ${o.customer_email ? `(${o.customer_email})` : ''}</div>
                 <div><strong>Address:</strong> ${o.shipping_address || 'Not provided'}</div>
+                <div><strong>Coordinates:</strong> ${o.delivery_latitude && o.delivery_longitude ? `${o.delivery_latitude}, ${o.delivery_longitude}` : 'Not set'}</div>
                 <div><strong>Contact:</strong> ${o.contact_number || 'Not provided'}</div>
                 <div><strong>Notes:</strong> ${o.shipment_notes || 'None'}</div>
                 <div><strong>Status:</strong> ${String(o.delivery_status || '').replaceAll('_', ' ')}</div>

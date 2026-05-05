@@ -1,4 +1,6 @@
 <?= $this->include('customer/partials/header') ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <?php
 // Helper function to get delivery status labels
@@ -12,6 +14,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'accepted_by_rider' => 'Accepted by Rider',
             'delivered_to_rider' => 'Picked Up',
             'to_receive' => 'Out for Delivery',
+            'delivered' => 'Delivered (Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
@@ -60,41 +63,23 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <h3><i class="fas fa-map-marked-alt"></i> Delivery Status</h3>
                 <div class="tracker-progress">
                     <?php
-                    // Determine current stage based on delivery status
+                    $status = (string) ($order['delivery_status'] ?? 'to_pay');
                     $currentStage = 0;
-                    switch($order['delivery_status']) {
-                        case 'to_pay':
-                            $currentStage = 0;
-                            break;
-                        case 'to_ship':
-                            $currentStage = 1;
-                            break;
-                        case 'ready_for_pickup':
-                            $currentStage = 2;
-                            break;
-                        case 'accepted_by_rider':
-                            $currentStage = 3;
-                            break;
-                        case 'delivered_to_rider':
-                            $currentStage = 4;
-                            break;
-                        case 'to_receive':
-                            $currentStage = 5;
-                            break;
-                        case 'completed':
-                            $currentStage = 6;
-                            break;
-                        default:
-                            $currentStage = 0;
+                    if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
+                        $currentStage = 1;
+                    } elseif ($status === 'delivered_to_rider') {
+                        $currentStage = 2;
+                    } elseif ($status === 'to_receive') {
+                        $currentStage = 3;
+                    } elseif (in_array($status, ['delivered', 'completed'], true)) {
+                        $currentStage = 4;
                     }
-                    
+
                     $stages = [
                         ['name' => 'Order Placed', 'icon' => 'fa-clipboard', 'description' => 'Order received by the shop'],
-                        ['name' => 'Preparing', 'icon' => 'fa-box', 'description' => 'Order is being prepared'],
-                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'A rider was assigned'],
-                        ['name' => 'Accepted', 'icon' => 'fa-handshake', 'description' => 'Rider accepted the delivery job'],
-                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'Parcel picked up by rider'],
-                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'Rider is on the way'],
+                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Rider is assigned for pickup'],
+                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'Parcel picked up from store'],
+                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'Rider is on the way to you'],
                         ['name' => 'Delivered', 'icon' => 'fa-home', 'description' => 'Order delivered successfully']
                     ];
                     ?>
@@ -144,20 +129,21 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-
-            <?php if (!empty($order['delivery_proof_image']) && in_array($order['delivery_status'], ['completed'], true)): ?>
-                <div class="tracking-info">
-                    <h3><i class="fas fa-image"></i> Proof of Delivery</h3>
-                    <p>
-                        <a href="<?= site_url('uploads/delivery_proofs/' . rawurlencode((string) $order['delivery_proof_image'])) ?>" target="_blank" rel="noopener">
-                            View delivery proof image
-                        </a>
-                    </p>
-                    <?php if (!empty($order['delivery_notes'])): ?>
-                        <p><strong>Rider Notes:</strong> <?= esc($order['delivery_notes']) ?></p>
+            <div class="shipping-info">
+                <h3><i class="fas fa-location-dot"></i> Delivery Tracking</h3>
+                <div id="tracking_status_text">
+                    <?php if (($order['delivery_status'] ?? '') !== 'to_receive'): ?>
+                        Live rider tracking is available once the order is Out for Delivery.
                     <?php endif; ?>
                 </div>
-            <?php endif; ?>
+                <div id="tracking_map_wrap" style="position:relative; margin-top:.75rem;">
+                    <button type="button" id="tracking_map_fullscreen_btn" class="btn btn-secondary" style="position:absolute; right:10px; top:10px; z-index:500; padding:.35rem .6rem; font-size:.72rem;">
+                        Fullscreen
+                    </button>
+                    <div id="customer_tracking_map" style="height:300px;border:1px solid var(--border);border-radius:10px;"></div>
+                </div>
+                <div id="tracking_meta" style="font-size:.9rem;color:var(--text-muted); margin-top:.5rem;"></div>
+            </div>
 
             <div class="order-items">
                 <h3><i class="fas fa-shopping-bag"></i> Order Items</h3>
@@ -204,12 +190,11 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel Order</a>
                 <?php endif; ?>
                 
-                <?php if ($order['delivery_status'] === 'to_receive'): ?>
-                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Received</a>
-                <?php endif; ?>
-                
                 <?php if (in_array($order['delivery_status'], ['completed', 'cancelled'])): ?>
                     <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
+                <?php endif; ?>
+                <?php if ($order['delivery_status'] === 'delivered'): ?>
+                    <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Delivery</a>
                 <?php endif; ?>
                 <?php if ($order['delivery_status'] === 'completed'): ?>
                     <button type="button" class="btn btn-secondary" onclick="openReviewModal(<?= (int) $order['id'] ?>, '<?= esc((string) ($order['reference_number'] ?? 'Order')) ?>')">Review</button>
@@ -802,6 +787,126 @@ if (!function_exists('getDeliveryStatusLabel')) {
 </style>
 
 <script>
+let trackingMap;
+let riderMarker;
+let destinationMarker;
+let storeMarker;
+let riderMotorIcon;
+let riderAnimationFrame = null;
+let lastRiderLatLng = null;
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2-lat1) * Math.PI / 180, dLon = (lon2-lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function initTrackingMap() {
+    trackingMap = L.map('customer_tracking_map').setView([6.1164, 125.1716], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(trackingMap);
+    riderMotorIcon = L.divIcon({
+        className: 'rider-motor-icon',
+        html: '<div style="font-size:22px;line-height:22px;">🏍️</div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+function toggleTrackingMapFullscreen() {
+    const wrap = document.getElementById('tracking_map_wrap');
+    if (!wrap) return;
+
+    if (!document.fullscreenElement) {
+        wrap.requestFullscreen?.().then(() => {
+            setTimeout(() => trackingMap?.invalidateSize(), 150);
+        }).catch(() => {});
+        return;
+    }
+
+    document.exitFullscreen?.().then(() => {
+        setTimeout(() => trackingMap?.invalidateSize(), 150);
+    }).catch(() => {});
+}
+
+function animateRiderMarker(toLat, toLng, durationMs = 1200) {
+    if (!riderMarker) {
+        riderMarker = L.marker([toLat, toLng], { icon: riderMotorIcon }).addTo(trackingMap).bindPopup('Rider location');
+        lastRiderLatLng = [toLat, toLng];
+        return;
+    }
+
+    const from = riderMarker.getLatLng();
+    const startLat = from.lat;
+    const startLng = from.lng;
+    const startTs = performance.now();
+
+    if (riderAnimationFrame) {
+        cancelAnimationFrame(riderAnimationFrame);
+        riderAnimationFrame = null;
+    }
+
+    const step = (now) => {
+        const t = Math.min(1, (now - startTs) / durationMs);
+        const lat = startLat + (toLat - startLat) * t;
+        const lng = startLng + (toLng - startLng) * t;
+        riderMarker.setLatLng([lat, lng]);
+        if (t < 1) {
+            riderAnimationFrame = requestAnimationFrame(step);
+        } else {
+            riderAnimationFrame = null;
+            lastRiderLatLng = [toLat, toLng];
+        }
+    };
+
+    riderAnimationFrame = requestAnimationFrame(step);
+}
+function refreshTracking() {
+    fetch(`<?= site_url('dashboard/orderTracking/' . (int) ($order['id'] ?? 0)) ?>?t=${Date.now()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' } })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success || !data.tracking) return;
+        const t = data.tracking;
+        const statusEl = document.getElementById('tracking_status_text');
+        const metaEl = document.getElementById('tracking_meta');
+
+        if (t.phase === 'pickup') {
+            statusEl.textContent = 'Rider on the way to store for pickup';
+        } else if (t.delivery_address) {
+            statusEl.textContent = `Delivery Address: ${t.delivery_address}`;
+        }
+
+        if (t.store_latitude && t.store_longitude) {
+            const s = [t.store_latitude, t.store_longitude];
+            if (!storeMarker) storeMarker = L.marker(s).addTo(trackingMap).bindPopup(`Pickup Location: ${t.store_address || 'Store'}`);
+            else storeMarker.setLatLng(s);
+        }
+
+        if (t.delivery_latitude && t.delivery_longitude) {
+            const d = [t.delivery_latitude, t.delivery_longitude];
+            if (!destinationMarker) destinationMarker = L.marker(d).addTo(trackingMap).bindPopup(`Customer address: ${t.delivery_address || 'Destination'}`);
+            else destinationMarker.setLatLng(d);
+            trackingMap.setView(d, 14);
+        } else {
+            metaEl.textContent = 'Customer pin is not yet set. Please wait for location confirmation.';
+        }
+
+        if (t.status === 'to_receive' && t.rider_latitude && t.rider_longitude && t.delivery_latitude && t.delivery_longitude) {
+            const r = [t.rider_latitude, t.rider_longitude];
+            animateRiderMarker(r[0], r[1]);
+            const km = haversineKm(t.rider_latitude, t.rider_longitude, t.delivery_latitude, t.delivery_longitude);
+            const eta = Math.max(2, Math.round((km / 25) * 60));
+            statusEl.textContent = `Out for Delivery | Rider: ${t.rider?.name || 'Assigned rider'} ${t.rider?.contact ? '(' + t.rider.contact + ')' : ''}`;
+            metaEl.textContent = `Destination: ${t.delivery_address || 'Saved address'} | Distance: ${km.toFixed(2)} km | ETA: ~${eta} min`;
+            const bounds = L.latLngBounds([r, [t.delivery_latitude, t.delivery_longitude]]);
+            trackingMap.fitBounds(bounds.pad(0.25));
+        } else if (t.status === 'to_receive' && (!t.rider_latitude || !t.rider_longitude)) {
+            statusEl.textContent = `Out for Delivery | Rider: ${t.rider?.name || 'Assigned rider'} ${t.rider?.contact ? '(' + t.rider.contact + ')' : ''}`;
+            metaEl.textContent = 'Waiting for live rider GPS location...';
+        } else if (t.phase === 'pickup') {
+            metaEl.textContent = `Pickup Location: ${t.store_address || 'Store'} | Rider: ${t.rider?.name || 'Assigned rider'}`;
+        } else {
+            metaEl.textContent = `Status: ${String(t.status || '').replaceAll('_', ' ')}`;
+        }
+    }).catch(() => {});
+}
 function openReviewModal(orderId, referenceNumber) {
     document.getElementById('reviewOrderId').value = orderId;
     document.getElementById('reviewModalTitle').textContent = `Review: ${referenceNumber}`;
@@ -832,6 +937,40 @@ window.addEventListener('click', function (event) {
         closeReviewModal();
     }
 });
+document.addEventListener('DOMContentLoaded', () => {
+    initTrackingMap();
+    refreshTracking();
+    setInterval(refreshTracking, 3000);
+    document.getElementById('tracking_map_fullscreen_btn')?.addEventListener('click', toggleTrackingMapFullscreen);
+    document.addEventListener('fullscreenchange', () => {
+        const btn = document.getElementById('tracking_map_fullscreen_btn');
+        if (btn) {
+            btn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+        }
+        setTimeout(() => trackingMap?.invalidateSize(), 120);
+    });
+});
 </script>
+
+<style>
+#tracking_map_wrap:fullscreen {
+    background: #111;
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+}
+
+#tracking_map_wrap:fullscreen #customer_tracking_map {
+    width: 100vw !important;
+    height: 100vh !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+
+#tracking_map_wrap:fullscreen #tracking_map_fullscreen_btn {
+    z-index: 1000;
+}
+</style>
 
 <?= $this->include('customer/partials/footer') ?>

@@ -988,6 +988,16 @@
                     <label class="checkout-label" for="delivery_description">Description</label>
                     <textarea class="checkout-input" id="delivery_description" name="delivery_description" rows="3" maxlength="255" placeholder="Add delivery notes, landmarks, or instructions"></textarea>
                 </div>
+                <div class="checkout-field" style="margin-top:.8rem;">
+                    <label class="checkout-label">Pin Delivery Location</label>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+                        <button type="button" class="btn btn-outline" style="padding:.45rem .7rem;" onclick="checkoutUseCurrentLocation()">Use Current Location</button>
+                        <span id="checkout_geo_status" class="location-status"></span>
+                    </div>
+                    <div id="checkout_map" style="height:220px;border:1px solid #e0e0e0;border-radius:10px;"></div>
+                    <input type="hidden" name="delivery_latitude" id="delivery_latitude">
+                    <input type="hidden" name="delivery_longitude" id="delivery_longitude">
+                </div>
             </div>
 
             <button type="submit" class="btn btn-primary" style="width:100%;">Place Order</button>
@@ -1010,14 +1020,28 @@
 </div>
 
 <script>
+if (!window.__leaflet_loaded__) {
+    const lCss = document.createElement('link');
+    lCss.rel = 'stylesheet';
+    lCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(lCss);
+    const lJs = document.createElement('script');
+    lJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    document.head.appendChild(lJs);
+    window.__leaflet_loaded__ = true;
+}
 const addUrl = '<?= site_url('customer/cart/add') ?>';
 const cartUrl = '<?= site_url('customer/cart') ?>';
 const gcashMerchantNumber = '+639365879409';
 const gcashMerchantName = 'QuickPuff VapeShop';
 const checkoutTotal = <?= json_encode((float) ($cart_total ?? 0)) ?>;
 const productCatalog = <?= json_encode(array_column($products ?? [], null, 'id')) ?>;
+const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
 let currentGcashQrPayload = '';
 let pendingFlavorProductId = null;
+let checkoutMap = null;
+let checkoutMarker = null;
+let checkoutGeocodeDebounce = null;
 
 const deliveryAddressData = {
     'South Cotabato': {
@@ -1085,6 +1109,7 @@ function openCheckoutModal() {
     if (!modal) return;
     initDeliveryAddressFields();
     modal.classList.add('show');
+    setTimeout(initCheckoutMap, 250);
 }
 
 function closeCheckoutModal() {
@@ -1169,7 +1194,166 @@ function validateCheckoutModal() {
             return false;
         }
     }
+    if (!document.getElementById('delivery_latitude').value || !document.getElementById('delivery_longitude').value) {
+        alert('Please pin your exact delivery location on the map.');
+        return false;
+    }
 
+    return true;
+}
+
+function initCheckoutMap() {
+    if (typeof L === 'undefined') return;
+    if (!checkoutMap) {
+        checkoutMap = L.map('checkout_map').setView([6.1164, 125.1716], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(checkoutMap);
+        checkoutMap.on('click', (e) => {
+            setCheckoutPin(e.latlng.lat, e.latlng.lng);
+        });
+        setCheckoutPin(6.1164, 125.1716);
+    } else {
+        checkoutMap.invalidateSize();
+    }
+}
+
+function setCheckoutPin(lat, lng) {
+    document.getElementById('delivery_latitude').value = String(lat);
+    document.getElementById('delivery_longitude').value = String(lng);
+    if (!checkoutMarker) {
+        checkoutMarker = L.marker([lat, lng]).addTo(checkoutMap);
+    } else {
+        checkoutMarker.setLatLng([lat, lng]);
+    }
+}
+
+function checkoutUseCurrentLocation() {
+    const status = document.getElementById('checkout_geo_status');
+    if (!navigator.geolocation) {
+        status.textContent = 'Geolocation unavailable.';
+        return;
+    }
+    status.textContent = 'Getting location...';
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        if (checkoutMap) checkoutMap.setView([lat, lng], 16);
+        setCheckoutPin(lat, lng);
+        const manualMode = document.querySelector('input[name="delivery_address_mode"][value="manual"]');
+        if (manualMode) {
+            manualMode.checked = true;
+            toggleDeliveryAddressMode();
+        }
+        reverseGeocodeForCheckout(lat, lng)
+            .then(() => {
+                status.textContent = 'Location captured and address autofilled.';
+            })
+            .catch(() => {
+                status.textContent = 'Location captured. Address autofill unavailable.';
+            });
+    }, () => {
+        status.textContent = 'Permission denied. Pin location manually.';
+    }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function getManualCheckoutAddress() {
+    const parts = [
+        document.getElementById('delivery_address_line')?.value || '',
+        document.getElementById('delivery_barangay')?.value || '',
+        document.getElementById('delivery_city')?.value || '',
+        document.getElementById('delivery_province')?.value || '',
+        document.getElementById('delivery_postal_code')?.value || '',
+        document.getElementById('delivery_country')?.value || 'Philippines'
+    ].map((v) => v.trim()).filter(Boolean);
+    return parts.join(', ');
+}
+
+function geocodeCheckoutAddressDebounced() {
+    clearTimeout(checkoutGeocodeDebounce);
+    checkoutGeocodeDebounce = setTimeout(() => {
+        const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        if (mode !== 'manual') return;
+        const address = getManualCheckoutAddress();
+        if (address.length < 8) return;
+        geocodeCheckoutAddressToMap(address);
+    }, 500);
+}
+
+async function geocodeCheckoutAddressToMap(addressText) {
+    if (!addressText || addressText.trim().length < 5) return;
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(addressText)}`, {
+        headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!Array.isArray(data) || !data.length) return;
+    const lat = Number(data[0].lat);
+    const lng = Number(data[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (checkoutMap) checkoutMap.setView([lat, lng], 16);
+    setCheckoutPin(lat, lng);
+}
+
+async function reverseGeocodeForCheckout(lat, lng) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, {
+        headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) throw new Error('reverse-geocode-failed');
+    const data = await response.json();
+    const addr = data.address || {};
+
+    const street = [addr.house_number, addr.road].filter(Boolean).join(' ').trim();
+    const city = addr.city || addr.town || addr.municipality || addr.county || '';
+    const barangay = addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || '';
+    const province = addr.state || '';
+    const postal = addr.postcode || '';
+
+    if (street) document.getElementById('delivery_address_line').value = street;
+    if (province) setSelectValueWithFallback(document.getElementById('delivery_province'), province);
+    if (city) {
+        setSelectValueWithFallback(document.getElementById('delivery_city'), city);
+        loadDeliveryBarangays();
+    }
+    if (barangay) setSelectValueWithFallback(document.getElementById('delivery_barangay'), barangay);
+    if (postal) document.getElementById('delivery_postal_code').value = postal;
+}
+
+function normalizeLocationText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/\./g, '')
+        .replace(/\bbarangay\b/g, '')
+        .replace(/\bcity\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function setSelectValueWithFallback(selectEl, targetValue) {
+    if (!selectEl || !targetValue) return false;
+    const targetNorm = normalizeLocationText(targetValue);
+    let bestValue = '';
+
+    for (const opt of Array.from(selectEl.options)) {
+        if (!opt.value) continue;
+        const optNorm = normalizeLocationText(opt.value);
+        if (optNorm === targetNorm) {
+            bestValue = opt.value;
+            break;
+        }
+        if (!bestValue && (optNorm.includes(targetNorm) || targetNorm.includes(optNorm))) {
+            bestValue = opt.value;
+        }
+    }
+
+    if (!bestValue) {
+        const extra = document.createElement('option');
+        extra.value = targetValue;
+        extra.textContent = targetValue;
+        selectEl.appendChild(extra);
+        bestValue = targetValue;
+    }
+
+    selectEl.value = bestValue;
+    selectEl.dispatchEvent(new Event('change'));
     return true;
 }
 
@@ -1206,7 +1390,16 @@ function initDeliveryAddressFields() {
     citySelect.addEventListener('change', function () {
         loadDeliveryBarangays();
         updateDeliveryPostalCode();
+        geocodeCheckoutAddressDebounced();
     });
+
+    ['delivery_address_line', 'delivery_barangay', 'delivery_postal_code', 'delivery_country', 'delivery_province']
+        .forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', geocodeCheckoutAddressDebounced);
+            el.addEventListener('input', geocodeCheckoutAddressDebounced);
+        });
 }
 
 function loadDeliveryBarangays() {
@@ -1234,6 +1427,11 @@ function toggleDeliveryAddressMode() {
     }
     if (savedAddressFields) {
         savedAddressFields.style.display = mode === 'saved_address' ? 'block' : 'none';
+    }
+    if (mode === 'saved_address' && savedDeliveryAddress.trim()) {
+        geocodeCheckoutAddressToMap(savedDeliveryAddress);
+    } else if (mode === 'manual') {
+        geocodeCheckoutAddressDebounced();
     }
 }
 

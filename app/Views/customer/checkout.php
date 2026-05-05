@@ -1,4 +1,6 @@
 <?= $this->include('customer/partials/header') ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
     .checkout-panel {
@@ -207,6 +209,32 @@
                     </div>
                 </div>
 
+                <div style="margin-top:1rem; border-top:1px solid #e0e0e0; padding-top:1rem;">
+                    <label class="field-label">Delivery Address</label>
+                    <div style="margin-bottom:.6rem;">
+                        <label><input type="radio" name="delivery_address_mode" value="manual" checked onchange="toggleAddressMode()"> Enter address</label>
+                        <label style="margin-left:1rem;"><input type="radio" name="delivery_address_mode" value="saved_address" onchange="toggleAddressMode()"> Use saved</label>
+                    </div>
+                    <div id="manual_fields">
+                        <input class="input" type="text" id="delivery_address_line" name="delivery_address_line" placeholder="Street / House No." style="margin-bottom:.5rem;">
+                        <input class="input" type="text" id="delivery_barangay" name="delivery_barangay" placeholder="Barangay" style="margin-bottom:.5rem;">
+                        <input class="input" type="text" id="delivery_city" name="delivery_city" placeholder="City / Municipality" style="margin-bottom:.5rem;">
+                        <input class="input" type="text" id="delivery_province" name="delivery_province" placeholder="Province" style="margin-bottom:.5rem;">
+                        <input class="input" type="text" id="delivery_postal_code" name="delivery_postal_code" placeholder="Postal code" style="margin-bottom:.5rem;">
+                        <input class="input" type="text" id="delivery_country" name="delivery_country" value="Philippines" placeholder="Country">
+                    </div>
+                    <div id="saved_fields" style="display:none; color:#666; font-size:.9rem;">
+                        <?= !empty($customer_delivery_address) ? 'Saved address: ' . esc($customer_delivery_address) : 'No saved address found.' ?>
+                    </div>
+                    <div style="display:flex; gap:.5rem; margin:.7rem 0;">
+                        <button type="button" class="btn" style="margin:0; width:auto; padding:.55rem .8rem;" onclick="useCurrentLocation()">Use Current Location</button>
+                        <span id="geo_status" style="font-size:.85rem; color:#666;"></span>
+                    </div>
+                    <div id="checkout_map" style="height:260px; border-radius:12px; border:1px solid #e0e0e0;"></div>
+                    <input type="hidden" name="delivery_latitude" id="delivery_latitude">
+                    <input type="hidden" name="delivery_longitude" id="delivery_longitude">
+                </div>
+
                 <button class="btn" type="submit" id="submit_btn" disabled>
                     Select Payment Method
                 </button>
@@ -220,6 +248,10 @@
     const cashFields = document.getElementById('cash_fields');
     const gcashFields = document.getElementById('gcash_fields');
     const submitBtn = document.getElementById('submit_btn');
+    const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
+    let map;
+    let marker;
+    let geocodeDebounceTimer = null;
 
     function togglePaymentFields() {
         const selectedMethod = paymentMethodSelect.value;
@@ -260,13 +292,146 @@
                 return false;
             }
         }
-        
+        const lat = document.getElementById('delivery_latitude').value;
+        const lng = document.getElementById('delivery_longitude').value;
+        if (!lat || !lng) {
+            alert('Please pin your delivery location on the map.');
+            return false;
+        }
+        const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        if (mode === 'saved_address' && !<?= json_encode(!empty($customer_delivery_address)) ?>) {
+            alert('No saved address found. Please enter your address manually.');
+            return false;
+        }
         return true;
+    }
+
+    function toggleAddressMode() {
+        const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        document.getElementById('manual_fields').style.display = mode === 'manual' ? 'block' : 'none';
+        document.getElementById('saved_fields').style.display = mode === 'saved_address' ? 'block' : 'none';
+        if (mode === 'saved_address' && savedDeliveryAddress.trim()) {
+            geocodeAddressAndPin(savedDeliveryAddress);
+        } else if (mode === 'manual') {
+            geocodeManualAddressDebounced();
+        }
+    }
+
+    function setPinnedLocation(lat, lng) {
+        document.getElementById('delivery_latitude').value = String(lat);
+        document.getElementById('delivery_longitude').value = String(lng);
+        if (!marker) {
+            marker = L.marker([lat, lng]).addTo(map);
+        } else {
+            marker.setLatLng([lat, lng]);
+        }
+    }
+
+    function useCurrentLocation() {
+        const status = document.getElementById('geo_status');
+        if (!navigator.geolocation) {
+            status.textContent = 'Geolocation not supported.';
+            return;
+        }
+        status.textContent = 'Getting location...';
+        navigator.geolocation.getCurrentPosition((position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            map.setView([lat, lng], 16);
+            setPinnedLocation(lat, lng);
+            const manualMode = document.querySelector('input[name="delivery_address_mode"][value="manual"]');
+            if (manualMode) {
+                manualMode.checked = true;
+                toggleAddressMode();
+            }
+            reverseGeocodeAndFillManual(lat, lng)
+                .then(() => {
+                    status.textContent = 'Location captured and address autofilled.';
+                })
+                .catch(() => {
+                    status.textContent = 'Location captured. Address autofill unavailable.';
+                });
+        }, () => {
+            status.textContent = 'Permission denied or unavailable. Pin manually.';
+        }, { enableHighAccuracy: true, timeout: 10000 });
+    }
+
+    function getManualAddressString() {
+        const parts = [
+            document.getElementById('delivery_address_line')?.value || '',
+            document.getElementById('delivery_barangay')?.value || '',
+            document.getElementById('delivery_city')?.value || '',
+            document.getElementById('delivery_province')?.value || '',
+            document.getElementById('delivery_postal_code')?.value || '',
+            document.getElementById('delivery_country')?.value || 'Philippines'
+        ]
+        .map((v) => v.trim())
+        .filter(Boolean);
+        return parts.join(', ');
+    }
+
+    function geocodeManualAddressDebounced() {
+        clearTimeout(geocodeDebounceTimer);
+        geocodeDebounceTimer = setTimeout(() => {
+            const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+            if (mode !== 'manual') return;
+            const fullAddress = getManualAddressString();
+            if (fullAddress.length < 8) return;
+            geocodeAddressAndPin(fullAddress);
+        }, 500);
+    }
+
+    async function geocodeAddressAndPin(addressText) {
+        if (!addressText || addressText.trim().length < 5) return;
+        const query = encodeURIComponent(addressText);
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${query}`;
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!Array.isArray(data) || !data.length) return;
+        const lat = Number(data[0].lat);
+        const lng = Number(data[0].lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        map.setView([lat, lng], 16);
+        setPinnedLocation(lat, lng);
+    }
+
+    async function reverseGeocodeAndFillManual(lat, lng) {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error('reverse-geocode-failed');
+        const data = await response.json();
+        const addr = data.address || {};
+
+        const street = [addr.house_number, addr.road].filter(Boolean).join(' ').trim();
+        const barangay = addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || '';
+        const city = addr.city || addr.town || addr.municipality || addr.county || '';
+        const province = addr.state || '';
+        const postal = addr.postcode || '';
+        const country = addr.country || 'Philippines';
+
+        if (street) document.getElementById('delivery_address_line').value = street;
+        if (barangay) document.getElementById('delivery_barangay').value = barangay;
+        if (city) document.getElementById('delivery_city').value = city;
+        if (province) document.getElementById('delivery_province').value = province;
+        if (postal) document.getElementById('delivery_postal_code').value = postal;
+        if (country) document.getElementById('delivery_country').value = country;
     }
 
     // Event listeners
     paymentMethodSelect.addEventListener('change', togglePaymentFields);
-    
+    map = L.map('checkout_map').setView([6.1164, 125.1716], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    map.on('click', (e) => setPinnedLocation(e.latlng.lat, e.latlng.lng));
+    setPinnedLocation(6.1164, 125.1716);
+    ['delivery_address_line', 'delivery_barangay', 'delivery_city', 'delivery_province', 'delivery_postal_code', 'delivery_country']
+        .forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', geocodeManualAddressDebounced);
+            el.addEventListener('input', geocodeManualAddressDebounced);
+        });
+    toggleAddressMode();
     // Initialize
     togglePaymentFields();
 </script>
