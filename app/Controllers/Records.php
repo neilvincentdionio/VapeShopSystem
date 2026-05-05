@@ -374,6 +374,9 @@ class Records extends BaseController
         if (! in_array($status, self::RECORD_STATUSES, true)) {
             $status = 'pending';
         }
+        if ($status === 'completed') {
+            $paymentStatus = 'paid';
+        }
 
         return [
             'record_type' => $recordType,

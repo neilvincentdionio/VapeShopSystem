@@ -151,7 +151,7 @@
 
         <?php foreach ($cart_items as $item): ?>
             <div class="items-row">
-                <div style="font-weight:800;"><?= esc($item['name']) ?></div>
+                <div style="font-weight:800;"><?= esc($item['display_name'] ?? $item['name']) ?></div>
                 <div><?= (int) ($item['quantity'] ?? 0) ?></div>
                 <div>₱<?= number_format((float) ($item['price'] ?? 0), 2) ?></div>
                 <div class="col-hide">₱<?= number_format((float) ($item['amount'] ?? 0), 2) ?></div>

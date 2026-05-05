@@ -17,12 +17,15 @@ class ProductModel extends Model
     protected $table = 'products';
     protected $primaryKey = 'id';
     protected $allowedFields = [
-        'category_id',
         'name',
-        'description',
+        'category',
+        'brand',
+        'flavor',
         'price',
-        'image',
-        'status',
+        'puffs',
+        'image_url',
+        'stock_qty',
+        'is_active',
     ];
 
     protected $useTimestamps = true;
@@ -31,10 +34,13 @@ class ProductModel extends Model
 
     protected $validationRules = [
         'name' => 'required|min_length[3]|max_length[255]',
-        'category_id' => 'required|integer',
-        'description' => 'permit_empty|max_length[1000]',
+        'category' => 'required|max_length[100]',
+        'brand' => 'permit_empty|max_length[100]',
+        'flavor' => 'permit_empty|max_length[100]',
         'price' => 'required|numeric|greater_than_equal_to[0]',
-        'status' => 'required|in_list[active,inactive]',
+        'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+        'stock_qty' => 'required|integer|greater_than_equal_to[0]',
+        'is_active' => 'required|in_list[0,1]',
     ];
 
     protected $validationMessages = [
@@ -57,7 +63,7 @@ class ProductModel extends Model
     public function getActiveProducts($limit = null, $offset = 0)
     {
         $builder = $this->baseProductQuery()
-            ->where('p.status', 'active')
+            ->where('p.is_active', 1)
             ->orderBy('p.created_at', 'DESC');
 
         if ($limit !== null) {
@@ -70,8 +76,7 @@ class ProductModel extends Model
     public function getProductsByCategory($category)
     {
         return $this->baseProductQuery()
-            ->where('p.status', 'active')
-            ->where('c.name', $category)
+            ->whereIn('p.category', $this->getCategoryFilterValues((string) $category))
             ->orderBy('p.created_at', 'DESC')
             ->get()
             ->getResultArray();
@@ -80,14 +85,23 @@ class ProductModel extends Model
     public function searchProducts($keyword, $category = null)
     {
         $builder = $this->baseProductQuery()
-            ->where('p.status', 'active')
             ->groupStart()
             ->like('p.name', $keyword)
-            ->orLike('p.description', $keyword)
+            ->orLike('p.brand', $keyword)
+            ->orLike('p.category', $keyword)
+            ->orWhereIn('p.category', $this->getCategoryFilterValues((string) $keyword));
+
+        if ($this->hasVariantTable()) {
+            $builder->orLike('pv.flavor', $keyword);
+        } else {
+            $builder->orLike('p.flavor', $keyword);
+        }
+
+        $builder
             ->groupEnd();
 
         if ($category && $category !== 'all') {
-            $builder->where('c.name', $category);
+            $builder->whereIn('p.category', $this->getCategoryFilterValues((string) $category));
         }
 
         return $builder->orderBy('p.created_at', 'DESC')->get()->getResultArray();
@@ -100,17 +114,31 @@ class ProductModel extends Model
 
     public function getCategoryOptions(): array
     {
-        $rows = $this->db->table('product_categories')
-            ->select('name')
-            ->orderBy('name', 'ASC')
-            ->get()
-            ->getResultArray();
+        return self::CATEGORY_OPTIONS;
+    }
 
-        if ($rows === []) {
+    public function getCategoryFilterValues(string $category): array
+    {
+        $category = trim($category);
+        if ($category === '' || strtolower($category) === 'all') {
             return self::CATEGORY_OPTIONS;
         }
 
-        return array_values(array_map(static fn ($row) => (string) $row['name'], $rows));
+        $normalized = strtolower(str_replace([' ', '_'], '-', $category));
+        $aliases = [
+            'devices' => ['Devices', 'Device'],
+            'device' => ['Devices', 'Device'],
+            'pods' => ['Pods', 'Pod'],
+            'pod' => ['Pods', 'Pod'],
+            'e-liquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
+            'eliquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
+            'disposable' => ['Disposable', 'Disposables'],
+            'disposables' => ['Disposable', 'Disposables'],
+            'accessories' => ['Accessories', 'Accessory'],
+            'accessory' => ['Accessories', 'Accessory'],
+        ];
+
+        return $aliases[$normalized] ?? [$category];
     }
 
     public function getProductById($id, $activeOnly = false)
@@ -118,11 +146,206 @@ class ProductModel extends Model
         $builder = $this->baseProductQuery()->where('p.id', $id);
 
         if ($activeOnly) {
-            $builder->where('p.status', 'active');
+            $builder->where('p.is_active', 1);
         }
 
         $row = $builder->get()->getRowArray();
         return $row ?: null;
+    }
+
+    public function getProductBaseById($id): ?array
+    {
+        $row = $this->db->table('products')
+            ->where('id', (int) $id)
+            ->get()
+            ->getRowArray();
+
+        if (! $row) {
+            return null;
+        }
+
+        $row['image'] = $row['image_url'] ?? null;
+        $row['description'] = $row['description'] ?? '';
+
+        return $row;
+    }
+
+    public function getProductVariants(int $productId): array
+    {
+        if (! $this->hasVariantTable()) {
+            return [];
+        }
+
+        return $this->db->table('product_variants')
+            ->where('product_id', $productId)
+            ->orderBy('id', 'ASC')
+            ->get()
+            ->getResultArray();
+    }
+
+    public function getProductVariant(int $productId, int $variantId): ?array
+    {
+        if (! $this->hasVariantTable()) {
+            return null;
+        }
+
+        $row = $this->db->table('product_variants')
+            ->where('id', $variantId)
+            ->where('product_id', $productId)
+            ->get()
+            ->getRowArray();
+
+        return $row ?: null;
+    }
+
+    public function getCustomerProducts(string $search = '', string $category = 'all'): array
+    {
+        $builder = $this->db->table('products p')
+            ->select(
+                "p.id, p.name, p.category, p.brand, p.flavor, p.price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                false
+            )
+            ->where('p.is_active', 1);
+
+        if ($category !== 'all') {
+            $builder->whereIn('p.category', $this->getCategoryFilterValues($category));
+        }
+
+        $search = trim($search);
+        if ($search !== '') {
+            $builder->groupStart()
+                ->like('p.name', $search)
+                ->orLike('p.brand', $search)
+                ->orLike('p.category', $search)
+                ->orWhereIn('p.category', $this->getCategoryFilterValues($search));
+
+            if ($this->hasVariantTable()) {
+                $matchingIds = $this->db->table('product_variants')
+                    ->select('product_id')
+                    ->like('flavor', $search)
+                    ->groupBy('product_id')
+                    ->get()
+                    ->getResultArray();
+                $matchingIds = array_values(array_unique(array_map(static fn ($row) => (int) $row['product_id'], $matchingIds)));
+
+                if ($matchingIds !== []) {
+                    $builder->orWhereIn('p.id', $matchingIds);
+                }
+            } else {
+                $builder->orLike('p.flavor', $search);
+            }
+
+            $builder->groupEnd();
+        }
+
+        $products = $builder
+            ->orderBy('p.created_at', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        if ($products === [] || ! $this->hasVariantTable()) {
+            return $products;
+        }
+
+        $productIds = array_values(array_map(static fn ($product) => (int) $product['id'], $products));
+        $variants = $this->db->table('product_variants')
+            ->whereIn('product_id', $productIds)
+            ->where('is_active', 1)
+            ->orderBy('flavor', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        $variantsByProduct = [];
+        foreach ($variants as $variant) {
+            $variantFlavor = trim((string) ($variant['flavor'] ?? ''));
+            if ($variantFlavor === '') {
+                continue;
+            }
+
+            $variantsByProduct[(int) $variant['product_id']][] = [
+                'id' => (int) $variant['id'],
+                'flavor' => $variantFlavor,
+                'price' => (float) ($variant['price'] ?? 0),
+                'stock' => (int) ($variant['stock_qty'] ?? 0),
+                'puffs' => $variant['puffs'] ?? null,
+            ];
+        }
+
+        foreach ($products as &$product) {
+            $product['variants'] = $variantsByProduct[(int) $product['id']] ?? [];
+            if ($product['variants'] !== []) {
+                $product['stock'] = array_sum(array_column($product['variants'], 'stock'));
+                $product['stock_qty'] = $product['stock'];
+            }
+        }
+        unset($product);
+
+        return $products;
+    }
+
+    public function syncProductVariants(int $productId, array $flavors, array $defaults = []): bool
+    {
+        if (! $this->hasVariantTable()) {
+            return true;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $keptIds = [];
+
+        $this->db->transStart();
+
+        foreach ($flavors as $flavor) {
+            $name = trim((string) ($flavor['name'] ?? ''));
+            $stock = max(0, (int) ($flavor['stock'] ?? 0));
+
+            if ($name === '') {
+                continue;
+            }
+
+            $variantData = [
+                'product_id' => $productId,
+                'flavor' => $name,
+                'puffs' => $defaults['puffs'] ?? null,
+                'price' => (float) ($defaults['price'] ?? 0),
+                'stock_qty' => $stock,
+                'is_active' => (int) ($defaults['is_active'] ?? 1),
+                'updated_at' => $now,
+            ];
+
+            $variantId = (int) ($flavor['id'] ?? 0);
+            if ($variantId > 0) {
+                $exists = $this->db->table('product_variants')
+                    ->where('id', $variantId)
+                    ->where('product_id', $productId)
+                    ->countAllResults() > 0;
+
+                if ($exists) {
+                    $this->db->table('product_variants')
+                        ->where('id', $variantId)
+                        ->where('product_id', $productId)
+                        ->update($variantData);
+                    $keptIds[] = $variantId;
+                    continue;
+                }
+            }
+
+            $variantData['created_at'] = $now;
+            $this->db->table('product_variants')->insert($variantData);
+            $keptIds[] = (int) $this->db->insertID();
+        }
+
+        $deleteBuilder = $this->db->table('product_variants')
+            ->where('product_id', $productId);
+
+        if ($keptIds !== []) {
+            $deleteBuilder->whereNotIn('id', $keptIds);
+        }
+
+        $deleteBuilder->delete();
+
+        $this->db->transComplete();
+
+        return $this->db->transStatus();
     }
 
     public function find($id = null)
@@ -136,7 +359,7 @@ class ProductModel extends Model
 
     public function updateStock($id, $quantity)
     {
-        $product = $this->getProductById($id);
+        $product = $this->getProductBaseById($id);
         if (! $product) {
             return false;
         }
@@ -146,15 +369,15 @@ class ProductModel extends Model
             return true;
         }
 
-        return $this->createInventoryMovement(
-            (int) $id,
-            $quantity < 0 ? 'sale' : 'adjustment',
-            $quantity,
-            null,
-            'product',
-            (int) $id,
-            null
-        );
+        if ($quantity < 0 && (int) ($product['stock_qty'] ?? 0) < abs($quantity)) {
+            return false;
+        }
+
+        return (bool) $this->db->table('products')
+            ->where('id', (int) $id)
+            ->set('stock_qty', 'stock_qty + ' . $quantity, false)
+            ->set('updated_at', date('Y-m-d H:i:s'))
+            ->update();
     }
 
     public function reserveStockForItems(array $items, ?string $referenceType = null, ?int $referenceId = null, ?int $createdBy = null): bool
@@ -164,28 +387,35 @@ class ProductModel extends Model
             return true;
         }
 
-        $lockedStock = $this->lockProductStockLevels(array_keys($requirements));
-        if (count($lockedStock) !== count($requirements)) {
-            return false;
-        }
-
-        foreach ($requirements as $productId => $quantity) {
-            if (($lockedStock[$productId] ?? 0) < $quantity) {
+        foreach ($requirements as $item) {
+            if (! $this->hasEnoughStockForLine($item)) {
                 return false;
             }
         }
 
-        foreach ($requirements as $productId => $quantity) {
-            if (! $this->createInventoryMovement(
-                $productId,
-                'sale',
-                -$quantity,
-                null,
-                $referenceType,
-                $referenceId,
-                'Reserved stock for transaction.',
-                $createdBy
-            )) {
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($requirements as $item) {
+            $productId = (int) $item['product_id'];
+            $variantId = $item['variant_id'];
+            $quantity = (int) $item['quantity'];
+
+            if ($variantId !== null) {
+                $this->db->table('product_variants')
+                    ->where('id', $variantId)
+                    ->where('product_id', $productId)
+                    ->set('stock_qty', 'stock_qty - ' . $quantity, false)
+                    ->set('updated_at', $now)
+                    ->update();
+            }
+
+            $this->db->table('products')
+                ->where('id', $productId)
+                ->set('stock_qty', 'stock_qty - ' . $quantity, false)
+                ->set('updated_at', $now)
+                ->update();
+
+            if ($this->db->affectedRows() < 0) {
                 return false;
             }
         }
@@ -200,24 +430,27 @@ class ProductModel extends Model
             return true;
         }
 
-        $lockedStock = $this->lockProductStockLevels(array_keys($requirements));
-        if (count($lockedStock) !== count($requirements)) {
-            return false;
-        }
+        $now = date('Y-m-d H:i:s');
 
-        foreach ($requirements as $productId => $quantity) {
-            if (! $this->createInventoryMovement(
-                $productId,
-                'return',
-                $quantity,
-                null,
-                $referenceType,
-                $referenceId,
-                'Restored stock for reversed transaction.',
-                $createdBy
-            )) {
-                return false;
+        foreach ($requirements as $item) {
+            $productId = (int) $item['product_id'];
+            $variantId = $item['variant_id'];
+            $quantity = (int) $item['quantity'];
+
+            if ($variantId !== null) {
+                $this->db->table('product_variants')
+                    ->where('id', $variantId)
+                    ->where('product_id', $productId)
+                    ->set('stock_qty', 'stock_qty + ' . $quantity, false)
+                    ->set('updated_at', $now)
+                    ->update();
             }
+
+            $this->db->table('products')
+                ->where('id', $productId)
+                ->set('stock_qty', 'stock_qty + ' . $quantity, false)
+                ->set('updated_at', $now)
+                ->update();
         }
 
         return true;
@@ -226,7 +459,7 @@ class ProductModel extends Model
     public function hasSufficientStock($id, $requiredQuantity)
     {
         $product = $this->getProductById($id);
-        return $product && (int) $product['stock'] >= (int) $requiredQuantity;
+        return $product && (int) $product['stock_qty'] >= (int) $requiredQuantity;
     }
 
     public function getAllProducts($limit = null, $offset = 0)
@@ -243,7 +476,7 @@ class ProductModel extends Model
     public function countActiveProducts()
     {
         return (int) $this->db->table('products')
-            ->where('status', 'active')
+            ->where('is_active', 1)
             ->countAllResults();
     }
 
@@ -255,9 +488,8 @@ class ProductModel extends Model
     public function getLowStockProducts($threshold = 10)
     {
         return $this->baseProductQuery()
-            ->where('p.status', 'active')
-            ->having('stock <=', (int) $threshold, false)
-            ->orderBy('stock', 'ASC')
+            ->where('p.stock_qty <=', (int) $threshold)
+            ->orderBy('p.stock_qty', 'ASC')
             ->get()
             ->getResultArray();
     }
@@ -268,18 +500,24 @@ class ProductModel extends Model
             return false;
         }
 
-        $stock = array_key_exists('stock', $row) ? (int) $row['stock'] : 0;
         $coreData = $this->prepareCoreProductData($row);
-
         $result = parent::insert($coreData, $returnID);
-        if ($result === false) {
-            return false;
+
+        if ($result === false || ! $this->hasVariantTable()) {
+            return $result;
         }
 
         $productId = (int) ($returnID ? $result : $this->getInsertID());
-        if ($stock !== 0) {
-            $this->createInventoryMovement($productId, 'initial', $stock, null, 'product', $productId, 'Initial stock');
-        }
+        $this->db->table('product_variants')->insert([
+            'product_id' => $productId,
+            'flavor' => $row['flavor'] ?? null,
+            'puffs' => $row['puffs'] ?? null,
+            'price' => (float) ($row['price'] ?? 0),
+            'stock_qty' => (int) ($row['stock_qty'] ?? 0),
+            'is_active' => (int) ($row['is_active'] ?? 1),
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
 
         return $result;
     }
@@ -295,110 +533,33 @@ class ProductModel extends Model
             return false;
         }
 
-        $desiredStock = array_key_exists('stock', $row) ? (int) $row['stock'] : null;
         $coreData = $this->prepareCoreProductData($row);
-
-        $result = true;
-        if ($coreData !== []) {
-            $result = parent::update($id, $coreData);
-        }
-
-        if (! $result) {
-            return false;
-        }
-
-        if ($desiredStock !== null) {
-            $currentStock = (int) ($current['stock'] ?? 0);
-            $delta = $desiredStock - $currentStock;
-            if ($delta !== 0) {
-                $this->createInventoryMovement((int) $id, 'adjustment', $delta, null, 'product', (int) $id, 'Manual stock update');
-            }
-        }
-
-        return true;
+        return parent::update($id, $coreData);
     }
 
     private function baseProductQuery()
     {
-        $stockSubquery = '(SELECT COALESCE(SUM(im.quantity), 0) FROM inventory_movements im WHERE im.product_id = p.id)';
+        $builder = $this->db->table('products p');
 
-        return $this->db->table('products p')
-            ->select("p.id, p.category_id, p.name, p.description, p.price, p.image, p.status, p.created_at, p.updated_at, c.name AS category, {$stockSubquery} AS stock", false)
-            ->join('product_categories c', 'c.id = p.category_id', 'left');
+        if ($this->hasVariantTable()) {
+            return $builder
+                ->select(
+                    "p.id, pv.id AS variant_id, p.name, p.category, p.brand, COALESCE(pv.flavor, p.flavor) AS flavor, COALESCE(pv.price, p.price) AS price, COALESCE(pv.puffs, p.puffs) AS puffs, p.image_url, p.image_url AS image, '' AS description, COALESCE(pv.stock_qty, p.stock_qty) AS stock_qty, COALESCE(pv.stock_qty, p.stock_qty) AS stock, p.stock_qty AS product_stock_qty, p.is_active, COALESCE(pv.is_active, p.is_active) AS variant_is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                    false
+                )
+                ->join('product_variants pv', 'pv.product_id = p.id', 'left');
+        }
+
+        return $builder
+            ->select(
+                "p.id, p.name, p.category, p.brand, p.flavor, p.price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                false
+            );
     }
 
     private function prepareCoreProductData(array $data): array
     {
-        $categoryValue = $data['category_id'] ?? ($data['category'] ?? null);
-        $categoryId = $this->resolveCategoryId($categoryValue);
-
-        $coreData = array_intersect_key($data, array_flip($this->allowedFields));
-        unset($coreData['category']);
-
-        if ($categoryId !== null) {
-            $coreData['category_id'] = $categoryId;
-        }
-
-        return $coreData;
-    }
-
-    private function resolveCategoryId($categoryValue): ?int
-    {
-        if ($categoryValue === null || $categoryValue === '') {
-            return null;
-        }
-
-        if (is_numeric($categoryValue)) {
-            return (int) $categoryValue;
-        }
-
-        $categoryName = trim((string) $categoryValue);
-        $slug = $this->slugify($categoryName);
-
-        $existing = $this->db->table('product_categories')
-            ->groupStart()
-            ->where('name', $categoryName)
-            ->orWhere('slug', $slug)
-            ->groupEnd()
-            ->get()
-            ->getRowArray();
-
-        if ($existing) {
-            return (int) $existing['id'];
-        }
-
-        $timestamp = date('Y-m-d H:i:s');
-        $this->db->table('product_categories')->insert([
-            'name' => $categoryName,
-            'slug' => $slug,
-            'created_at' => $timestamp,
-            'updated_at' => $timestamp,
-        ]);
-
-        return (int) $this->db->insertID();
-    }
-
-    private function createInventoryMovement(
-        int $productId,
-        string $movementType,
-        int $quantity,
-        ?float $unitCost = null,
-        ?string $referenceType = null,
-        ?int $referenceId = null,
-        ?string $notes = null,
-        ?int $createdBy = null
-    ): bool {
-        return (bool) $this->db->table('inventory_movements')->insert([
-            'product_id' => $productId,
-            'movement_type' => $movementType,
-            'quantity' => $quantity,
-            'unit_cost' => $unitCost,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
-            'notes' => $notes,
-            'created_by' => $createdBy,
-            'created_at' => date('Y-m-d H:i:s'),
-        ]);
+        return array_intersect_key($data, array_flip($this->allowedFields));
     }
 
     private function normalizeStockItems(array $items): array
@@ -406,54 +567,62 @@ class ProductModel extends Model
         $normalized = [];
 
         foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
             $productId = (int) ($item['id'] ?? $item['product_id'] ?? 0);
+            $variantId = isset($item['variant_id']) && (int) $item['variant_id'] > 0
+                ? (int) $item['variant_id']
+                : null;
             $quantity = (int) ($item['qty'] ?? $item['quantity'] ?? 0);
 
             if ($productId <= 0 || $quantity <= 0) {
                 continue;
             }
 
-            $normalized[$productId] = ($normalized[$productId] ?? 0) + $quantity;
+            $key = $productId . ':' . ($variantId ?? 0);
+            if (! isset($normalized[$key])) {
+                $normalized[$key] = [
+                    'product_id' => $productId,
+                    'variant_id' => $variantId,
+                    'quantity' => 0,
+                ];
+            }
+
+            $normalized[$key]['quantity'] += $quantity;
         }
 
-        ksort($normalized);
-
-        return $normalized;
+        return array_values($normalized);
     }
 
-    private function lockProductStockLevels(array $productIds): array
+    private function hasEnoughStockForLine(array $item): bool
     {
-        if ($productIds === []) {
-            return [];
+        $quantity = (int) ($item['quantity'] ?? 0);
+        if ($quantity <= 0) {
+            return true;
         }
 
-        sort($productIds);
-        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-        $sql = "
-            SELECT
-                p.id,
-                COALESCE(SUM(im.quantity), 0) AS stock
-            FROM products p
-            LEFT JOIN inventory_movements im ON im.product_id = p.id
-            WHERE p.id IN ({$placeholders})
-            GROUP BY p.id
-            FOR UPDATE
-        ";
+        $productId = (int) ($item['product_id'] ?? 0);
+        $variantId = $item['variant_id'] ?? null;
 
-        $rows = $this->db->query($sql, $productIds)->getResultArray();
-        $stockMap = [];
-
-        foreach ($rows as $row) {
-            $stockMap[(int) $row['id']] = (int) $row['stock'];
+        if ($variantId !== null) {
+            $variant = $this->getProductVariant($productId, (int) $variantId);
+            return $variant && (int) ($variant['stock_qty'] ?? 0) >= $quantity;
         }
 
-        return $stockMap;
+        $product = $this->getProductBaseById($productId);
+        return $product && (int) ($product['stock_qty'] ?? 0) >= $quantity;
     }
 
-    private function slugify(string $value): string
+    private function hasVariantTable(): bool
     {
-        $value = strtolower(trim($value));
-        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
-        return trim($value, '-') ?: 'category';
+        static $hasTable = null;
+
+        if ($hasTable === null) {
+            $hasTable = $this->db->tableExists('product_variants');
+        }
+
+        return $hasTable;
     }
 }

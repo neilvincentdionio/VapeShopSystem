@@ -58,6 +58,33 @@ class Products extends BaseController
     }
 
     /**
+     * Show read-only product details for admins.
+     */
+    public function view($id)
+    {
+        $guard = $this->enforcePermission('view_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
+        $product = $this->productModel->getProductBaseById($id);
+
+        if (!$product) {
+            return redirect()->to('/products')->with('error', 'Product not found.');
+        }
+
+        $variants = $this->productModel->getProductVariants((int) $id);
+
+        $data = [
+            'title' => 'View Product',
+            'product' => $product,
+            'variants' => $variants,
+        ];
+
+        return view('admin/products/view', $data);
+    }
+
+    /**
      * Store new product
      */
     public function store()
@@ -70,11 +97,13 @@ class Products extends BaseController
         $validation = $this->validate([
             'name' => 'required|min_length[3]|max_length[255]',
             'category' => 'required|in_list[Devices,Pods,E-Liquid,Disposable,Accessories]',
-            'description' => 'max_length[1000]',
+            'brand' => 'permit_empty|max_length[100]',
+            'flavor' => 'permit_empty|max_length[100]',
             'price' => 'required|numeric|greater_than_equal_to[0]',
-            'stock' => 'required|integer|greater_than_equal_to[0]',
-            'status' => 'required|in_list[active,inactive]',
-            'image' => 'uploaded[image]|max_size[image,2048]|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png,image/webp]'
+            'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'stock_qty' => 'required|integer|greater_than_equal_to[0]',
+            'is_active' => 'required|in_list[0,1]',
+            'image' => 'permit_empty|max_size[image,4096]|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png,image/webp,image/gif]'
         ]);
 
         if (!$validation) {
@@ -93,14 +122,41 @@ class Products extends BaseController
         $productData = [
             'name' => $this->request->getPost('name'),
             'category' => $this->request->getPost('category'),
-            'description' => $this->request->getPost('description'),
+            'brand' => $this->request->getPost('brand'),
+            'flavor' => $this->request->getPost('flavor'),
             'price' => $this->request->getPost('price'),
-            'stock' => $this->request->getPost('stock'),
-            'status' => $this->request->getPost('status'),
-            'image' => $imageName
+            'puffs' => $this->request->getPost('puffs') ?: null,
+            'stock_qty' => $this->request->getPost('stock_qty'),
+            'is_active' => $this->request->getPost('is_active') ?: 1,
+            'image_url' => $imageName
         ];
 
-        if ($this->productModel->insert($productData)) {
+        // Handle flavors for products that use flavor inventory
+        $flavors = $this->normalizeFlavorInput($this->request->getPost('flavors') ?? []);
+        $usesFlavorInventory = $this->usesFlavorInventory((string) $this->request->getPost('category'));
+
+        if ($usesFlavorInventory) {
+            // Calculate total stock from flavors
+            $totalStock = array_sum(array_column($flavors, 'stock'));
+            $productData['stock_qty'] = $totalStock;
+
+            // Flavor rows are stored in product_variants.
+            $productData['flavor'] = null;
+        }
+
+        $productId = $this->productModel->insert($productData);
+
+        if (
+            $productId
+            && (
+                ! $usesFlavorInventory
+                || $this->productModel->syncProductVariants((int) $productId, $flavors, [
+                    'price' => $productData['price'],
+                    'puffs' => $productData['puffs'],
+                    'is_active' => $productData['is_active'],
+                ])
+            )
+        ) {
             return redirect()->to('/products')->with('success', 'Product created successfully.');
         }
 
@@ -117,10 +173,20 @@ class Products extends BaseController
             return $guard;
         }
 
-        $product = $this->productModel->find($id);
+        $product = $this->productModel->getProductBaseById($id);
 
         if (!$product) {
             return redirect()->to('/products')->with('error', 'Product not found.');
+        }
+
+        $product['flavors'] = $this->formatFlavorRows($this->productModel->getProductVariants((int) $id));
+
+        // Backward compatibility for products saved before product_variants existed.
+        if ($product['flavors'] === [] && !empty($product['flavor'])) {
+            $decodedFlavors = json_decode($product['flavor'], true);
+            if (is_array($decodedFlavors)) {
+                $product['flavors'] = $this->formatLegacyFlavorRows($decodedFlavors);
+            }
         }
 
         $data = [
@@ -151,10 +217,12 @@ class Products extends BaseController
         $validationRules = [
             'name' => 'required|min_length[3]|max_length[255]',
             'category' => 'required|in_list[Devices,Pods,E-Liquid,Disposable,Accessories]',
-            'description' => 'max_length[1000]',
+            'brand' => 'permit_empty|max_length[100]',
+            'flavor' => 'permit_empty|max_length[100]',
             'price' => 'required|numeric|greater_than_equal_to[0]',
-            'stock' => 'required|integer|greater_than_equal_to[0]',
-            'status' => 'required|in_list[active,inactive]'
+            'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'stock_qty' => 'required|integer|greater_than_equal_to[0]',
+            'is_active' => 'required|in_list[0,1]'
         ];
 
         // Only validate image if a new one is uploaded
@@ -170,12 +238,12 @@ class Products extends BaseController
 
         // Handle image upload
         $imageFile = $this->request->getFile('image');
-        $imageName = $product['image']; // Keep existing image by default
+        $imageName = $product['image_url']; // Keep existing image by default
 
         if ($imageFile && $imageFile->isValid() && !$imageFile->hasMoved()) {
             // Delete old image if exists
-            if ($product['image'] && file_exists('uploads/products/' . $product['image'])) {
-                unlink('uploads/products/' . $product['image']);
+            if ($product['image_url'] && file_exists('uploads/products/' . $product['image_url'])) {
+                unlink('uploads/products/' . $product['image_url']);
             }
 
             $imageName = $imageFile->getRandomName();
@@ -185,15 +253,45 @@ class Products extends BaseController
         $productData = [
             'name' => $this->request->getPost('name'),
             'category' => $this->request->getPost('category'),
-            'description' => $this->request->getPost('description'),
+            'brand' => $this->request->getPost('brand'),
+            'flavor' => $this->request->getPost('flavor'),
             'price' => $this->request->getPost('price'),
-            'stock' => $this->request->getPost('stock'),
-            'status' => $this->request->getPost('status'),
-            'image' => $imageName
+            'puffs' => $this->request->getPost('puffs') ?: null,
+            'stock_qty' => $this->request->getPost('stock_qty'),
+            'is_active' => $this->request->getPost('is_active') ?: 1,
+            'image_url' => $imageName
         ];
 
-        if ($this->productModel->update($id, $productData)) {
-            return redirect()->to('/products')->with('success', 'Product updated successfully.');
+        // Handle flavors for products that use flavor inventory
+        $flavors = $this->normalizeFlavorInput($this->request->getPost('flavors') ?? []);
+        $usesFlavorInventory = $this->usesFlavorInventory((string) $this->request->getPost('category'));
+        
+        if ($usesFlavorInventory) {
+            // Calculate total stock from flavors
+            $totalStock = array_sum(array_column($flavors, 'stock'));
+            $productData['stock_qty'] = $totalStock;
+
+            // Flavor rows are stored in product_variants.
+            $productData['flavor'] = null;
+
+            if (
+                $this->productModel->update($id, $productData)
+                && $this->productModel->syncProductVariants((int) $id, $flavors, [
+                    'price' => $productData['price'],
+                    'puffs' => $productData['puffs'],
+                    'is_active' => $productData['is_active'],
+                ])
+            ) {
+                return redirect()->to('/products')->with('success', 'Product updated successfully.');
+            }
+        } else {
+            // Update regular product
+            if (
+                $this->productModel->update($id, $productData)
+                && $this->productModel->syncProductVariants((int) $id, [])
+            ) {
+                return redirect()->to('/products')->with('success', 'Product updated successfully.');
+            }
         }
 
         return redirect()->back()->withInput()->with('error', 'Failed to update product.');
@@ -216,8 +314,8 @@ class Products extends BaseController
         }
 
         // Delete product image if exists
-        if ($product['image'] && file_exists('uploads/products/' . $product['image'])) {
-            unlink('uploads/products/' . $product['image']);
+        if ($product['image_url'] && file_exists('uploads/products/' . $product['image_url'])) {
+            unlink('uploads/products/' . $product['image_url']);
         }
 
         if ($this->productModel->delete($id)) {
@@ -243,10 +341,10 @@ class Products extends BaseController
             return redirect()->to('/products')->with('error', 'Product not found.');
         }
 
-        $newStatus = $product['status'] === 'active' ? 'inactive' : 'active';
+        $newStatus = (int) $product['is_active'] === 1 ? 0 : 1;
 
-        if ($this->productModel->update($id, ['status' => $newStatus])) {
-            $statusText = $newStatus === 'active' ? 'activated' : 'deactivated';
+        if ($this->productModel->update($id, ['is_active' => $newStatus])) {
+            $statusText = $newStatus === 1 ? 'activated' : 'deactivated';
             return redirect()->to('/products')->with('success', "Product {$statusText} successfully.");
         }
 
@@ -264,5 +362,66 @@ class Products extends BaseController
         }
 
         return true;
+    }
+
+    private function usesFlavorInventory(string $category): bool
+    {
+        return in_array(strtolower($category), ['pods', 'disposable', 'e-liquid'], true);
+    }
+
+    private function normalizeFlavorInput($flavors): array
+    {
+        if (! is_array($flavors)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($flavors as $flavor) {
+            if (! is_array($flavor)) {
+                continue;
+            }
+
+            $name = trim((string) ($flavor['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'id' => (int) ($flavor['id'] ?? 0),
+                'name' => $name,
+                'stock' => max(0, (int) ($flavor['stock'] ?? 0)),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function formatFlavorRows(array $variants): array
+    {
+        return array_map(static function (array $variant): array {
+            return [
+                'id' => (int) ($variant['id'] ?? 0),
+                'name' => $variant['flavor'] ?? '',
+                'stock' => (int) ($variant['stock_qty'] ?? 0),
+            ];
+        }, array_values(array_filter($variants, static fn (array $variant): bool => trim((string) ($variant['flavor'] ?? '')) !== '')));
+    }
+
+    private function formatLegacyFlavorRows(array $flavors): array
+    {
+        return array_values(array_filter(array_map(static function ($flavor): array {
+            if (! is_array($flavor)) {
+                return ['id' => 0, 'name' => '', 'stock' => 0];
+            }
+
+            $name = $flavor['name'] ?? $flavor['flavor_name'] ?? '';
+
+            return [
+                'id' => 0,
+                'name' => $name,
+                'stock' => (int) ($flavor['stock'] ?? $flavor['flavor_stock'] ?? 0),
+            ];
+        }, $flavors), static fn (array $flavor): bool => trim((string) ($flavor['name'] ?? '')) !== ''));
     }
 }

@@ -356,6 +356,20 @@
             </div>
             
             <div class="purchase-section">
+                <?php if (!empty($product['variants'])): ?>
+                    <div class="quantity-selector">
+                        <label for="variant_id">Flavor:</label>
+                        <select id="variant_id" onchange="updateVariantStock()" style="padding:.65rem .8rem; border:1px solid #e0e0e0; border-radius:8px; min-width:220px;">
+                            <option value="">Select flavor</option>
+                            <?php foreach ($product['variants'] as $variant): ?>
+                                <option value="<?= (int) $variant['id'] ?>" data-stock="<?= (int) $variant['stock'] ?>" <?= (int) $variant['stock'] <= 0 ? 'disabled' : '' ?>>
+                                    <?= esc($variant['flavor']) ?> (<?= (int) $variant['stock'] ?> left)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
+
                 <div class="quantity-selector">
                     <label for="quantity">Quantity:</label>
                     <div class="quantity-input">
@@ -389,13 +403,23 @@
 <script>
 const maxQuantity = <?= $product['stock'] ?>;
 const productId = <?= $product['id'] ?>;
+const hasFlavorVariants = <?= !empty($product['variants']) ? 'true' : 'false' ?>;
 const addUrl = '<?= site_url('customer/cart/add') ?>';
 const cartUrl = '<?= site_url('customer/cart') ?>';
+
+function selectedMaxQuantity() {
+    if (!hasFlavorVariants) {
+        return maxQuantity;
+    }
+
+    const option = document.getElementById('variant_id')?.selectedOptions?.[0];
+    return parseInt(option?.dataset?.stock || '0', 10);
+}
 
 function increaseQuantity() {
     const input = document.getElementById('quantity');
     const currentValue = parseInt(input.value);
-    if (currentValue < maxQuantity) {
+    if (currentValue < selectedMaxQuantity()) {
         input.value = currentValue + 1;
     }
 }
@@ -408,8 +432,28 @@ function decreaseQuantity() {
     }
 }
 
+function updateVariantStock() {
+    const input = document.getElementById('quantity');
+    const stock = selectedMaxQuantity();
+    input.max = stock;
+    if (parseInt(input.value, 10) > stock) {
+        input.value = Math.max(1, stock);
+    }
+}
+
 function addToCart() {
     const quantity = document.getElementById('quantity').value;
+    const variantId = document.getElementById('variant_id')?.value || '';
+
+    if (hasFlavorVariants && !variantId) {
+        alert('Please select a flavor.');
+        return;
+    }
+
+    const payload = new URLSearchParams({ product_id: productId, quantity: quantity });
+    if (variantId) {
+        payload.set('variant_id', variantId);
+    }
 
     fetch(addUrl, {
         method: 'POST',
@@ -417,7 +461,7 @@ function addToCart() {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'X-Requested-With': 'XMLHttpRequest'
         },
-        body: new URLSearchParams({ product_id: productId, quantity: quantity })
+        body: payload
     })
         .then(async (res) => {
             const data = await res.json().catch(() => null);

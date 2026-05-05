@@ -110,6 +110,7 @@ $routes->group('records', ['filter' => 'auth'], static function ($routes) {
 // Products module routes (Admin only)
 $routes->group('products', ['filter' => 'auth:admin'], static function ($routes) {
     $routes->get('/', 'Products::index', ['filter' => 'permission:view_products']);
+    $routes->get('view/(:num)', 'Products::view/$1', ['filter' => 'permission:view_products']);
     $routes->get('create', 'Products::create', ['filter' => 'permission:create_products']);
     $routes->post('store', 'Products::store', ['filter' => 'permission:create_products']);
     $routes->get('edit/(:num)', 'Products::edit/$1', ['filter' => 'permission:update_products']);

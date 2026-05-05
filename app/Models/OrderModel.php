@@ -171,7 +171,32 @@ class OrderModel extends Model
             $orderData['status'] = $status;
         }
 
-        return $this->updateOrder($orderId, $orderData, [], $shipmentData);
+        $paymentData = [];
+        if ($status === 'completed') {
+            $payment = $this->db->table('order_payments')
+                ->where('order_id', $orderId)
+                ->get()
+                ->getRowArray();
+
+            if (($payment['status'] ?? 'unpaid') !== 'paid') {
+                $totalRow = $this->db->table('order_items')
+                    ->select('COALESCE(SUM(quantity * unit_price), 0) AS total_amount', false)
+                    ->where('order_id', $orderId)
+                    ->get()
+                    ->getRowArray();
+                $totalAmount = round((float) ($totalRow['total_amount'] ?? 0), 2);
+
+                $paymentData = [
+                    'status' => 'paid',
+                    'amount' => $totalAmount,
+                    'amount_received' => $payment['amount_received'] ?? $totalAmount,
+                    'change_amount' => $payment['change_amount'] ?? 0.00,
+                    'paid_at' => $payment['paid_at'] ?? date('Y-m-d H:i:s'),
+                ];
+            }
+        }
+
+        return $this->updateOrder($orderId, $orderData, $paymentData, $shipmentData);
     }
 
     public function getOrderItems(int $orderId): array
@@ -295,7 +320,7 @@ class OrderModel extends Model
             ->select(
                 'o.id, o.reference_number, o.title, o.description, o.order_date AS date, o.order_date AS record_date, o.status, o.notes, o.customer_id AS created_by, o.created_at, o.updated_at, ' .
                 'COALESCE(i.total_quantity, 0) AS quantity, COALESCE(i.total_amount, 0) AS total_amount, ' .
-                "COALESCE(p.method, 'cash') AS payment_method, COALESCE(p.status, 'unpaid') AS payment_status, " .
+                "COALESCE(p.method, 'cash') AS payment_method, CASE WHEN COALESCE(s.status, o.status) = 'completed' THEN 'paid' ELSE COALESCE(p.status, 'unpaid') END AS payment_status, " .
                 'p.amount_received, p.change_amount, ' .
                 "COALESCE(s.status, 'to_pay') AS delivery_status, s.tracking_number, s.shipping_address, s.contact_number, s.shipped_at, s.delivered_at, s.notes AS shipment_notes, " .
                 's.assigned_rider_id, s.assigned_at, s.picked_up_at, s.completed_at, s.delivery_proof_image, s.delivery_notes, s.delivery_proof_submitted_at',

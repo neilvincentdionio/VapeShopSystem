@@ -405,14 +405,9 @@ class Dashboard extends BaseController
             $category = 'all';
         }
 
-        // Get products from database
-        if (!empty($search)) {
-            $products = $this->productModel->searchProducts($search, $category);
-        } elseif ($category !== 'all') {
-            $products = $this->productModel->getProductsByCategory($category);
-        } else {
-            $products = $this->productModel->getActiveProducts();
-        }
+        // Get one customer-facing card per product. Flavor variants are attached
+        // to each product for selection before adding to cart.
+        $products = $this->productModel->getCustomerProducts((string) $search, (string) $category);
 
         $categories = $allowedCategories;
 
@@ -851,6 +846,7 @@ class Dashboard extends BaseController
         }
 
         $productId = (int) $this->request->getPost('product_id');
+        $variantId = (int) ($this->request->getPost('variant_id') ?? 0);
         $quantity = (int) ($this->request->getPost('quantity') ?? 1);
         if ($productId <= 0) {
             return $this->response->setStatusCode(422)->setJSON([
@@ -873,15 +869,43 @@ class Dashboard extends BaseController
             ]);
         }
 
-        $product = $this->productModel->getProductById($productId, true);
-        if (! $product) {
+        $product = $this->productModel->getProductBaseById($productId);
+        if (! $product || (int) ($product['is_active'] ?? 0) !== 1) {
             return $this->response->setStatusCode(404)->setJSON([
                 'success' => false,
                 'message' => 'Product not found.',
             ]);
         }
 
-        if ((int) $product['stock'] <= 0) {
+        $variants = $this->productModel->getProductVariants($productId);
+        $hasFlavorChoices = $this->usesFlavorSelection((string) ($product['category'] ?? '')) && $this->hasNamedVariants($variants);
+        $selectedVariant = null;
+        $availableStock = (int) ($product['stock_qty'] ?? 0);
+
+        if ($hasFlavorChoices) {
+            if ($variantId <= 0) {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'Please select a flavor.',
+                ]);
+            }
+
+            $selectedVariant = $this->productModel->getProductVariant($productId, $variantId);
+            if (
+                ! $selectedVariant
+                || (int) ($selectedVariant['is_active'] ?? 0) !== 1
+                || trim((string) ($selectedVariant['flavor'] ?? '')) === ''
+            ) {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'Invalid flavor selected.',
+                ]);
+            }
+
+            $availableStock = (int) ($selectedVariant['stock_qty'] ?? 0);
+        }
+
+        if ($availableStock <= 0) {
             return $this->response->setStatusCode(409)->setJSON([
                 'success' => false,
                 'message' => 'This product is out of stock.',
@@ -890,18 +914,19 @@ class Dashboard extends BaseController
 
         $cart = $this->getCustomerCart();
         $items = $cart['raw_items'];
-        $currentQty = (int) ($items[(string) $productId] ?? 0);
+        $cartKey = $this->makeCartKey($productId, $selectedVariant ? (int) $selectedVariant['id'] : null);
+        $currentQty = (int) ($items[$cartKey] ?? 0);
         $requestedQty = $currentQty + $quantity;
 
-        if ($requestedQty > (int) $product['stock']) {
+        if ($requestedQty > $availableStock) {
             return $this->response->setStatusCode(409)->setJSON([
                 'success' => false,
                 'message' => 'Insufficient stock.',
-                'available' => (int) $product['stock'],
+                'available' => $availableStock,
             ]);
         }
 
-        $items[(string) $productId] = $requestedQty;
+        $items[$cartKey] = $requestedQty;
         $this->setCustomerCartRawItems($items);
 
         $cartCount = array_sum(array_map(static fn ($v) => (int) $v, $items));
@@ -923,24 +948,30 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
+        $cartKey = (string) ($this->request->getPost('cart_key') ?? '');
         $productId = (int) $this->request->getPost('product_id');
         $quantity = (int) ($this->request->getPost('quantity') ?? 0);
 
+        if ($cartKey === '') {
+            $cartKey = (string) $productId;
+        }
+
+        [$productId, $variantId] = $this->parseCartKey($cartKey);
         if ($productId <= 0) {
             return redirect()->to('/customer/cart')->with('error', 'Invalid product.');
         }
 
-        $product = $this->productModel->getProductById($productId, true);
-        if (! $product) {
+        $cartProduct = $this->resolveCartProduct($cartKey);
+        if (! $cartProduct) {
             return redirect()->to('/customer/cart')->with('error', 'Product not found.');
         }
 
         $items = $this->getCustomerCart()['raw_items'];
         if ($quantity <= 0) {
-            unset($items[(string) $productId]);
+            unset($items[$cartKey]);
         } else {
-            $quantity = min($quantity, (int) $product['stock']);
-            $items[(string) $productId] = $quantity;
+            $quantity = min($quantity, (int) $cartProduct['stock']);
+            $items[$cartKey] = $quantity;
         }
 
         $this->setCustomerCartRawItems($items);
@@ -958,13 +989,19 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
+        $cartKey = (string) ($this->request->getPost('cart_key') ?? '');
         $productId = (int) $this->request->getPost('product_id');
+        if ($cartKey === '') {
+            $cartKey = (string) $productId;
+        }
+
+        [$productId] = $this->parseCartKey($cartKey);
         if ($productId <= 0) {
             return redirect()->to('/customer/cart')->with('error', 'Invalid product.');
         }
 
         $items = $this->getCustomerCart()['raw_items'];
-        unset($items[(string) $productId]);
+        unset($items[$cartKey]);
         $this->setCustomerCartRawItems($items);
 
         return redirect()->to('/customer/cart')->with('success', 'Item removed from cart.');
@@ -1012,8 +1049,8 @@ class Dashboard extends BaseController
         $orderItems = $this->mapCartItemsToOrderItems($cartItems);
 
         foreach ($cartItems as $item) {
-            $product = $this->productModel->getProductById((int) $item['id'], true);
-            if (! $product || (int) $product['stock'] < (int) $item['quantity']) {
+            $cartProduct = $this->resolveCartProduct((string) ($item['cart_key'] ?? $item['id'] ?? ''));
+            if (! $cartProduct || (int) $cartProduct['stock'] < (int) $item['quantity']) {
                 return $this->response->setStatusCode(409)->setJSON([
                     'success' => false,
                     'message' => 'Insufficient stock for one of the items.',
@@ -1021,30 +1058,53 @@ class Dashboard extends BaseController
             }
         }
 
-        $orderId = $this->orderModel->createOrder(
-            [
-                'customer_id' => $customerId,
-                'reference_number' => $referenceNumber,
-                'title' => 'Direct Order',
-                'description' => 'Customer direct order purchase.',
-                'order_date' => date('Y-m-d'),
-                'status' => 'pending',
-            ],
-            $orderItems,
-            [
-                'method' => 'cash',
-                'status' => 'pending',
-                'amount' => round($total, 2),
-            ],
-            $this->buildCustomerShipmentData($customer, [
-                'status' => 'to_ship',
-            ])
-        );
+        $db = \Config\Database::connect();
+        $db->transStart();
 
-        if (! $orderId) {
+        try {
+            $orderId = $this->orderModel->createOrder(
+                [
+                    'customer_id' => $customerId,
+                    'reference_number' => $referenceNumber,
+                    'title' => 'Direct Order',
+                    'description' => 'Customer direct order purchase.',
+                    'order_date' => date('Y-m-d'),
+                    'status' => 'pending',
+                ],
+                $orderItems,
+                [
+                    'method' => 'cash',
+                    'status' => 'pending',
+                    'amount' => round($total, 2),
+                ],
+                $this->buildCustomerShipmentData($customer, [
+                    'status' => 'to_ship',
+                ])
+            );
+
+            if (! $orderId) {
+                throw new \RuntimeException('Failed to create order.');
+            }
+
+            if (! $this->productModel->reserveStockForItems(
+                $orderItems,
+                'order',
+                (int) $orderId,
+                (int) $this->session->get('user_id')
+            )) {
+                throw new \RuntimeException('Insufficient stock for one of the selected items.');
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Order transaction failed.');
+            }
+        } catch (\Throwable $e) {
+            $db->transRollback();
             return $this->response->setStatusCode(500)->setJSON([
                 'success' => false,
-                'message' => 'Failed to create order.',
+                'message' => $e->getMessage(),
             ]);
         }
 
@@ -1193,11 +1253,10 @@ class Dashboard extends BaseController
                 throw new \RuntimeException('Failed to create order.');
             }
 
-            // For GCash (paid), reserve/deduct stock immediately.
-            // For COD (unpaid), stock is deducted on payment confirmation/admin checkout.
+            // Orders move straight to "to_ship", so reserve stock immediately
+            // for both COD and GCash. Cancellation restores it.
             if (
-                $paymentMethod === 'gcash'
-                && ! $this->productModel->reserveStockForItems(
+                ! $this->productModel->reserveStockForItems(
                     $orderItems,
                     'order',
                     (int) $orderId,
@@ -1323,21 +1382,22 @@ class Dashboard extends BaseController
             $rawItems = $rawCart['items'];
         }
 
-        // Normalize: productId => positive int quantity
+        // Normalize: productId or productId:variantId => positive int quantity
         $normalized = [];
-        foreach ($rawItems as $pid => $qty) {
-            $pid = (string) $pid;
+        foreach ($rawItems as $key => $qty) {
+            $key = (string) $key;
             $qty = (int) $qty;
-            if ($pid !== '' && $qty > 0) {
-                $normalized[$pid] = $qty;
+            [$productId] = $this->parseCartKey($key);
+            if ($productId > 0 && $qty > 0) {
+                $normalized[$key] = $qty;
             }
         }
 
         $items = [];
         $total = 0.0;
 
-        foreach ($normalized as $pid => $qty) {
-            $product = $this->productModel->getProductById((int) $pid, true);
+        foreach ($normalized as $cartKey => $qty) {
+            $product = $this->resolveCartProduct((string) $cartKey);
             if (! $product) {
                 continue;
             }
@@ -1348,6 +1408,10 @@ class Dashboard extends BaseController
             $items[] = [
                 'id' => (int) $product['id'],
                 'name' => (string) $product['name'],
+                'display_name' => (string) ($product['display_name'] ?? $product['name']),
+                'cart_key' => (string) $cartKey,
+                'variant_id' => $product['variant_id'] ?? null,
+                'flavor' => (string) ($product['flavor'] ?? ''),
                 'price' => (float) $product['price'],
                 'image' => (string) ($product['image'] ?? ''),
                 'quantity' => (int) $qty,
@@ -1364,16 +1428,17 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Persist raw cart items (productId => qty) in session.
+     * Persist raw cart items (productId or productId:variantId => qty) in session.
      */
     private function setCustomerCartRawItems(array $items): void
     {
         $normalized = [];
-        foreach ($items as $pid => $qty) {
-            $pid = (string) $pid;
+        foreach ($items as $key => $qty) {
+            $key = (string) $key;
             $qty = (int) $qty;
-            if ($pid !== '' && $qty > 0) {
-                $normalized[$pid] = $qty;
+            [$productId] = $this->parseCartKey($key);
+            if ($productId > 0 && $qty > 0) {
+                $normalized[$key] = $qty;
             }
         }
 
@@ -1410,11 +1475,90 @@ class Dashboard extends BaseController
         return array_map(static function (array $item): array {
             return [
                 'id' => (int) ($item['id'] ?? 0),
+                'variant_id' => isset($item['variant_id']) ? (int) $item['variant_id'] : null,
                 'qty' => (int) ($item['quantity'] ?? $item['qty'] ?? 0),
-                'name' => (string) ($item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
+                'name' => (string) ($item['display_name'] ?? $item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
                 'unit_price' => (float) ($item['price'] ?? $item['unit_price'] ?? 0),
             ];
         }, $cartItems);
+    }
+
+    private function makeCartKey(int $productId, ?int $variantId = null): string
+    {
+        return $variantId && $variantId > 0
+            ? $productId . ':' . $variantId
+            : (string) $productId;
+    }
+
+    /**
+     * @return array{0:int,1:int|null}
+     */
+    private function parseCartKey(string $cartKey): array
+    {
+        $parts = explode(':', $cartKey, 2);
+        $productId = (int) ($parts[0] ?? 0);
+        $variantId = isset($parts[1]) && $parts[1] !== '' ? (int) $parts[1] : null;
+
+        return [$productId, $variantId && $variantId > 0 ? $variantId : null];
+    }
+
+    private function resolveCartProduct(string $cartKey): ?array
+    {
+        [$productId, $variantId] = $this->parseCartKey($cartKey);
+        if ($productId <= 0) {
+            return null;
+        }
+
+        $product = $this->productModel->getProductBaseById($productId);
+        if (! $product || (int) ($product['is_active'] ?? 0) !== 1) {
+            return null;
+        }
+
+        $resolved = [
+            'id' => (int) $product['id'],
+            'name' => (string) $product['name'],
+            'display_name' => (string) $product['name'],
+            'category' => (string) ($product['category'] ?? ''),
+            'price' => (float) ($product['price'] ?? 0),
+            'image' => (string) ($product['image'] ?? $product['image_url'] ?? ''),
+            'stock' => (int) ($product['stock_qty'] ?? 0),
+            'variant_id' => null,
+            'flavor' => '',
+        ];
+
+        if ($variantId) {
+            $variant = $this->productModel->getProductVariant((int) $product['id'], $variantId);
+            if (! $variant || (int) ($variant['is_active'] ?? 0) !== 1) {
+                return null;
+            }
+
+            $flavor = trim((string) ($variant['flavor'] ?? ''));
+            $resolved['variant_id'] = (int) $variant['id'];
+            $resolved['flavor'] = $flavor;
+            $resolved['display_name'] = $flavor !== ''
+                ? $resolved['name'] . ' - ' . $flavor
+                : $resolved['name'];
+            $resolved['price'] = (float) ($variant['price'] ?? $resolved['price']);
+            $resolved['stock'] = (int) ($variant['stock_qty'] ?? 0);
+        }
+
+        return $resolved;
+    }
+
+    private function usesFlavorSelection(string $category): bool
+    {
+        return in_array(strtolower($category), ['pods', 'disposable', 'e-liquid'], true);
+    }
+
+    private function hasNamedVariants(array $variants): bool
+    {
+        foreach ($variants as $variant) {
+            if (trim((string) ($variant['flavor'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1544,10 +1688,25 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $product = $this->productModel->getProductById($id, true);
+        $product = $this->productModel->getProductBaseById($id);
 
-        if (!$product) {
+        if (!$product || (int) ($product['is_active'] ?? 0) !== 1) {
             return redirect()->to('/customer/products')->with('error', 'Product not found.');
+        }
+
+        $product['status'] = (int) ($product['is_active'] ?? 0) === 1 ? 'active' : 'inactive';
+        $product['stock'] = (int) ($product['stock_qty'] ?? 0);
+        $product['variants'] = array_values(array_filter(array_map(static function (array $variant): array {
+            return [
+                'id' => (int) ($variant['id'] ?? 0),
+                'flavor' => (string) ($variant['flavor'] ?? ''),
+                'stock' => (int) ($variant['stock_qty'] ?? 0),
+                'price' => (float) ($variant['price'] ?? 0),
+            ];
+        }, $this->productModel->getProductVariants((int) $id)), static fn (array $variant): bool => trim($variant['flavor']) !== ''));
+
+        if ($product['variants'] !== []) {
+            $product['stock'] = array_sum(array_column($product['variants'], 'stock'));
         }
 
         return view('customer/product_details', $this->getCustomerPageData('Product Details', 'products', [
@@ -2629,6 +2788,9 @@ class Dashboard extends BaseController
             $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
             if (!in_array($paymentStatus, ['paid', 'partial', 'unpaid'], true)) {
                 $paymentStatus = 'unpaid';
+            }
+            if ($recordStatus === 'completed') {
+                $paymentStatus = 'paid';
             }
 
             $payload = [

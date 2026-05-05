@@ -201,7 +201,7 @@
                         <?php endif; ?>
                     </div>
                     <div>
-                        <div class="cart-item-title"><?= esc($item['name']) ?></div>
+                        <div class="cart-item-title"><?= esc($item['display_name'] ?? $item['name']) ?></div>
                         <div class="cart-item-meta">
                             <span>Price: ₱<?= number_format((float) ($item['price'] ?? 0), 2) ?></span>
                             <span>Stock: <?= (int) ($item['stock'] ?? 0) ?></span>
@@ -213,7 +213,7 @@
                             ₱<?= number_format((float) ($item['amount'] ?? 0), 2) ?>
                         </div>
                         <form method="post" action="<?= site_url('customer/cart/remove') ?>">
-                            <input type="hidden" name="product_id" value="<?= (int) ($item['id'] ?? 0) ?>">
+                            <input type="hidden" name="cart_key" value="<?= esc($item['cart_key'] ?? (string) ($item['id'] ?? 0)) ?>">
                             <button type="submit" class="btn btn-danger" onclick="return confirm('Remove this item from cart?')">
                                 Remove
                             </button>

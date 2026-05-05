@@ -79,6 +79,9 @@ class RecordModel extends Model
     {
         $row['date'] = $row['record_date'] ?? null;
         $row['total_amount'] = round(((float) ($row['quantity'] ?? 0)) * ((float) ($row['unit_price'] ?? 0)), 2);
+        if (($row['status'] ?? '') === 'completed') {
+            $row['payment_status'] = 'paid';
+        }
         return $row;
     }
 }

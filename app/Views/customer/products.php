@@ -634,6 +634,81 @@
         background: #0047b1;
         border-color: #0047b1;
     }
+
+    .flavor-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1300;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .flavor-modal.show {
+        display: flex;
+    }
+
+    .flavor-modal-card {
+        width: 100%;
+        max-width: 460px;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        padding: 1.25rem;
+    }
+
+    .flavor-modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .flavor-modal-title {
+        font-weight: 900;
+        color: #333333;
+        font-size: 1.05rem;
+    }
+
+    .flavor-modal-close {
+        background: transparent;
+        border: none;
+        color: #666666;
+        cursor: pointer;
+        font-size: 1.25rem;
+    }
+
+    .flavor-choice-list {
+        display: grid;
+        gap: .6rem;
+        margin: .85rem 0 1rem;
+    }
+
+    .flavor-choice {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: .65rem;
+        align-items: center;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: .75rem;
+        cursor: pointer;
+    }
+
+    .flavor-choice.selected {
+        border-color: #00bcd4;
+        background: rgba(0, 188, 212, 0.08);
+    }
+
+    .flavor-choice-stock {
+        color: #666666;
+        font-size: .84rem;
+        font-weight: 700;
+    }
 </style>
 
 <div class="products-container">
@@ -713,7 +788,7 @@
                                         View Details
                                     </a>
                                     <button class="btn btn-primary" 
-                                            onclick="event.stopPropagation(); addToCart(<?= $product['id'] ?>)"
+                                            onclick="event.stopPropagation(); beginAddToCart(<?= (int) $product['id'] ?>)"
                                             <?= ($product['stock'] <= 0 || empty($age_allowed)) ? 'disabled' : '' ?>>
                                         <?php if ($product['stock'] <= 0): ?>
                                             Out of Stock
@@ -762,14 +837,14 @@
                                 <?php endif; ?>
                             </div>
                             <div>
-                                <div class="cart-mini-title"><?= esc($item['name'] ?? '') ?></div>
+                                <div class="cart-mini-title"><?= esc($item['display_name'] ?? $item['name'] ?? '') ?></div>
                                 <div class="cart-mini-meta">
                                     <span>Qty: <?= (int) ($item['quantity'] ?? 0) ?></span>
                                     <span>₱<?= number_format((float) ($item['amount'] ?? 0), 2) ?></span>
                                 </div>
                                 <div style="margin-top:.6rem;">
                                     <form method="post" action="<?= site_url('customer/cart/remove') ?>">
-                                        <input type="hidden" name="product_id" value="<?= (int) ($item['id'] ?? 0) ?>">
+                                        <input type="hidden" name="cart_key" value="<?= esc($item['cart_key'] ?? (string) ($item['id'] ?? 0)) ?>">
                                         <button type="submit" class="btn btn-danger" style="padding:.45rem .8rem; width:auto; font-size:.7rem;">
                                             Remove
                                         </button>
@@ -920,13 +995,29 @@
     </div>
 </div>
 
+<div class="flavor-modal" id="flavorModal">
+    <div class="flavor-modal-card">
+        <div class="flavor-modal-head">
+            <div>
+                <div class="flavor-modal-title" id="flavorModalTitle">Select Flavor</div>
+                <div class="cart-empty-text" id="flavorModalSubtitle" style="margin: .25rem 0 0;">Choose a flavor before adding to cart.</div>
+            </div>
+            <button type="button" class="flavor-modal-close" onclick="closeFlavorModal()">×</button>
+        </div>
+        <div class="flavor-choice-list" id="flavorChoiceList"></div>
+        <button type="button" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()">Add Selected Flavor</button>
+    </div>
+</div>
+
 <script>
 const addUrl = '<?= site_url('customer/cart/add') ?>';
 const cartUrl = '<?= site_url('customer/cart') ?>';
 const gcashMerchantNumber = '+639365879409';
 const gcashMerchantName = 'QuickPuff VapeShop';
 const checkoutTotal = <?= json_encode((float) ($cart_total ?? 0)) ?>;
+const productCatalog = <?= json_encode(array_column($products ?? [], null, 'id')) ?>;
 let currentGcashQrPayload = '';
+let pendingFlavorProductId = null;
 
 const deliveryAddressData = {
     'South Cotabato': {
@@ -1146,8 +1237,86 @@ function toggleDeliveryAddressMode() {
     }
 }
 
-function addToCart(productId) {
+function productNeedsFlavor(product) {
+    const category = (product?.category || '').toLowerCase();
+    return ['pods', 'disposable', 'e-liquid'].includes(category)
+        && Array.isArray(product?.variants)
+        && product.variants.length > 0;
+}
+
+function beginAddToCart(productId) {
+    const product = productCatalog[String(productId)] || productCatalog[productId];
+    if (productNeedsFlavor(product)) {
+        openFlavorModal(product);
+        return;
+    }
+
+    addToCart(productId);
+}
+
+function openFlavorModal(product) {
+    pendingFlavorProductId = parseInt(product.id, 10);
+    const modal = document.getElementById('flavorModal');
+    const title = document.getElementById('flavorModalTitle');
+    const subtitle = document.getElementById('flavorModalSubtitle');
+    const list = document.getElementById('flavorChoiceList');
+
+    title.textContent = product.name || 'Select Flavor';
+    subtitle.textContent = 'Choose a flavor before adding this product to cart.';
+    list.innerHTML = '';
+
+    product.variants.forEach((variant, index) => {
+        const disabled = parseInt(variant.stock, 10) <= 0;
+        const id = `flavor_${variant.id}`;
+        const label = document.createElement('label');
+        label.className = 'flavor-choice';
+        if (disabled) {
+            label.style.opacity = '0.55';
+            label.style.cursor = 'not-allowed';
+        }
+        label.innerHTML = `
+            <input type="radio" name="selected_flavor" id="${id}" value="${variant.id}" ${index === 0 && !disabled ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+            <span>${variant.flavor}</span>
+            <span class="flavor-choice-stock">${disabled ? 'Out of stock' : variant.stock + ' left'}</span>
+        `;
+        label.addEventListener('click', () => {
+            document.querySelectorAll('.flavor-choice').forEach((choice) => choice.classList.remove('selected'));
+            if (!disabled) {
+                label.classList.add('selected');
+            }
+        });
+        if (index === 0 && !disabled) {
+            label.classList.add('selected');
+        }
+        list.appendChild(label);
+    });
+
+    modal.classList.add('show');
+}
+
+function closeFlavorModal() {
+    const modal = document.getElementById('flavorModal');
+    modal?.classList.remove('show');
+    pendingFlavorProductId = null;
+}
+
+function confirmFlavorAddToCart() {
+    const selectedFlavor = document.querySelector('input[name="selected_flavor"]:checked');
+    if (!pendingFlavorProductId || !selectedFlavor) {
+        alert('Please select an available flavor.');
+        return;
+    }
+
+    addToCart(pendingFlavorProductId, selectedFlavor.value);
+    closeFlavorModal();
+}
+
+function addToCart(productId, variantId = null) {
     const payload = new URLSearchParams({ product_id: productId, quantity: 1 });
+    if (variantId) {
+        payload.set('variant_id', variantId);
+    }
+
     fetch(addUrl, {
         method: 'POST',
         headers: {
@@ -1391,7 +1560,7 @@ function showProductDescription(product) {
         addToCartBtn.textContent = 'Add to Cart';
         addToCartBtn.disabled = false;
         addToCartBtn.onclick = function() {
-            addToCart(product.id);
+            beginAddToCart(product.id);
             closeProductModal();
         };
     }
@@ -1417,6 +1586,11 @@ window.onclick = function(event) {
     const modal = document.getElementById('productModal');
     if (event.target === modal) {
         closeProductModal();
+    }
+
+    const flavorModal = document.getElementById('flavorModal');
+    if (event.target === flavorModal) {
+        closeFlavorModal();
     }
 }
 </script>
