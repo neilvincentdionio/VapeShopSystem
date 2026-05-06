@@ -303,7 +303,7 @@
         <div class="product-image-section">
             <div class="main-image">
                 <?php if ($product['image']): ?>
-                    <img src="<?= base_url('uploads/products/' . $product['image']) ?>" 
+                    <img src="<?= esc(product_image_url($product['image'])) ?>" 
                          alt="<?= esc($product['name']) ?>">
                 <?php else: ?>
                     <i class="fas fa-vape-vape"></i>

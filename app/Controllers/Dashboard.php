@@ -754,7 +754,7 @@ class Dashboard extends BaseController
             }
 
             // Validate image
-            if (!$proofImage->isValid() || !$proofImage->getSize() > 0) {
+            if (!$proofImage->isValid() || $proofImage->getSize() <= 0) {
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid image file']);
             }
 
@@ -771,12 +771,9 @@ class Dashboard extends BaseController
 
             $effectiveLat = $finalLat ?? (isset($shipment['rider_latitude']) ? (float) $shipment['rider_latitude'] : null);
             $effectiveLng = $finalLng ?? (isset($shipment['rider_longitude']) ? (float) $shipment['rider_longitude'] : null);
-            if ($effectiveLat === null || $effectiveLng === null) {
-                return $this->response->setJSON(['success' => false, 'message' => 'GPS location unavailable. Please enable location and try again.']);
-            }
             $deliveryLat = isset($shipment['delivery_latitude']) ? (float) $shipment['delivery_latitude'] : null;
             $deliveryLng = isset($shipment['delivery_longitude']) ? (float) $shipment['delivery_longitude'] : null;
-            if ($deliveryLat !== null && $deliveryLng !== null) {
+            if ($effectiveLat !== null && $effectiveLng !== null && $deliveryLat !== null && $deliveryLng !== null) {
                 $meters = $this->calculateDistanceMeters($effectiveLat, $effectiveLng, $deliveryLat, $deliveryLng);
                 $maxMeters = (float) (getenv('DELIVERY_COMPLETION_MAX_DISTANCE_METERS') ?: 500);
                 if ($meters > $maxMeters) {
@@ -794,22 +791,29 @@ class Dashboard extends BaseController
             }
             
             if ($proofImage->move($uploadPath, $filename)) {
-                $updated = $this->orderModel->updateOrder(
-                    $orderId,
-                    [],
-                    [],
-                    [
-                        'status' => 'delivered',
-                        'delivery_proof_image' => $filename,
-                        'delivery_notes' => $deliveryNotes,
-                        'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
-                        'delivered_at' => date('Y-m-d H:i:s'),
+                $shipmentUpdate = [
+                    'status' => 'delivered',
+                    'delivery_proof_image' => $filename,
+                    'delivery_notes' => $deliveryNotes,
+                    'delivery_proof_submitted_at' => date('Y-m-d H:i:s'),
+                    'delivered_at' => date('Y-m-d H:i:s'),
+                ];
+
+                if ($effectiveLat !== null && $effectiveLng !== null) {
+                    $shipmentUpdate += [
                         'final_rider_latitude' => $effectiveLat,
                         'final_rider_longitude' => $effectiveLng,
                         'delivered_latitude' => $effectiveLat,
                         'delivered_longitude' => $effectiveLng,
                         'last_location_updated_at' => date('Y-m-d H:i:s'),
-                    ]
+                    ];
+                }
+
+                $updated = $this->orderModel->updateOrder(
+                    $orderId,
+                    [],
+                    [],
+                    $shipmentUpdate
                 );
 
                 if (! $updated) {

@@ -6,6 +6,8 @@ use App\Models\ProductModel;
 
 class Products extends BaseController
 {
+    private const PRODUCT_IMAGE_UPLOAD_DIR = 'uploads/products';
+
     protected $session;
     protected $productModel;
 
@@ -96,7 +98,7 @@ class Products extends BaseController
 
         $validation = $this->validate([
             'name' => 'required|min_length[3]|max_length[255]',
-            'category' => 'required|in_list[Devices,Pods,E-Liquid,Disposable,Accessories]',
+            'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
             'brand' => 'permit_empty|max_length[100]',
             'flavor' => 'permit_empty|max_length[100]',
             'price' => 'required|numeric|greater_than_equal_to[0]',
@@ -110,14 +112,8 @@ class Products extends BaseController
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
-        // Handle image upload
         $imageFile = $this->request->getFile('image');
-        $imageName = null;
-
-        if ($imageFile && $imageFile->isValid() && !$imageFile->hasMoved()) {
-            $imageName = $imageFile->getRandomName();
-            $imageFile->move('uploads/products', $imageName);
-        }
+        $imageName = $this->storeProductImage($imageFile);
 
         $productData = [
             'name' => $this->request->getPost('name'),
@@ -157,6 +153,11 @@ class Products extends BaseController
                 ])
             )
         ) {
+            $this->rememberProductImage(
+                (string) $productData['name'],
+                $imageName
+            );
+
             return redirect()->to('/products')->with('success', 'Product created successfully.');
         }
 
@@ -216,7 +217,7 @@ class Products extends BaseController
 
         $validationRules = [
             'name' => 'required|min_length[3]|max_length[255]',
-            'category' => 'required|in_list[Devices,Pods,E-Liquid,Disposable,Accessories]',
+            'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
             'brand' => 'permit_empty|max_length[100]',
             'flavor' => 'permit_empty|max_length[100]',
             'price' => 'required|numeric|greater_than_equal_to[0]',
@@ -236,18 +237,11 @@ class Products extends BaseController
             return redirect()->back()->withInput()->with('validation', $this->validator);
         }
 
-        // Handle image upload
         $imageFile = $this->request->getFile('image');
         $imageName = $product['image_url']; // Keep existing image by default
 
         if ($imageFile && $imageFile->isValid() && !$imageFile->hasMoved()) {
-            // Delete old image if exists
-            if ($product['image_url'] && file_exists('uploads/products/' . $product['image_url'])) {
-                unlink('uploads/products/' . $product['image_url']);
-            }
-
-            $imageName = $imageFile->getRandomName();
-            $imageFile->move('uploads/products', $imageName);
+            $imageName = $this->storeProductImage($imageFile);
         }
 
         $productData = [
@@ -282,6 +276,12 @@ class Products extends BaseController
                     'is_active' => $productData['is_active'],
                 ])
             ) {
+                $this->rememberProductImage(
+                    (string) $productData['name'],
+                    $imageName,
+                    (string) ($product['name'] ?? '')
+                );
+
                 return redirect()->to('/products')->with('success', 'Product updated successfully.');
             }
         } else {
@@ -290,6 +290,12 @@ class Products extends BaseController
                 $this->productModel->update($id, $productData)
                 && $this->productModel->syncProductVariants((int) $id, [])
             ) {
+                $this->rememberProductImage(
+                    (string) $productData['name'],
+                    $imageName,
+                    (string) ($product['name'] ?? '')
+                );
+
                 return redirect()->to('/products')->with('success', 'Product updated successfully.');
             }
         }
@@ -311,11 +317,6 @@ class Products extends BaseController
 
         if (!$product) {
             return redirect()->to('/products')->with('error', 'Product not found.');
-        }
-
-        // Delete product image if exists
-        if ($product['image_url'] && file_exists('uploads/products/' . $product['image_url'])) {
-            unlink('uploads/products/' . $product['image_url']);
         }
 
         if ($this->productModel->delete($id)) {
@@ -362,6 +363,56 @@ class Products extends BaseController
         }
 
         return true;
+    }
+
+    private function storeProductImage($imageFile): ?string
+    {
+        if (! $imageFile || ! $imageFile->isValid() || $imageFile->hasMoved()) {
+            return null;
+        }
+
+        $uploadPath = FCPATH . self::PRODUCT_IMAGE_UPLOAD_DIR;
+        if (! is_dir($uploadPath)) {
+            mkdir($uploadPath, 0775, true);
+        }
+
+        $imageName = $imageFile->getRandomName();
+        $imageFile->move($uploadPath, $imageName);
+
+        return $imageName;
+    }
+
+    private function rememberProductImage(string $productName, ?string $imageName, string $oldProductName = ''): void
+    {
+        $productName = trim($productName);
+        $imageName = normalize_product_image_path($imageName, true);
+
+        if ($productName === '' || $imageName === null) {
+            return;
+        }
+
+        $mapPath = WRITEPATH . 'product_image_seed_map.json';
+        $map = [];
+
+        if (is_file($mapPath)) {
+            $decoded = json_decode((string) file_get_contents($mapPath), true);
+            if (is_array($decoded)) {
+                $map = $decoded;
+            }
+        }
+
+        $oldProductName = trim($oldProductName);
+        if ($oldProductName !== '' && $oldProductName !== $productName) {
+            unset($map[$oldProductName]);
+        }
+
+        $map[$productName] = $imageName;
+        ksort($map, SORT_NATURAL | SORT_FLAG_CASE);
+
+        file_put_contents(
+            $mapPath,
+            json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
     }
 
     private function usesFlavorInventory(string $category): bool

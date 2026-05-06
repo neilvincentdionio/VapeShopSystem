@@ -7,11 +7,10 @@ use CodeIgniter\Model;
 class ProductModel extends Model
 {
     public const CATEGORY_OPTIONS = [
-        'Devices',
+        'Device',
         'Pods',
         'E-Liquid',
         'Disposable',
-        'Accessories',
     ];
 
     protected $table = 'products';
@@ -126,16 +125,14 @@ class ProductModel extends Model
 
         $normalized = strtolower(str_replace([' ', '_'], '-', $category));
         $aliases = [
-            'devices' => ['Devices', 'Device'],
-            'device' => ['Devices', 'Device'],
+            'devices' => ['Device', 'Devices'],
+            'device' => ['Device', 'Devices'],
             'pods' => ['Pods', 'Pod'],
             'pod' => ['Pods', 'Pod'],
             'e-liquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
             'eliquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
             'disposable' => ['Disposable', 'Disposables'],
             'disposables' => ['Disposable', 'Disposables'],
-            'accessories' => ['Accessories', 'Accessory'],
-            'accessory' => ['Accessories', 'Accessory'],
         ];
 
         return $aliases[$normalized] ?? [$category];

@@ -195,7 +195,7 @@
                 <div class="cart-item">
                     <div class="cart-item-image">
                         <?php if (!empty($item['image'])): ?>
-                            <img src="<?= base_url('uploads/products/' . $item['image']) ?>" alt="<?= esc($item['name']) ?>">
+                            <img src="<?= esc(product_image_url($item['image'])) ?>" alt="<?= esc($item['name']) ?>">
                         <?php else: ?>
                             🛒
                         <?php endif; ?>

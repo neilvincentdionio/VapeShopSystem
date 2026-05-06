@@ -1,3 +1,14 @@
+<?php
+$selectedCategory = trim((string) old('category', $product['category'] ?? ''));
+$selectedCategoryAliases = [
+    'device' => 'Device',
+    'devices' => 'Device',
+    'e-liquid' => 'E-Liquid',
+    'eliquid' => 'E-Liquid',
+];
+$selectedCategoryKey = strtolower(str_replace([' ', '_'], '-', $selectedCategory));
+$selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedCategory;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -553,7 +564,7 @@
                                     <option value="">Select Category</option>
                                     <?php foreach ($categories as $category): ?>
                                         <option value="<?= esc($category) ?>" 
-                                                <?= old('category', $product['category']) === $category ? 'selected' : '' ?>>
+                                                <?= $selectedCategory === $category ? 'selected' : '' ?>>
                                             <?= esc($category) ?>
                                         </option>
                                     <?php endforeach; ?>

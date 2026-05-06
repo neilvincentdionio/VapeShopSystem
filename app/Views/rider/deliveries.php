@@ -1024,26 +1024,7 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
         statusHint.textContent = 'Uploading proof...';
     }
     
-    if (navigator.geolocation) {
-        if (statusHint) {
-            statusHint.textContent = 'Getting GPS location (up to 4 seconds)...';
-        }
-        navigator.geolocation.getCurrentPosition((pos) => {
-            formData.append('final_rider_latitude', String(pos.coords.latitude));
-            formData.append('final_rider_longitude', String(pos.coords.longitude));
-            if (statusHint) {
-                statusHint.textContent = 'Uploading proof...';
-            }
-            appendAndSubmit();
-        }, () => {
-            if (statusHint) {
-                statusHint.textContent = 'GPS unavailable, submitting using last known location...';
-            }
-            appendAndSubmit();
-        }, { enableHighAccuracy: true, timeout: 4000, maximumAge: 15000 });
-    } else {
-        appendAndSubmit();
-    }
+    appendAndSubmit();
 });
 
 // Close modal when clicking outside

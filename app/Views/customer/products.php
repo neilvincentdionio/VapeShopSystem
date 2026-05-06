@@ -753,7 +753,7 @@
                         <div class="product-card" onclick="showProductDescription(<?= htmlspecialchars(json_encode($product)) ?>)">
                             <div class="product-image">
                                 <?php if ($product['image']): ?>
-                                    <img src="<?= base_url('uploads/products/' . $product['image']) ?>" 
+                                    <img src="<?= esc(product_image_url($product['image'])) ?>" 
                                          alt="<?= esc($product['name']) ?>">
                                 <?php else: ?>
                                     <i class="fas fa-vape-vape"></i>
@@ -831,7 +831,7 @@
                         <div class="cart-mini-item">
                             <div class="cart-mini-thumb">
                                 <?php if (!empty($item['image'])): ?>
-                                    <img src="<?= base_url('uploads/products/' . $item['image']) ?>" alt="<?= esc($item['name'] ?? '') ?>">
+                                    <img src="<?= esc(product_image_url($item['image'])) ?>" alt="<?= esc($item['name'] ?? '') ?>">
                                 <?php else: ?>
                                     🛒
                                 <?php endif; ?>
@@ -1727,7 +1727,7 @@ function showProductDescription(product) {
     
     // Update modal content
     document.getElementById('modalProductImage').src = product.image ? 
-        '<?= base_url('uploads/products/') ?>' + product.image : '';
+        '<?= product_image_url('__PRODUCT_IMAGE__') ?>'.replace('__PRODUCT_IMAGE__', encodeURIComponent(product.image)) : '';
     document.getElementById('modalProductImage').alt = product.name;
     document.getElementById('modalProductName').textContent = product.name;
     document.getElementById('modalProductCategory').textContent = product.category;

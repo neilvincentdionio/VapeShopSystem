@@ -2,7 +2,7 @@
 $product = $product ?? [];
 $variants = $variants ?? [];
 $imageName = trim((string) ($product['image_url'] ?? $product['image'] ?? ''));
-$imageSrc = $imageName !== '' ? base_url('uploads/products/' . $imageName) : '';
+$imageSrc = product_image_url($imageName);
 $hasVariants = $variants !== [];
 $totalVariantStock = array_sum(array_map(static fn (array $variant): int => (int) ($variant['stock_qty'] ?? 0), $variants));
 $displayStock = $hasVariants ? $totalVariantStock : (int) ($product['stock_qty'] ?? 0);
