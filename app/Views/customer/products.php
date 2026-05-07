@@ -184,6 +184,36 @@
         align-items: center;
     }
 
+    .qty-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+    }
+
+    .qty-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        border: 1px solid #d9d9d9;
+        background: #ffffff;
+        color: #333333;
+        font-weight: 700;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .qty-btn:hover {
+        border-color: #00bcd4;
+        color: #00bcd4;
+    }
+
+    .qty-value {
+        min-width: 20px;
+        text-align: center;
+        font-weight: 700;
+        color: #333333;
+    }
+
     .cart-sidebar .cart-summary {
         border-top: 1px solid #eaeaea;
         padding-top: 1rem;
@@ -683,24 +713,72 @@
     }
 
     .flavor-choice-list {
-        display: grid;
-        gap: .6rem;
         margin: .85rem 0 1rem;
     }
 
-    .flavor-choice {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: .65rem;
-        align-items: center;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: .75rem;
-        cursor: pointer;
+    .flavor-dropdown {
+        position: relative;
     }
 
-    .flavor-choice.selected {
+    .flavor-select-trigger {
+        width: 100%;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: .75rem .8rem;
+        font-size: 1rem;
+        background: #ffffff;
+        color: #333333;
+        text-align: left;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .flavor-select-trigger:focus,
+    .flavor-select-trigger.open {
+        outline: none;
         border-color: #00bcd4;
+        box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
+    }
+
+    .flavor-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + .35rem);
+        left: 0;
+        right: 0;
+        z-index: 20;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        max-height: 230px;
+        overflow-y: auto;
+    }
+
+    .flavor-dropdown-menu.show {
+        display: block;
+    }
+
+    .flavor-option {
+        width: 100%;
+        border: none;
+        background: #ffffff;
+        padding: .65rem .8rem;
+        text-align: left;
+        cursor: pointer;
+        font-size: .96rem;
+        color: #333333;
+        border-bottom: 1px solid #f1f1f1;
+    }
+
+    .flavor-option:last-child {
+        border-bottom: none;
+    }
+
+    .flavor-option:hover,
+    .flavor-option.active {
         background: rgba(0, 188, 212, 0.08);
     }
 
@@ -708,6 +786,7 @@
         color: #666666;
         font-size: .84rem;
         font-weight: 700;
+        margin-top: .55rem;
     }
 </style>
 
@@ -782,11 +861,11 @@
                                 </div>
                                 
                                 <div class="product-actions">
-                                    <a href="<?= site_url('customer/product/' . $product['id']) ?>" 
-                                       class="btn btn-outline"
-                                       onclick="event.stopPropagation()">
+                                    <button type="button"
+                                            class="btn btn-outline"
+                                            onclick='event.stopPropagation(); showProductDescription(<?= htmlspecialchars(json_encode($product), ENT_QUOTES, "UTF-8") ?>)'>
                                         View Details
-                                    </a>
+                                    </button>
                                     <button class="btn btn-primary" 
                                             onclick="event.stopPropagation(); beginAddToCart(<?= (int) $product['id'] ?>)"
                                             <?= ($product['stock'] <= 0 || empty($age_allowed)) ? 'disabled' : '' ?>>
@@ -839,7 +918,20 @@
                             <div>
                                 <div class="cart-mini-title"><?= esc($item['display_name'] ?? $item['name'] ?? '') ?></div>
                                 <div class="cart-mini-meta">
-                                    <span>Qty: <?= (int) ($item['quantity'] ?? 0) ?></span>
+                                    <?php $currentQty = (int) ($item['quantity'] ?? 0); ?>
+                                    <div class="qty-controls">
+                                        <form method="post" action="<?= site_url('customer/cart/update') ?>" style="display:inline;">
+                                            <input type="hidden" name="cart_key" value="<?= esc($item['cart_key'] ?? (string) ($item['id'] ?? 0)) ?>">
+                                            <input type="hidden" name="quantity" value="<?= max(0, $currentQty - 1) ?>">
+                                            <button type="submit" class="qty-btn" aria-label="Decrease quantity">-</button>
+                                        </form>
+                                        <span class="qty-value"><?= $currentQty ?></span>
+                                        <form method="post" action="<?= site_url('customer/cart/update') ?>" style="display:inline;">
+                                            <input type="hidden" name="cart_key" value="<?= esc($item['cart_key'] ?? (string) ($item['id'] ?? 0)) ?>">
+                                            <input type="hidden" name="quantity" value="<?= $currentQty + 1 ?>">
+                                            <button type="submit" class="qty-btn" aria-label="Increase quantity">+</button>
+                                        </form>
+                                    </div>
                                     <span>₱<?= number_format((float) ($item['amount'] ?? 0), 2) ?></span>
                                 </div>
                                 <div style="margin-top:.6rem;">
@@ -953,6 +1045,7 @@
                         <label class="checkout-label" for="delivery_province">Province</label>
                         <select class="checkout-input" id="delivery_province" name="delivery_province">
                             <option value="South Cotabato" selected>South Cotabato</option>
+                            <option value="Sarangani">Sarangani</option>
                         </select>
                     </div>
 
@@ -1014,7 +1107,16 @@
             </div>
             <button type="button" class="flavor-modal-close" onclick="closeFlavorModal()">×</button>
         </div>
-        <div class="flavor-choice-list" id="flavorChoiceList"></div>
+        <div class="flavor-choice-list">
+            <div class="flavor-dropdown">
+                <button type="button" id="flavorSelectTrigger" class="flavor-select-trigger" onclick="toggleFlavorDropdown()">
+                    <span id="flavorSelectText">Select flavor</span>
+                    <span aria-hidden="true">▼</span>
+                </button>
+                <div id="flavorDropdownMenu" class="flavor-dropdown-menu"></div>
+            </div>
+            <div class="flavor-choice-stock" id="flavorStockInfo"></div>
+        </div>
         <button type="button" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()">Add Selected Flavor</button>
     </div>
 </div>
@@ -1039,6 +1141,8 @@ const productCatalog = <?= json_encode(array_column($products ?? [], null, 'id')
 const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
 let currentGcashQrPayload = '';
 let pendingFlavorProductId = null;
+let pendingFlavorVariantId = null;
+let pendingFlavorVariants = [];
 let checkoutMap = null;
 let checkoutMarker = null;
 let checkoutGeocodeDebounce = null;
@@ -1046,9 +1150,30 @@ let checkoutGeocodeDebounce = null;
 const deliveryAddressData = {
     'South Cotabato': {
         'General Santos City': [],
-        'Koronadal City': []
+        'Koronadal City': [],
+        'Banga': [],
+        'Lake Sebu': [],
+        'Norala': [],
+        'Polomolok': [],
+        'Santo Nino': [],
+        'Surallah': [],
+        "T'boli": [],
+        'Tampakan': [],
+        'Tantangan': [],
+        'Tupi': []
+    },
+    'Sarangani': {
+        'Alabel': [],
+        'Glan': [],
+        'Kiamba': [],
+        'Maasim': [],
+        'Maitum': [],
+        'Malapatan': [],
+        'Malungon': []
     }
 };
+
+const defaultBarangayList = [];
 
 const deliveryBarangayOverrides = {
     'General Santos City': [
@@ -1061,13 +1186,75 @@ const deliveryBarangayOverrides = {
         'Avancena', 'Cacub', 'Caloocan', 'Carpenter Hill', 'Concepcion',
         'General Paulino Santos', 'Mabini', 'Magsaysay', 'Morales', 'San Isidro',
         'Santa Cruz', 'Zone I', 'Zone II', 'Zone III', 'Zone IV'
+    ],
+    'Polomolok': [
+        'Cannery Site', 'Glamang', 'Kinilis', 'Koronadal Proper', 'Landan',
+        'Lapu', 'Lumakil', 'Magsaysay', 'Maligo', 'Pagalungan',
+        'Palkan', 'Poblacion', 'Rubber', 'Silway 7', 'Silway 8', 'Sumbakil'
+    ],
+    'Alabel': [
+        'Alegria', 'Bagacay', 'Baluntay', 'Domolok', 'Kawas', 'Maribulan',
+        'Pag-asa', 'Paraiso', 'Poblacion', 'Spring', 'Tokawal'
+    ],
+    'Glan': [
+        'Baliton', 'Batulaki', 'Big Margus', 'Burias', 'Calabanit', 'Cross',
+        'Datal Bukay', 'E. Alegado', 'Gumasa', 'Kapatan', 'Lago', 'Poblacion',
+        'Rio del Pilar', 'San Jose', 'Taluya', 'Tangisan', 'Upper Klinan'
+    ],
+    'Malungon': [
+        'Alpabel', 'Banate', 'Datal Batong', 'Datal Bila', 'Datal Tampal',
+        'Kawayan', 'Lower Mainit', 'Malungon Gamay', 'Poblacion', 'San Juan',
+        'Tamban', 'Upper Mainit'
     ]
 };
 
 const deliveryPostalCodes = {
     'General Santos City': '9500',
-    'Koronadal City': '9506'
+    'Koronadal City': '9506',
+    'Banga': '9501',
+    'Lake Sebu': '9514',
+    'Norala': '9508',
+    'Polomolok': '9504',
+    'Santo Nino': '9511',
+    'Surallah': '9512',
+    "T'boli": '9513',
+    'Tampakan': '9507',
+    'Tantangan': '9510',
+    'Tupi': '9505',
+    'Alabel': '9501',
+    'Glan': '9517',
+    'Kiamba': '9514',
+    'Maasim': '9502',
+    'Maitum': '9515',
+    'Malapatan': '9516',
+    'Malungon': '9503'
 };
+
+const PSGC_API_BASE = 'https://psgc.cloud/api/v1';
+const localityCodeByName = {
+    // South Cotabato
+    'Banga': { code: '126302000', type: 'municipality' },
+    'General Santos City': { code: '126303000', type: 'city' },
+    'Koronadal City': { code: '126306000', type: 'city' },
+    'Norala': { code: '126311000', type: 'municipality' },
+    'Polomolok': { code: '126312000', type: 'municipality' },
+    'Surallah': { code: '126313000', type: 'municipality' },
+    'Tampakan': { code: '126314000', type: 'municipality' },
+    'Tantangan': { code: '126315000', type: 'municipality' },
+    "T'boli": { code: '126316000', type: 'municipality' },
+    'Tupi': { code: '126317000', type: 'municipality' },
+    'Santo Nino': { code: '126318000', type: 'municipality' },
+    'Lake Sebu': { code: '126319000', type: 'municipality' },
+    // Sarangani
+    'Alabel': { code: '128001000', type: 'municipality' },
+    'Glan': { code: '128002000', type: 'municipality' },
+    'Kiamba': { code: '128003000', type: 'municipality' },
+    'Maasim': { code: '128004000', type: 'municipality' },
+    'Maitum': { code: '128005000', type: 'municipality' },
+    'Malapatan': { code: '128006000', type: 'municipality' },
+    'Malungon': { code: '128007000', type: 'municipality' }
+};
+const remoteBarangayCache = {};
 
 function showToast(message, type = 'processing', showSpinner = false) {
     // Remove existing toast if any
@@ -1303,17 +1490,25 @@ async function reverseGeocodeForCheckout(lat, lng) {
 
     const street = [addr.house_number, addr.road].filter(Boolean).join(' ').trim();
     const city = addr.city || addr.town || addr.municipality || addr.county || '';
-    const barangay = addr.suburb || addr.neighbourhood || addr.village || addr.hamlet || '';
+    const barangayCandidates = [
+        addr.suburb,
+        addr.neighbourhood,
+        addr.village,
+        addr.hamlet,
+        addr.quarter,
+        addr.city_district
+    ].filter(Boolean);
     const province = addr.state || '';
     const postal = addr.postcode || '';
 
     if (street) document.getElementById('delivery_address_line').value = street;
     if (province) setSelectValueWithFallback(document.getElementById('delivery_province'), province);
+    let loadedBarangays = [];
     if (city) {
         setSelectValueWithFallback(document.getElementById('delivery_city'), city);
-        loadDeliveryBarangays();
+        loadedBarangays = await loadDeliveryBarangays();
     }
-    if (barangay) setSelectValueWithFallback(document.getElementById('delivery_barangay'), barangay);
+    setBarangayValueFromCandidates(document.getElementById('delivery_barangay'), barangayCandidates, loadedBarangays);
     if (postal) document.getElementById('delivery_postal_code').value = postal;
 }
 
@@ -1321,10 +1516,50 @@ function normalizeLocationText(value) {
     return String(value || '')
         .toLowerCase()
         .replace(/\./g, '')
+        .replace(/\bbrgy\b/g, '')
         .replace(/\bbarangay\b/g, '')
         .replace(/\bcity\b/g, '')
+        .replace(/\bpoblacion\b/g, 'pob')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function setBarangayValueFromCandidates(selectEl, candidates, availableBarangays = []) {
+    if (!selectEl) return false;
+    const values = Array.isArray(availableBarangays) && availableBarangays.length
+        ? availableBarangays
+        : Array.from(selectEl.options).map((opt) => opt.value).filter(Boolean);
+
+    if (!values.length) return false;
+
+    const normalizedValues = values.map((name) => ({
+        original: name,
+        norm: normalizeLocationText(name)
+    }));
+
+    const list = Array.isArray(candidates) ? candidates : [];
+    for (const candidateRaw of list) {
+        const candidate = String(candidateRaw || '').trim();
+        if (!candidate) continue;
+        const targetNorm = normalizeLocationText(candidate);
+        if (!targetNorm) continue;
+
+        const exact = normalizedValues.find((v) => v.norm === targetNorm);
+        if (exact) {
+            selectEl.value = exact.original;
+            selectEl.dispatchEvent(new Event('change'));
+            return true;
+        }
+
+        const partial = normalizedValues.find((v) => v.norm.includes(targetNorm) || targetNorm.includes(v.norm));
+        if (partial) {
+            selectEl.value = partial.original;
+            selectEl.dispatchEvent(new Event('change'));
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function setSelectValueWithFallback(selectEl, targetValue) {
@@ -1366,6 +1601,7 @@ function renderDeliveryOptions(select, values, placeholder, selectedValue = '') 
     select.appendChild(placeholderOption);
 
     values.forEach((value) => {
+        if (!value) return;
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
@@ -1376,6 +1612,19 @@ function renderDeliveryOptions(select, values, placeholder, selectedValue = '') 
     });
 }
 
+function getApiItems(payload) {
+    if (Array.isArray(payload)) {
+        return payload;
+    }
+    if (payload && Array.isArray(payload.data)) {
+        return payload.data;
+    }
+    if (payload && payload.items && Array.isArray(payload.items)) {
+        return payload.items;
+    }
+    return [];
+}
+
 function initDeliveryAddressFields() {
     const provinceSelect = document.getElementById('delivery_province');
     const citySelect = document.getElementById('delivery_city');
@@ -1383,9 +1632,19 @@ function initDeliveryAddressFields() {
         return;
     }
 
-    renderDeliveryOptions(provinceSelect, ['South Cotabato'], 'Select Province', 'South Cotabato');
-    renderDeliveryOptions(citySelect, Object.keys(deliveryAddressData['South Cotabato']), 'Select City / Municipality');
+    const provinces = Object.keys(deliveryAddressData);
+    const currentProvince = provinceSelect.value || 'South Cotabato';
+    renderDeliveryOptions(provinceSelect, provinces, 'Select Province', currentProvince);
+    renderDeliveryOptions(citySelect, Object.keys(deliveryAddressData[currentProvince] || {}), 'Select City / Municipality');
     citySelect.dataset.initialized = '1';
+
+    provinceSelect.addEventListener('change', function () {
+        const selectedProvince = provinceSelect.value || 'South Cotabato';
+        renderDeliveryOptions(citySelect, Object.keys(deliveryAddressData[selectedProvince] || {}), 'Select City / Municipality');
+        renderDeliveryOptions(document.getElementById('delivery_barangay'), [], 'Select Barangay');
+        updateDeliveryPostalCode();
+        geocodeCheckoutAddressDebounced();
+    });
 
     citySelect.addEventListener('change', function () {
         loadDeliveryBarangays();
@@ -1402,11 +1661,48 @@ function initDeliveryAddressFields() {
         });
 }
 
-function loadDeliveryBarangays() {
+async function loadDeliveryBarangays() {
     const city = document.getElementById('delivery_city')?.value || '';
     const barangaySelect = document.getElementById('delivery_barangay');
-    const barangays = deliveryBarangayOverrides[city] || [];
+    if (!barangaySelect) return;
+
+    let barangays = deliveryBarangayOverrides[city] || [];
+    const localityInfo = localityCodeByName[city] || null;
+
+    if (city && localityInfo?.code) {
+        if (!Array.isArray(remoteBarangayCache[city])) {
+            try {
+                const path = localityInfo.type === 'city' ? 'cities' : 'municipalities';
+                const res = await fetch(`${PSGC_API_BASE}/${path}/${encodeURIComponent(localityInfo.code)}/barangays?per_page=500`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    const payload = await res.json();
+                    const apiItems = getApiItems(payload);
+                    const apiBarangays = apiItems
+                        .map((item) => String(item.name || '').trim())
+                        .filter(Boolean);
+                    if (apiBarangays.length) {
+                        remoteBarangayCache[city] = Array.from(new Set(apiBarangays)).sort((a, b) => a.localeCompare(b));
+                    }
+                }
+            } catch (e) {
+                // Keep local overrides only if external lookup fails.
+            }
+        }
+
+        if (Array.isArray(remoteBarangayCache[city]) && remoteBarangayCache[city].length) {
+            barangays = remoteBarangayCache[city];
+        }
+    }
+
+    if (!Array.isArray(barangays) || !barangays.length) {
+        renderDeliveryOptions(barangaySelect, [], 'No barangays loaded');
+        return [];
+    }
+
     renderDeliveryOptions(barangaySelect, barangays, 'Select Barangay');
+    return barangays;
 }
 
 function updateDeliveryPostalCode() {
@@ -1454,39 +1750,58 @@ function beginAddToCart(productId) {
 
 function openFlavorModal(product) {
     pendingFlavorProductId = parseInt(product.id, 10);
+    pendingFlavorVariantId = null;
+    pendingFlavorVariants = [];
     const modal = document.getElementById('flavorModal');
     const title = document.getElementById('flavorModalTitle');
     const subtitle = document.getElementById('flavorModalSubtitle');
-    const list = document.getElementById('flavorChoiceList');
+    const triggerText = document.getElementById('flavorSelectText');
+    const triggerBtn = document.getElementById('flavorSelectTrigger');
+    const menu = document.getElementById('flavorDropdownMenu');
+    const stockInfo = document.getElementById('flavorStockInfo');
 
     title.textContent = product.name || 'Select Flavor';
     subtitle.textContent = 'Choose a flavor before adding this product to cart.';
-    list.innerHTML = '';
+    menu.innerHTML = '';
+    triggerBtn.classList.remove('open');
+    menu.classList.remove('show');
 
-    product.variants.forEach((variant, index) => {
+    const availableVariants = [];
+    product.variants.forEach((variant) => {
         const disabled = parseInt(variant.stock, 10) <= 0;
-        const id = `flavor_${variant.id}`;
-        const label = document.createElement('label');
-        label.className = 'flavor-choice';
-        if (disabled) {
-            label.style.opacity = '0.55';
-            label.style.cursor = 'not-allowed';
+        if (!disabled) {
+            availableVariants.push(variant);
         }
-        label.innerHTML = `
-            <input type="radio" name="selected_flavor" id="${id}" value="${variant.id}" ${index === 0 && !disabled ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
-            <span>${variant.flavor}</span>
-            <span class="flavor-choice-stock">${disabled ? 'Out of stock' : variant.stock + ' left'}</span>
-        `;
-        label.addEventListener('click', () => {
-            document.querySelectorAll('.flavor-choice').forEach((choice) => choice.classList.remove('selected'));
-            if (!disabled) {
-                label.classList.add('selected');
-            }
+    });
+
+    if (!availableVariants.length) {
+        triggerText.textContent = 'No available flavors';
+        pendingFlavorVariantId = null;
+        stockInfo.textContent = 'Out of stock';
+        modal.classList.add('show');
+        return;
+    }
+
+    pendingFlavorVariants = availableVariants;
+    pendingFlavorVariantId = String(availableVariants[0].id);
+    triggerText.textContent = `${availableVariants[0].flavor} (${availableVariants[0].stock} left)`;
+    stockInfo.textContent = `${availableVariants[0].stock} left`;
+
+    availableVariants.forEach((variant, index) => {
+        const optionBtn = document.createElement('button');
+        optionBtn.type = 'button';
+        optionBtn.className = 'flavor-option' + (index === 0 ? ' active' : '');
+        optionBtn.textContent = `${variant.flavor} (${variant.stock} left)`;
+        optionBtn.dataset.variantId = String(variant.id);
+        optionBtn.addEventListener('click', function () {
+            pendingFlavorVariantId = String(variant.id);
+            triggerText.textContent = `${variant.flavor} (${variant.stock} left)`;
+            stockInfo.textContent = `${variant.stock} left`;
+            menu.querySelectorAll('.flavor-option').forEach((el) => el.classList.remove('active'));
+            optionBtn.classList.add('active');
+            closeFlavorDropdown();
         });
-        if (index === 0 && !disabled) {
-            label.classList.add('selected');
-        }
-        list.appendChild(label);
+        menu.appendChild(optionBtn);
     });
 
     modal.classList.add('show');
@@ -1495,17 +1810,37 @@ function openFlavorModal(product) {
 function closeFlavorModal() {
     const modal = document.getElementById('flavorModal');
     modal?.classList.remove('show');
+    closeFlavorDropdown();
     pendingFlavorProductId = null;
+    pendingFlavorVariantId = null;
+    pendingFlavorVariants = [];
+}
+
+function toggleFlavorDropdown() {
+    const triggerBtn = document.getElementById('flavorSelectTrigger');
+    const menu = document.getElementById('flavorDropdownMenu');
+    if (!triggerBtn || !menu) return;
+    const willOpen = !menu.classList.contains('show');
+    menu.classList.toggle('show', willOpen);
+    triggerBtn.classList.toggle('open', willOpen);
+}
+
+function closeFlavorDropdown() {
+    const triggerBtn = document.getElementById('flavorSelectTrigger');
+    const menu = document.getElementById('flavorDropdownMenu');
+    if (!triggerBtn || !menu) return;
+    menu.classList.remove('show');
+    triggerBtn.classList.remove('open');
 }
 
 function confirmFlavorAddToCart() {
-    const selectedFlavor = document.querySelector('input[name="selected_flavor"]:checked');
-    if (!pendingFlavorProductId || !selectedFlavor) {
+    const selectedFlavorId = pendingFlavorVariantId || '';
+    if (!pendingFlavorProductId || !selectedFlavorId) {
         alert('Please select an available flavor.');
         return;
     }
 
-    addToCart(pendingFlavorProductId, selectedFlavor.value);
+    addToCart(pendingFlavorProductId, selectedFlavorId);
     closeFlavorModal();
 }
 
@@ -1568,10 +1903,14 @@ function showProductDescription(product) {
                 <div class="modal-description">
                     <h3>Product Description</h3>
                     <p id="modalProductDescription"></p>
+                    <div id="modalFlavorListWrap" style="margin-top: 1rem;">
+                        <h3 style="margin-bottom:.6rem;">Available Flavors</h3>
+                        <div id="modalFlavorList" class="cart-empty-text" style="margin:0;"></div>
+                    </div>
                 </div>
                 <div class="modal-actions">
                     <button class="btn btn-outline" onclick="closeProductModal()">Close</button>
-                    <button class="btn btn-primary" id="modalAddToCartBtn" onclick="addToCartFromModal()">
+                    <button class="btn btn-primary" id="modalAddToCartBtn">
                         Add to Cart
                     </button>
                 </div>
@@ -1693,7 +2032,7 @@ function showProductDescription(product) {
                 gap: 1rem;
                 justify-content: flex-end;
             }
-            
+
             @keyframes fadeIn {
                 from { opacity: 0; }
                 to { opacity: 1; }
@@ -1748,7 +2087,26 @@ function showProductDescription(product) {
     
     document.getElementById('modalProductDescription').textContent = 
         product.description || 'Premium quality product for the best vaping experience.';
-    
+
+    const flavorWrap = document.getElementById('modalFlavorListWrap');
+    const flavorList = document.getElementById('modalFlavorList');
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    const availableVariants = variants.filter((variant) => (parseInt(variant.stock, 10) || 0) > 0);
+    if (flavorWrap && flavorList) {
+        if (availableVariants.length > 0) {
+            flavorWrap.style.display = 'block';
+            flavorList.innerHTML = availableVariants
+                .map((variant) => `<div>${variant.flavor} (${variant.stock} left)</div>`)
+                .join('');
+        } else if (variants.length > 0) {
+            flavorWrap.style.display = 'block';
+            flavorList.textContent = 'No available flavors right now.';
+        } else {
+            flavorWrap.style.display = 'none';
+            flavorList.textContent = '';
+        }
+    }
+
     // Update add to cart button
     const addToCartBtn = document.getElementById('modalAddToCartBtn');
     if (product.stock <= 0) {
@@ -1758,8 +2116,8 @@ function showProductDescription(product) {
         addToCartBtn.textContent = 'Add to Cart';
         addToCartBtn.disabled = false;
         addToCartBtn.onclick = function() {
-            beginAddToCart(product.id);
             closeProductModal();
+            beginAddToCart(product.id);
         };
     }
     
@@ -1789,6 +2147,12 @@ window.onclick = function(event) {
     const flavorModal = document.getElementById('flavorModal');
     if (event.target === flavorModal) {
         closeFlavorModal();
+    }
+
+    const dropdown = document.getElementById('flavorDropdownMenu');
+    const trigger = document.getElementById('flavorSelectTrigger');
+    if (dropdown && trigger && !dropdown.contains(event.target) && !trigger.contains(event.target)) {
+        closeFlavorDropdown();
     }
 }
 </script>

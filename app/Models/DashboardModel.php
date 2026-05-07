@@ -120,7 +120,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countOrders($today, $tomorrow),
-            'revenue' => '&#8369;' . number_format($this->sumRevenue($today, $tomorrow), 2),
+            'revenue' => '₱' . number_format($this->sumRevenue($today, $tomorrow), 2),
             'new_users' => $this->countNewUsers($today, $tomorrow),
             'active_sessions' => $this->countActiveUsers(),
         ];
@@ -133,7 +133,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countOrders($weekStart, $nextDay),
-            'revenue' => '&#8369;' . number_format($this->sumRevenue($weekStart, $nextDay), 2),
+            'revenue' => '₱' . number_format($this->sumRevenue($weekStart, $nextDay), 2),
             'new_users' => $this->countNewUsers($weekStart, $nextDay),
             'active_sessions' => $this->countActiveUsers(),
         ];
@@ -146,7 +146,7 @@ class DashboardModel extends Model
 
         return [
             'orders' => $this->countOrders($monthStart, $nextDay),
-            'revenue' => '&#8369;' . number_format($this->sumRevenue($monthStart, $nextDay), 2),
+            'revenue' => '₱' . number_format($this->sumRevenue($monthStart, $nextDay), 2),
             'new_users' => $this->countNewUsers($monthStart, $nextDay),
             'active_sessions' => $this->countActiveUsers(),
         ];

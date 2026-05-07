@@ -189,7 +189,7 @@ class Dashboard extends BaseController
             'page_title' => $pageTitle,
             'active_page' => $activePage,
             'orders_today' => $analyticsToday['orders'] ?? 0,
-            'revenue_today' => $analyticsToday['revenue'] ?? '&#8369;0.00',
+            'revenue_today' => $analyticsToday['revenue'] ?? '₱0.00',
             'recent_orders' => $analyticsToday['orders'] ?? 0,
             'growth_rate' => $this->dashboardModel->getGrowthRate($userRole, $shopName),
         ], $extra);
@@ -320,7 +320,7 @@ class Dashboard extends BaseController
             return $accessCheck;
         }
 
-        $deliveries = $this->getRiderDeliveries();
+        $deliveries = $this->getRiderDashboardDeliveries();
         $today = date('Y-m-d');
 
         $stats = [
@@ -372,11 +372,41 @@ class Dashboard extends BaseController
      */
     private function getRiderDeliveries(): array
     {
+        $riderId = (int) $this->session->get('user_id');
+        $orders = $this->orderModel->getAdminOrders();
+        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
+
+        $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses, $riderId): bool {
+            $status = (string) ($order['delivery_status'] ?? 'to_pay');
+            $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
+
+            return in_array($status, $deliveryStatuses, true)
+                && $assignedRiderId > 0
+                && $assignedRiderId === $riderId;
+        }));
+
+        foreach ($deliveries as &$delivery) {
+            $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
+        }
+        unset($delivery);
+
+        return $deliveries;
+    }
+
+    /**
+     * Dashboard feed for riders.
+     * Shows recent delivery-stage orders even if not assigned to the current rider.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getRiderDashboardDeliveries(): array
+    {
         $orders = $this->orderModel->getAdminOrders();
         $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses): bool {
-            return in_array((string) ($order['delivery_status'] ?? 'to_pay'), $deliveryStatuses, true);
+            $status = (string) ($order['delivery_status'] ?? 'to_pay');
+            return in_array($status, $deliveryStatuses, true);
         }));
 
         foreach ($deliveries as &$delivery) {
@@ -1059,7 +1089,7 @@ class Dashboard extends BaseController
 
         $this->setCustomerCartRawItems($items);
 
-        return redirect()->to('/customer/cart')->with('success', 'Cart updated successfully.');
+        return redirect()->back()->with('success', 'Cart updated successfully.');
     }
 
     /**
@@ -1087,7 +1117,7 @@ class Dashboard extends BaseController
         unset($items[$cartKey]);
         $this->setCustomerCartRawItems($items);
 
-        return redirect()->to('/customer/cart')->with('success', 'Item removed from cart.');
+        return redirect()->back()->with('success', 'Item removed from cart.');
     }
 
     /**

@@ -149,13 +149,14 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <h3><i class="fas fa-shopping-bag"></i> Order Items</h3>
                 <?php if (!empty($items)): ?>
                     <?php foreach ($items as $item): ?>
+                        <?php $itemName = str_replace('BLACK?', 'BLACK', (string) ($item['name'] ?? '')); ?>
                         <div class="order-item">
                             <div class="item-info">
-                                <div class="item-name"><?= esc($item['name']) ?></div>
-                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> × ₱<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                <div class="item-name"><?= esc($itemName) ?></div>
+                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
                             </div>
                             <div class="item-price">
-                                ₱<?= number_format((float) $item['qty'] * (float) $item['unit_price'], 2) ?>
+                                &#8369;<?= number_format((float) $item['qty'] * (float) $item['unit_price'], 2) ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -167,15 +168,15 @@ if (!function_exists('getDeliveryStatusLabel')) {
             <div class="order-summary">
                 <div class="summary-row">
                     <span>Subtotal:</span>
-                    <span>₱<?= number_format((float) $order['total_amount'], 2) ?></span>
+                    <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                 </div>
                 <div class="summary-row">
                     <span>Shipping:</span>
-                    <span>₱0.00</span>
+                    <span>&#8369;0.00</span>
                 </div>
                 <div class="summary-row total">
                     <span>Total:</span>
-                    <span>₱<?= number_format((float) $order['total_amount'], 2) ?></span>
+                    <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                 </div>
             </div>
 
@@ -250,6 +251,8 @@ if (!function_exists('getDeliveryStatusLabel')) {
         max-width: 800px;
         margin: 0 auto;
         padding: 2rem 1.5rem;
+        position: relative;
+        z-index: 1;
     }
     
     .orders-header {
@@ -394,6 +397,26 @@ if (!function_exists('getDeliveryStatusLabel')) {
     .tracking-info p,
     .shipping-info p {
         margin-bottom: 0.5rem;
+    }
+
+    #tracking_map_wrap {
+        position: relative;
+        z-index: 1;
+    }
+
+    #customer_tracking_map {
+        position: relative;
+        z-index: 1;
+        overflow: hidden;
+    }
+
+    #customer_tracking_map .leaflet-pane {
+        z-index: 1;
+    }
+
+    #customer_tracking_map .leaflet-top,
+    #customer_tracking_map .leaflet-bottom {
+        z-index: 2;
     }
     
     .tracking-status {
