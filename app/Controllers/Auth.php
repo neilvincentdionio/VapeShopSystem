@@ -7,6 +7,7 @@ use App\Models\PasswordResetModel;
 use App\Models\LoginAttemptModel;
 use App\Libraries\OtpService;
 use App\Libraries\ActivityLogger;
+use App\Libraries\PasswordResetMailer;
 
 class Auth extends BaseController
 {
@@ -16,6 +17,7 @@ class Auth extends BaseController
     protected $otpService;
     protected $session;
     protected $activityLogger;
+    protected $passwordResetMailer;
 
     public function __construct()
     {
@@ -25,6 +27,7 @@ class Auth extends BaseController
         $this->otpService = new OtpService();
         $this->session = session();
         $this->activityLogger = new ActivityLogger();
+        $this->passwordResetMailer = new PasswordResetMailer();
     }
 
     /**
@@ -376,30 +379,56 @@ class Auth extends BaseController
         // Sanitize email
         $email = filter_var($email, FILTER_SANITIZE_EMAIL);
 
+        // Keep response generic to avoid revealing valid accounts.
+        $genericSuccessMessage = 'If an account with that email exists, a password reset link has been sent.';
+
         // Check if user exists
         $user = $this->userModel->getUserByEmail($email);
         if (!$user) {
-            // Don't reveal if email exists or not for security
             return redirect()->back()
-                           ->with('success', 'If an account with that email exists, a password reset link has been sent.');
+                           ->with('success', $genericSuccessMessage);
         }
 
-        // Check if user is admin - admins cannot reset password via forgot password
+        // Admin accounts are excluded from forgot-password flow.
+        // We still return the same generic message for account-enumeration safety.
         if ($user['role'] === 'admin') {
             return redirect()->back()
-                           ->with('error', 'Administrators cannot use the forgot password feature. Please contact the system administrator.');
+                           ->with('success', $genericSuccessMessage);
         }
+
+        // Housekeeping for stale rows.
+        $this->passwordResetModel->cleanupExpiredTokens();
 
         // Generate reset token
         $token = $this->passwordResetModel->createToken($email);
 
-        // In a real application, send email here
-        // For demo purposes, we'll just show the token
+        // Generate reset URL. In production this should be delivered by email.
         $resetLink = site_url("reset-password?email=" . urlencode($email) . "&token=" . $token);
 
-        return redirect()->back()
-                       ->with('success', 'Please click the link to reset your password.')
-                       ->with('debug_link', $resetLink); // Remove in production
+        $mailResult = $this->passwordResetMailer->sendResetLink($email, $resetLink);
+        if (!$mailResult['sent']) {
+            log_message('error', 'Password reset email failed for {email}: {error}', [
+                'email' => $email,
+                'error' => (string) ($mailResult['error'] ?? 'unknown error'),
+            ]);
+
+            // Local fallback for testing when SMTP is not configured.
+            if (ENVIRONMENT !== 'production') {
+                return redirect()->back()
+                    ->with('success', $genericSuccessMessage)
+                    ->with('debug_link', $resetLink)
+                    ->with('error', 'Email send failed. Configure Gmail SMTP to send real reset emails.');
+            }
+        }
+
+        $redirect = redirect()->back()->with('success', $genericSuccessMessage);
+
+        // Testing convenience: always expose reset link outside production.
+        if (ENVIRONMENT !== 'production') {
+            $redirect = $redirect->with('debug_link', $resetLink);
+        }
+
+        return $redirect;
     }
 
     /**
@@ -407,8 +436,13 @@ class Auth extends BaseController
      */
     public function resetPassword()
     {
-        $email = $this->request->getGet('email');
-        $token = $this->request->getGet('token');
+        $email = trim((string) $this->request->getGet('email'));
+        $token = trim((string) $this->request->getGet('token'));
+
+        if ($email === '' || $token === '') {
+            return redirect()->to('/forgot-password')
+                           ->with('error', 'Invalid or expired reset link.');
+        }
 
         // Validate token
         $reset = $this->passwordResetModel->validateToken($email, $token);
@@ -441,10 +475,15 @@ class Auth extends BaseController
      */
     public function updatePassword()
     {
-        $email = $this->request->getPost('email');
-        $token = $this->request->getPost('token');
+        $email = trim((string) $this->request->getPost('email'));
+        $token = trim((string) $this->request->getPost('token'));
         $password = $this->request->getPost('password');
         $confirmPassword = $this->request->getPost('confirm_password');
+
+        if ($email === '' || $token === '') {
+            return redirect()->to('/forgot-password')
+                           ->with('error', 'Invalid or expired reset link.');
+        }
 
         // Validate input
         $rules = [

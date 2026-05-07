@@ -20,17 +20,18 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            padding: 1rem;
         }
 
 
         .forgot-container {
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
+            background: #f9fbfa;
+            border: 1px solid rgba(14, 27, 22, 0.08);
             padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            border-radius: 24px;
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.12);
             width: 100%;
-            max-width: 400px;
+            max-width: 560px;
             position: relative;
             z-index: 2;
         }
@@ -41,15 +42,15 @@
         }
 
         .forgot-header h1 {
-            color: #333333;
-            font-size: 1.5rem;
+            color: #1a2a24;
+            font-size: 2rem;
             margin-bottom: 0.5rem;
             font-weight: 700;
         }
 
         .forgot-header p {
-            color: #666666;
-            font-size: 0.9rem;
+            color: #61726b;
+            font-size: 1.02rem;
             line-height: 1.5;
         }
 
@@ -60,18 +61,19 @@
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
-            color: #333333;
-            font-weight: 500;
+            color: #23352e;
+            font-weight: 600;
+            font-size: 1.02rem;
         }
 
         .form-group input {
             width: 100%;
-            padding: 0.75rem;
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 1rem;
-            color: #333333;
+            padding: 0.85rem 0.95rem;
+            background: #fdfefe;
+            border: 1px solid #d5dfd9;
+            border-radius: 12px;
+            font-size: 1.06rem;
+            color: #1f2e28;
             transition: all 0.3s;
         }
 
@@ -94,13 +96,13 @@
 
         .btn {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.95rem;
             background: #27c56f;
             color: #ffffff;
             border: 1px solid #27c56f;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 500;
+            border-radius: 12px;
+            font-size: 1.08rem;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.3s;
         }
@@ -172,7 +174,7 @@
         .back-to-login a {
             color: #667eea;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 1rem;
         }
 
         .back-to-login a:hover {
@@ -246,9 +248,7 @@
                         <?= htmlspecialchars(session()->getFlashdata('debug_link')) ?>
                     </a>
                 </div>
-                <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #6c757d;">
-                    💡 Click the link above to reset your password
-                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #6c757d;">Tip: Click the link above to reset your password</div>
             </div>
         <?php endif; ?>
 
@@ -272,7 +272,7 @@
         </form>
 
         <div class="back-to-login">
-            <a href="<?= site_url('login') ?>">← Back to Login</a>
+            <a href="<?= site_url('login') ?>">&larr; Back to Login</a>
         </div>
     </div>
 
@@ -295,3 +295,4 @@
     </script>
 </body>
 </html>
+

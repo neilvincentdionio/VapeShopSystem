@@ -18,28 +18,24 @@
             padding: 2rem 1rem;
             background: #ffffff;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             position: relative;
         }
 
         .register-shell {
             width: 100%;
-            max-width: 760px;
+            max-width: 860px;
             margin: 0 auto;
-            display: block;
         }
 
         .form-panel {
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-        }
-
-        .form-panel {
+            width: 100%;
             background: #f9fbfa;
-            border: 1px solid rgba(14, 27, 22, 0.08);
             padding: 2rem;
+            border-radius: 24px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.12);
         }
 
         .form-header h2 {
@@ -251,6 +247,10 @@
         @media (max-width: 640px) {
             body {
                 padding: 1rem;
+            }
+
+            .form-panel {
+                width: 100%;
             }
 
             .form-panel {
