@@ -119,6 +119,7 @@ $routes->group('products', ['filter' => 'auth:admin'], static function ($routes)
     $routes->post('update/(:num)', 'Products::update/$1', ['filter' => 'permission:update_products']);
     $routes->get('delete/(:num)', 'Products::delete/$1', ['filter' => 'permission:delete_products']);
     $routes->get('toggle-status/(:num)', 'Products::toggleStatus/$1', ['filter' => 'permission:update_products']);
+    $routes->post('reviews/reply/(:num)', 'Products::replyReview/$1', ['filter' => 'permission:view_products']);
 });
 
 // Customer product details route
@@ -207,11 +208,8 @@ $routes->post('/api/auth/refresh', 'ApiAuth::refresh');
 $routes->post('/api/auth/logout', 'ApiAuth::logout');
 $routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => ['jwtauth', 'permission:read']]);
 
-// Review and Rating routes
-$routes->get('/customer/review/form', 'Dashboard::reviewForm', ['filter' => 'auth']);
-$routes->post('/customer/review/submit', 'Dashboard::submitReview', ['filter' => 'auth']);
-$routes->post('/customer/review/helpful', 'Dashboard::markReviewHelpful', ['filter' => 'auth']);
-$routes->get('/customer/reviews/order/(:num)', 'Dashboard::getCustomerOrderReviews/$1', ['filter' => 'auth']);
+// Product review and rating routes
+$routes->post('/customer/product-review/submit', 'Dashboard::submitProductReview', ['filter' => 'auth']);
 
 // Admin Dashboard routes
 $routes->get('/admin-dashboard', 'AdminDashboard::index', ['filter' => 'auth:admin']);

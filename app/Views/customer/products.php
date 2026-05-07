@@ -336,6 +336,35 @@
         color: #333;
         margin-bottom: 0.5rem;
     }
+
+    .product-rating {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        width: fit-content;
+        margin-bottom: 0.55rem;
+        padding: 0.28rem 0.55rem;
+        border: 1px solid #fde68a;
+        border-radius: 999px;
+        background: #fffbeb;
+        color: #92400e;
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .product-rating .rating-star {
+        color: #f59e0b;
+        font-size: 0.9rem;
+        line-height: 1;
+    }
+
+    .product-rating:hover {
+        border-color: #f59e0b;
+        background: #fef3c7;
+    }
     
     .product-stock {
         font-size: 0.85rem;
@@ -366,7 +395,7 @@
         transition: all 0.2s ease;
         flex: 1;
     }
-    
+
     .btn-primary {
         background: #00bcd4;
         color: white;
@@ -788,6 +817,116 @@
         font-weight: 700;
         margin-top: .55rem;
     }
+
+    .reviews-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1350;
+        background: rgba(0, 0, 0, 0.45);
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .reviews-modal.show {
+        display: flex;
+    }
+
+    .reviews-modal-card {
+        width: min(100%, 560px);
+        max-height: 88vh;
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        padding: 1.25rem;
+    }
+
+    .reviews-modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .reviews-modal-title {
+        font-size: 1.05rem;
+        font-weight: 900;
+        color: #333333;
+        margin-bottom: 0.35rem;
+    }
+
+    .reviews-modal-summary {
+        color: #666666;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .reviews-modal-close {
+        background: transparent;
+        border: none;
+        color: #666666;
+        cursor: pointer;
+        font-size: 1.25rem;
+    }
+
+    .review-list {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .review-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 0.9rem;
+        background: #ffffff;
+    }
+
+    .review-card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.45rem;
+    }
+
+    .reviewer-name {
+        color: #333333;
+        font-weight: 800;
+    }
+
+    .review-stars {
+        color: #f59e0b;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .review-text,
+    .admin-reply {
+        color: #555555;
+        line-height: 1.5;
+        font-size: 0.92rem;
+    }
+
+    .admin-reply {
+        margin-top: 0.7rem;
+        padding: 0.7rem;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        background: #eff6ff;
+        color: #1e3a8a;
+    }
+
+    .reviews-empty {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 1.2rem;
+        color: #666666;
+        background: #f8f9fa;
+        text-align: center;
+    }
 </style>
 
 <div class="products-container">
@@ -850,6 +989,21 @@
                                     <?= esc($product['description'] ?? 'Premium quality product for the best vaping experience.') ?>
                                 </p>
                                 <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
+                                <?php
+                                    $reviewSummary = $product['review_summary'] ?? ['average_rating' => 0, 'total_reviews' => 0];
+                                    $averageRating = (float) ($reviewSummary['average_rating'] ?? 0);
+                                    $totalReviews = (int) ($reviewSummary['total_reviews'] ?? 0);
+                                ?>
+                                <button type="button"
+                                        class="product-rating"
+                                        title="<?= $totalReviews > 0 ? esc(number_format($averageRating, 1) . ' out of 5 from ' . $totalReviews . ' review(s)') : 'No reviews yet' ?>"
+                                        onclick='event.stopPropagation(); openReviewsModal(<?= htmlspecialchars(json_encode($product), ENT_QUOTES, "UTF-8") ?>)'>
+                                    <span class="rating-star">★</span>
+                                    <span><?= $totalReviews > 0 ? esc(number_format($averageRating, 1)) : 'No ratings' ?></span>
+                                    <?php if ($totalReviews > 0): ?>
+                                        <span>(<?= $totalReviews ?>)</span>
+                                    <?php endif; ?>
+                                </button>
                                 <div class="product-stock <?= $product['stock'] <= 10 ? 'low-stock' : '' ?>">
                                     <?php if ($product['stock'] <= 0): ?>
                                         Out of Stock
@@ -976,6 +1130,19 @@
                 <?php endif; ?>
             </div>
         </aside>
+    </div>
+</div>
+
+<div id="reviewsModal" class="reviews-modal" aria-hidden="true">
+    <div class="reviews-modal-card">
+        <div class="reviews-modal-head">
+            <div>
+                <div class="reviews-modal-title" id="reviewsModalTitle">Product Reviews</div>
+                <div class="reviews-modal-summary" id="reviewsModalSummary"></div>
+            </div>
+            <button type="button" class="reviews-modal-close" onclick="closeReviewsModal()">&times;</button>
+        </div>
+        <div id="reviewsModalBody"></div>
     </div>
 </div>
 
@@ -1878,6 +2045,68 @@ function addToCart(productId, variantId = null) {
         });
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function renderStars(rating) {
+    const count = Math.max(0, Math.min(5, parseInt(rating, 10) || 0));
+    return '★'.repeat(count) + '☆'.repeat(5 - count);
+}
+
+function openReviewsModal(product) {
+    const modal = document.getElementById('reviewsModal');
+    const title = document.getElementById('reviewsModalTitle');
+    const summary = document.getElementById('reviewsModalSummary');
+    const body = document.getElementById('reviewsModalBody');
+    if (!modal || !title || !summary || !body) {
+        return;
+    }
+
+    const reviewSummary = product.review_summary || {};
+    const average = parseFloat(reviewSummary.average_rating || 0);
+    const total = parseInt(reviewSummary.total_reviews || 0, 10);
+    const reviews = Array.isArray(product.approved_reviews) ? product.approved_reviews : [];
+
+    title.textContent = `${product.name || 'Product'} Reviews`;
+    summary.textContent = total > 0
+        ? `${average.toFixed(1)} out of 5 from ${total} customer review${total === 1 ? '' : 's'}`
+        : 'No customer reviews yet.';
+
+    if (!reviews.length) {
+        body.innerHTML = '<div class="reviews-empty">No customer reviews for this product yet.</div>';
+    } else {
+        body.innerHTML = `<div class="review-list">${reviews.map((review) => `
+            <article class="review-card">
+                <div class="review-card-head">
+                    <div class="reviewer-name">${escapeHtml(review.user_name || 'Customer')}</div>
+                    <div class="review-stars">${renderStars(review.rating)}</div>
+                </div>
+                <div class="review-text">${escapeHtml(review.review_text || 'No written comment.')}</div>
+                ${review.admin_reply ? `<div class="admin-reply"><strong>Admin reply:</strong> ${escapeHtml(review.admin_reply)}</div>` : ''}
+            </article>
+        `).join('')}</div>`;
+    }
+
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeReviewsModal() {
+    const modal = document.getElementById('reviewsModal');
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
 // Product Description Modal
 function showProductDescription(product) {
     // Create modal if it doesn't exist
@@ -2147,6 +2376,11 @@ window.onclick = function(event) {
     const flavorModal = document.getElementById('flavorModal');
     if (event.target === flavorModal) {
         closeFlavorModal();
+    }
+
+    const reviewsModal = document.getElementById('reviewsModal');
+    if (event.target === reviewsModal) {
+        closeReviewsModal();
     }
 
     const dropdown = document.getElementById('flavorDropdownMenu');

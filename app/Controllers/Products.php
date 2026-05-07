@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\ProductModel;
+use App\Models\ReviewModel;
 
 class Products extends BaseController
 {
@@ -10,11 +11,13 @@ class Products extends BaseController
 
     protected $session;
     protected $productModel;
+    protected $reviewModel;
 
     public function __construct()
     {
         $this->session = session();
         $this->productModel = new ProductModel();
+        $this->reviewModel = new ReviewModel();
         helper(['text', 'form']);
     }
 
@@ -29,6 +32,7 @@ class Products extends BaseController
         }
 
         $products = $this->productModel->getAllProducts();
+        $productIds = array_values(array_unique(array_map(static fn (array $product): int => (int) ($product['id'] ?? 0), $products)));
         $data = [
             'title' => 'Product Management',
             'products' => $products,
@@ -36,6 +40,8 @@ class Products extends BaseController
             'lowStockProducts' => $this->productModel->getLowStockProducts(),
             'totalProducts' => $this->productModel->countAllProducts(),
             'activeProducts' => $this->productModel->countActiveProducts(),
+            'reviewSummaries' => $this->reviewModel->getAdminReviewDataForProducts($productIds),
+            'reviewNotification' => $this->reviewModel->getAdminReviewNotificationSummary(),
         ];
 
         return view('admin/products/index', $data);
@@ -81,6 +87,8 @@ class Products extends BaseController
             'title' => 'View Product',
             'product' => $product,
             'variants' => $variants,
+            'reviewSummary' => $this->reviewModel->getProductReviewSummary((int) $id),
+            'productReviews' => $this->reviewModel->getReviewsForProduct((int) $id),
         ];
 
         return view('admin/products/view', $data);
@@ -350,6 +358,35 @@ class Products extends BaseController
         }
 
         return redirect()->to('/products')->with('error', 'Failed to update product status.');
+    }
+
+    public function replyReview($reviewId)
+    {
+        $guard = $this->enforcePermission('view_products');
+        if ($guard !== true) {
+            return $guard;
+        }
+
+        $reviewId = (int) $reviewId;
+        $reply = trim((string) $this->request->getPost('admin_reply'));
+        $review = $this->reviewModel->find($reviewId);
+
+        if (! $review) {
+            return redirect()->to('/products')->with('error', 'Review not found.');
+        }
+
+        $saved = $this->reviewModel->update($reviewId, [
+            'admin_reply' => $reply !== '' ? mb_substr($reply, 0, 1000) : null,
+            'replied_by' => $reply !== '' ? (int) $this->session->get('user_id') : null,
+            'replied_at' => $reply !== '' ? date('Y-m-d H:i:s') : null,
+        ]);
+
+        if (! $saved) {
+            return redirect()->back()->with('error', 'Failed to save admin reply.');
+        }
+
+        return redirect()->to('/products/view/' . (int) ($review['product_id'] ?? 0))
+            ->with('success', $reply !== '' ? 'Reply saved.' : 'Reply removed.');
     }
 
     private function enforcePermission(string $permissionName)

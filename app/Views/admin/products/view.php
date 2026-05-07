@@ -6,6 +6,8 @@ $imageSrc = product_image_url($imageName);
 $hasVariants = $variants !== [];
 $totalVariantStock = array_sum(array_map(static fn (array $variant): int => (int) ($variant['stock_qty'] ?? 0), $variants));
 $displayStock = $hasVariants ? $totalVariantStock : (int) ($product['stock_qty'] ?? 0);
+$reviewSummary = $reviewSummary ?? ['total_reviews' => 0, 'average_rating' => 0];
+$productReviews = $productReviews ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -241,6 +243,110 @@ $displayStock = $hasVariants ? $totalVariantStock : (int) ($product['stock_qty']
             font-weight: 600;
         }
 
+        .reviews-panel {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+            padding: 1.5rem;
+        }
+
+        .reviews-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .rating-summary {
+            color: #92400e;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .review-list {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .review-row {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            background: #ffffff;
+        }
+
+        .review-row-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.55rem;
+        }
+
+        .reviewer {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .review-stars {
+            color: #f59e0b;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .review-meta {
+            color: #6b7280;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .review-status {
+            display: inline-flex;
+            border-radius: 999px;
+            padding: 0.18rem 0.55rem;
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .admin-reply-box {
+            margin-top: 0.85rem;
+            padding: 0.8rem;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            line-height: 1.5;
+        }
+
+        .reply-form {
+            margin-top: 0.85rem;
+            display: grid;
+            gap: 0.6rem;
+        }
+
+        .reply-form textarea {
+            width: 100%;
+            min-height: 74px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 0.7rem;
+            font: inherit;
+            resize: vertical;
+        }
+
+        .reply-form-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
         @media (max-width: 900px) {
             .page-header,
             .detail-grid {
@@ -255,6 +361,15 @@ $displayStock = $hasVariants ? $totalVariantStock : (int) ($product['stock_qty']
 
             .info-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .reviews-header,
+            .review-row-head {
+                flex-direction: column;
+            }
+
+            .rating-summary {
+                white-space: normal;
             }
         }
     </style>
@@ -361,6 +476,64 @@ $displayStock = $hasVariants ? $totalVariantStock : (int) ($product['stock_qty']
                         <?php endif; ?>
                     </div>
                 </div>
+            </section>
+
+            <section class="reviews-panel" id="product-reviews">
+                <div class="reviews-header">
+                    <div>
+                        <h2 class="section-title" style="margin-top:0;">Product Reviews</h2>
+                        <p class="empty-note" style="margin:0;">Ratings submitted by customers after completed purchases.</p>
+                    </div>
+                    <div class="rating-summary">
+                        <?= number_format((float) ($reviewSummary['average_rating'] ?? 0), 1) ?>/5
+                        from <?= (int) ($reviewSummary['total_reviews'] ?? 0) ?> customer review(s)
+                    </div>
+                </div>
+
+                <?php if ($productReviews !== []): ?>
+                    <div class="review-list">
+                        <?php foreach ($productReviews as $review): ?>
+                            <article class="review-row">
+                                <div class="review-row-head">
+                                    <div>
+                                        <div class="reviewer"><?= esc($review['user_name'] ?? 'Customer') ?></div>
+                                        <div class="review-meta">
+                                            Order #<?= (int) ($review['order_id'] ?? 0) ?> &middot;
+                                            <?= date('M j, Y', strtotime((string) ($review['created_at'] ?? 'now'))) ?>
+                                            <span class="review-status"><?= esc($review['status'] ?? 'approved') ?></span>
+                                        </div>
+                                    </div>
+                                    <div class="review-stars">
+                                        <?= str_repeat('★', (int) ($review['rating'] ?? 0)) ?><?= str_repeat('☆', 5 - (int) ($review['rating'] ?? 0)) ?>
+                                    </div>
+                                </div>
+                                <?php if (!empty($review['review_text'])): ?>
+                                    <p><?= esc($review['review_text']) ?></p>
+                                <?php else: ?>
+                                    <p class="review-meta">No written comment.</p>
+                                <?php endif; ?>
+                                <?php if (!empty($review['admin_reply'])): ?>
+                                    <div class="admin-reply-box">
+                                        <strong>Admin reply:</strong>
+                                        <?= nl2br(esc($review['admin_reply'])) ?>
+                                    </div>
+                                <?php endif; ?>
+                                <form method="post" action="<?= site_url('products/reviews/reply/' . (int) ($review['id'] ?? 0)) ?>" class="reply-form">
+                                    <?= csrf_field() ?>
+                                    <textarea name="admin_reply" maxlength="1000" placeholder="Write an admin reply to this review..."><?= esc((string) ($review['admin_reply'] ?? '')) ?></textarea>
+                                    <div class="reply-form-actions">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-reply"></i>
+                                            Save Reply
+                                        </button>
+                                    </div>
+                                </form>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-note">No product reviews have been submitted yet.</div>
+                <?php endif; ?>
             </section>
         </div>
     </main>

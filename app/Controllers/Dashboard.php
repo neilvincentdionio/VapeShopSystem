@@ -6,7 +6,7 @@ use App\Models\DashboardModel;
 use App\Models\UserModel;
 use App\Models\ProductModel;
 use App\Models\OrderModel;
-use App\Models\OrderReviewModel;
+use App\Models\ReviewModel;
 use App\Models\RecordModel;
 use App\Libraries\SecurityAuditService;
 
@@ -18,7 +18,7 @@ class Dashboard extends BaseController
     protected $productModel;
     protected $orderModel;
     protected $recordModel;
-    protected $orderReviewModel;
+    protected $reviewModel;
     protected $securityAuditService;
 
     public function __construct()
@@ -28,7 +28,7 @@ class Dashboard extends BaseController
         $this->userModel = new UserModel();
         $this->productModel = new ProductModel();
         $this->orderModel = new OrderModel();
-        $this->orderReviewModel = new OrderReviewModel();
+        $this->reviewModel = new ReviewModel();
         $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
     }
@@ -438,6 +438,7 @@ class Dashboard extends BaseController
         // Get one customer-facing card per product. Flavor variants are attached
         // to each product for selection before adding to cart.
         $products = $this->productModel->getCustomerProducts((string) $search, (string) $category);
+        $products = $this->attachProductReviewSummaries($products);
 
         $categories = $allowedCategories;
 
@@ -457,6 +458,29 @@ class Dashboard extends BaseController
         ]));
     }
 
+    private function attachProductReviewSummaries(array $products): array
+    {
+        if ($products === []) {
+            return $products;
+        }
+
+        $productIds = array_values(array_unique(array_map(static fn (array $product): int => (int) ($product['id'] ?? 0), $products)));
+        $reviewData = $this->reviewModel->getProductReviewDataForProducts($productIds);
+
+        foreach ($products as &$product) {
+            $productId = (int) ($product['id'] ?? 0);
+            $data = $reviewData[$productId] ?? [
+                'summary' => ['total_reviews' => 0, 'average_rating' => 0.0],
+                'reviews' => [],
+            ];
+            $product['review_summary'] = $data['summary'];
+            $product['approved_reviews'] = $data['reviews'];
+        }
+        unset($product);
+
+        return $products;
+    }
+
     /**
      * Customer orders page.
      */
@@ -470,20 +494,78 @@ class Dashboard extends BaseController
         $userId = (int) $this->session->get('user_id');
 
         $activeTab = $this->request->getGet('tab') ?? 'all';
-        $validTabs = ['all', 'to_pay', 'to_ship', 'to_receive', 'completed', 'cancelled', 'return_refund', 'failed_delivery'];
+        $validTabs = ['all', 'to_pay', 'to_ship', 'to_receive', 'completed', 'to_review', 'cancelled', 'return_refund', 'failed_delivery'];
 
         if (!in_array($activeTab, $validTabs, true)) {
             $activeTab = 'all';
         }
 
-        $orders = $this->orderModel->getCustomerOrders($userId, $activeTab === 'all' ? null : $activeTab);
+        $orders = $this->orderModel->getCustomerOrders($userId, $activeTab === 'to_review' ? 'completed' : ($activeTab === 'all' ? null : $activeTab));
+        $orders = $this->attachProductReviewState($orders, $userId);
+        if ($activeTab === 'to_review') {
+            $orders = array_values(array_filter($orders, static fn (array $order): bool => (int) ($order['reviewable_count'] ?? 0) > 0));
+        }
+
         $statusCounts = $this->orderModel->getCustomerStatusCounts($userId);
+        $statusCounts['to_review'] = $this->countOrdersToReview($userId);
 
         return view('customer/orders', $this->getCustomerPageData('Orders', 'orders', [
             'orders' => $orders,
             'activeTab' => $activeTab,
             'statusCounts' => $statusCounts,
         ]));
+    }
+
+    private function attachProductReviewState(array $orders, int $customerId): array
+    {
+        if ($orders === []) {
+            return $orders;
+        }
+
+        $orderIds = array_values(array_unique(array_map(static fn (array $order): int => (int) ($order['id'] ?? 0), $orders)));
+        $reviewsByKey = $this->reviewModel->getCustomerReviewsForOrders($orderIds, $customerId);
+
+        foreach ($orders as &$order) {
+            $reviewableCount = 0;
+            $items = (array) ($order['items'] ?? []);
+            foreach ($items as &$item) {
+                $productId = (int) ($item['id'] ?? 0);
+                $review = $productId > 0 ? ($reviewsByKey[((int) $order['id']) . ':' . $productId] ?? null) : null;
+                $item['product_review'] = $review;
+                $item['can_review_product'] = $productId > 0
+                    && ($order['delivery_status'] ?? '') === 'completed'
+                    && $review === null;
+
+                if ($item['can_review_product']) {
+                    $reviewableCount++;
+                }
+            }
+            unset($item);
+
+            $order['items'] = $items;
+            $order['reviewable_count'] = $reviewableCount;
+            $order['has_product_reviews'] = $this->orderHasProductReviews($order);
+        }
+        unset($order);
+
+        return $orders;
+    }
+
+    private function countOrdersToReview(int $customerId): int
+    {
+        $orders = $this->attachProductReviewState($this->orderModel->getCustomerOrders($customerId, 'completed'), $customerId);
+        return count(array_filter($orders, static fn (array $order): bool => (int) ($order['reviewable_count'] ?? 0) > 0));
+    }
+
+    private function orderHasProductReviews(array $order): bool
+    {
+        foreach ((array) ($order['items'] ?? []) as $item) {
+            if (! empty($item['product_review'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2898,9 +2980,6 @@ class Dashboard extends BaseController
             case 'reorder':
                 return $this->reorderItems($order);
             
-            case 'review':
-                return $this->reviewOrder($order);
-            
             case 'view':
                 return $this->viewOrderDetailsPrivate($order);
             
@@ -3154,51 +3233,7 @@ class Dashboard extends BaseController
         return redirect()->to('/customer/cart')->with('success', 'Items added to cart. You can now checkout.');
     }
 
-    private function reviewOrder($order)
-    {
-        $orderId = (int) ($order['id'] ?? 0);
-        if ($orderId <= 0) {
-            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
-        }
-
-        if (($order['delivery_status'] ?? '') !== 'completed') {
-            return redirect()->to('/customer/orders')->with('error', 'You can only review completed orders.');
-        }
-
-        return redirect()->to('/customer/review/form?order_id=' . $orderId);
-    }
-
-    public function reviewForm()
-    {
-        $accessCheck = $this->checkCustomerAccess();
-        if ($accessCheck !== true) {
-            return $accessCheck;
-        }
-
-        $orderId = (int) $this->request->getGet('order_id');
-        if ($orderId <= 0) {
-            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
-        }
-
-        $order = $this->orderModel->getOrder($orderId);
-        if (! $order || (int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
-            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
-        }
-
-        if (($order['delivery_status'] ?? '') !== 'completed') {
-            return redirect()->to('/customer/orders')->with('error', 'Only completed orders can be reviewed.');
-        }
-
-        $customerId = (int) $this->session->get('user_id');
-        $existingReview = $this->orderReviewModel->getCustomerReviewForOrder($orderId, $customerId);
-
-        return view('customer/review_form', $this->getCustomerPageData('Write a Review', 'orders', [
-            'order' => $order,
-            'existingReview' => $existingReview,
-        ]));
-    }
-
-    public function submitReview()
+    public function submitProductReview()
     {
         $accessCheck = $this->checkCustomerAccess();
         if ($accessCheck !== true) {
@@ -3206,12 +3241,13 @@ class Dashboard extends BaseController
         }
 
         $orderId = (int) $this->request->getPost('order_id');
+        $productId = (int) $this->request->getPost('product_id');
         $rating = (int) $this->request->getPost('rating');
         $reviewText = trim((string) $this->request->getPost('review_text'));
         $customerId = (int) $this->session->get('user_id');
 
-        if ($orderId <= 0) {
-            return redirect()->to('/customer/orders')->with('error', 'Invalid order.');
+        if ($orderId <= 0 || $productId <= 0) {
+            return redirect()->to('/customer/orders?tab=to_review')->with('error', 'Invalid product review.');
         }
 
         if ($rating < 1 || $rating > 5) {
@@ -3220,65 +3256,96 @@ class Dashboard extends BaseController
 
         $order = $this->orderModel->getOrder($orderId);
         if (! $order || (int) ($order['created_by'] ?? 0) !== $customerId) {
-            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+            return redirect()->to('/customer/orders?tab=to_review')->with('error', 'Order not found.');
         }
 
         if (($order['delivery_status'] ?? '') !== 'completed') {
             return redirect()->to('/customer/orders')->with('error', 'Only completed orders can be reviewed.');
         }
 
+        $hasProduct = false;
+        foreach ((array) ($order['items'] ?? []) as $item) {
+            if ((int) ($item['id'] ?? 0) === $productId) {
+                $hasProduct = true;
+                break;
+            }
+        }
+
+        if (! $hasProduct) {
+            return redirect()->to('/customer/orders?tab=to_review')->with('error', 'This product is not part of that order.');
+        }
+
         $payload = [
             'order_id' => $orderId,
-            'customer_id' => $customerId,
+            'product_id' => $productId,
+            'user_id' => $customerId,
             'rating' => $rating,
             'review_text' => $reviewText !== '' ? mb_substr($reviewText, 0, 1000) : null,
+            'status' => 'approved',
         ];
 
-        $existing = $this->orderReviewModel->getCustomerReviewForOrder($orderId, $customerId);
-        if ($existing && isset($existing['id'])) {
-            $saved = $this->orderReviewModel->update((int) $existing['id'], $payload);
-        } else {
-            $saved = (bool) $this->orderReviewModel->insert($payload);
-        }
+        $existing = $this->reviewModel->getReviewForOrderProduct($orderId, $productId, $customerId);
+        $saved = $existing && isset($existing['id'])
+            ? $this->reviewModel->update((int) $existing['id'], $payload)
+            : (bool) $this->reviewModel->insert($payload);
 
         if (! $saved) {
-            return redirect()->back()->withInput()->with('error', 'Failed to save review. Please try again.');
+            return redirect()->back()->withInput()->with('error', 'Failed to save product review. Please try again.');
         }
 
-        return redirect()->to('/customer/orders?tab=completed')->with('success', 'Thank you! Your review has been submitted.');
+        return redirect()->to('/customer/orders?tab=to_review')->with('success', 'Your product review has been posted.');
     }
 
-    public function getCustomerOrderReviews($orderId = null)
+    public function getProductReviews($productId = null)
     {
-        $accessCheck = $this->checkCustomerAccess();
-        if ($accessCheck !== true) {
-            return $accessCheck;
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
         }
 
-        $id = (int) $orderId;
-        $customerId = (int) $this->session->get('user_id');
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $id = (int) $productId;
         if ($id <= 0) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Invalid order']);
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid product']);
         }
-
-        $review = $this->orderReviewModel->getCustomerReviewForOrder($id, $customerId);
 
         return $this->response->setJSON([
             'success' => true,
-            'review' => $review,
+            'summary' => $this->reviewModel->getProductReviewSummary($id),
+            'reviews' => $this->reviewModel->getReviewsForProduct($id),
         ]);
     }
 
-    public function markReviewHelpful()
+    public function approveReview($reviewId = null)
     {
-        $accessCheck = $this->checkCustomerAccess();
-        if ($accessCheck !== true) {
-            return $accessCheck;
+        return $this->updateProductReviewStatus((int) $reviewId, 'approved');
+    }
+
+    public function rejectReview($reviewId = null)
+    {
+        return $this->updateProductReviewStatus((int) $reviewId, 'rejected');
+    }
+
+    private function updateProductReviewStatus(int $reviewId, string $status)
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if ((string) $this->session->get('user_role') !== 'admin') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        if ($reviewId <= 0 || ! in_array($status, ['approved', 'rejected'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Invalid review']);
         }
 
         return $this->response->setJSON([
-            'success' => true,
-            'message' => 'Feature available for public product reviews.',
+            'success' => (bool) $this->reviewModel->update($reviewId, ['status' => $status]),
         ]);
     }
 

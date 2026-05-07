@@ -85,7 +85,7 @@ class ProductSeeder extends Seeder
             ],
 
             [
-                'name' => 'BLACK V2',
+                'name' => 'BLACK? V2',
                 'category' => 'Pods',
                 'brand' => 'BLACK',
                 'image_url' => null,

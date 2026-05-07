@@ -14,6 +14,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_receive' => 'Out for Delivery',
             'delivered' => 'Delivered (Confirm)',
             'completed' => 'Completed',
+            'to_review' => 'To Review',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
             'failed_delivery' => 'Failed Delivery',
@@ -276,6 +277,13 @@ if (!function_exists('extractGcashReference')) {
     .order-item:last-child {
         border-bottom: 1px solid var(--border);
     }
+
+    .order-item.review-needed,
+    .order-item.review-submitted {
+        align-items: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
     
     .item-info {
         flex: 1;
@@ -299,6 +307,100 @@ if (!function_exists('extractGcashReference')) {
         color: var(--text-main);
         font-size: 0.9rem;
         white-space: nowrap;
+    }
+
+    .product-review-form {
+        grid-column: 1 / -1;
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .product-review-fields {
+        display: grid;
+        grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .product-review-fields textarea {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.65rem 0.75rem;
+        font: inherit;
+        color: var(--text-main);
+        background: #ffffff;
+    }
+
+    .star-rating {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.12rem;
+        width: 100%;
+        max-width: 220px;
+        min-height: 46px;
+        padding: 0.5rem 0.55rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    .star-rating-btn {
+        border: none;
+        background: transparent;
+        color: #d1d5db;
+        cursor: pointer;
+        font-size: 1.35rem;
+        line-height: 1;
+        padding: 0;
+        width: 1.35rem;
+        flex: 0 0 1.35rem;
+        transition: color 0.15s ease, transform 0.15s ease;
+    }
+
+    .star-rating-btn:hover,
+    .star-rating-btn.active {
+        color: #f59e0b;
+    }
+
+    .star-rating-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .star-rating-label {
+        margin-left: 0.35rem;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .review-status-note {
+        grid-column: 1 / -1;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    .review-pill {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        border-radius: 999px;
+        border: 1px solid rgba(39, 197, 111, 0.3);
+        background: rgba(39, 197, 111, 0.1);
+        color: var(--accent);
+        padding: 0.25rem 0.65rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
     }
     
     .order-total {
@@ -463,6 +565,14 @@ if (!function_exists('extractGcashReference')) {
         .item-price {
             align-self: flex-end;
         }
+
+        .product-review-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .star-rating {
+            max-width: 100%;
+        }
     }
 </style>
 
@@ -561,9 +671,45 @@ function stopAutoRefresh() {
     }
 }
 
+function setProductStarRating(container, rating) {
+    const value = parseInt(rating, 10) || 0;
+    const input = container.querySelector('input[name="rating"]');
+    const label = container.querySelector('.star-rating-label');
+    if (input) {
+        input.value = value > 0 ? String(value) : '';
+    }
+    container.querySelectorAll('.star-rating-btn').forEach((button) => {
+        const starValue = parseInt(button.dataset.ratingValue || '0', 10);
+        button.classList.toggle('active', starValue <= value);
+    });
+    if (label) {
+        label.textContent = value > 0 ? `${value} star${value > 1 ? 's' : ''}` : 'Select rating';
+    }
+}
+
 // Start auto-refresh when page loads
 document.addEventListener('DOMContentLoaded', function() {
     startAutoRefresh();
+
+    document.querySelectorAll('[data-star-rating]').forEach((container) => {
+        container.querySelectorAll('.star-rating-btn').forEach((button) => {
+            button.addEventListener('click', function () {
+                setProductStarRating(container, button.dataset.ratingValue);
+            });
+
+            button.addEventListener('mouseenter', function () {
+                container.querySelectorAll('.star-rating-btn').forEach((starButton) => {
+                    const previewValue = parseInt(button.dataset.ratingValue || '0', 10);
+                    const starValue = parseInt(starButton.dataset.ratingValue || '0', 10);
+                    starButton.classList.toggle('active', starValue <= previewValue);
+                });
+            });
+        });
+
+        container.addEventListener('mouseleave', function () {
+            setProductStarRating(container, container.querySelector('input[name="rating"]')?.value || '');
+        });
+    });
     
     // Stop when page is hidden
     document.addEventListener('visibilitychange', function() {
@@ -616,6 +762,12 @@ window.addEventListener('beforeunload', function() {
             <a href="<?= site_url('customer/orders?tab=completed') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'completed' ? 'active' : '' ?>">
                 Completed
             </a>
+            <a href="<?= site_url('customer/orders?tab=to_review') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'to_review' ? 'active' : '' ?>">
+                To Review
+                <?php if (isset($statusCounts['to_review']) && $statusCounts['to_review'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['to_review'] ?></span>
+                <?php endif; ?>
+            </a>
             <a href="<?= site_url('customer/orders?tab=cancelled') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'cancelled' ? 'active' : '' ?>">
                 Cancelled
             </a>
@@ -651,14 +803,50 @@ window.addEventListener('beforeunload', function() {
                     <div class="order-items">
                         <?php if (!empty($order['items'])): ?>
                             <?php foreach ($order['items'] as $item): ?>
-                                <div class="order-item">
+                                <?php
+                                    $productReview = $item['product_review'] ?? null;
+                                    $needsReview = !empty($item['can_review_product']);
+                                    $reviewClass = $needsReview ? ' review-needed' : (!empty($productReview) ? ' review-submitted' : '');
+                                ?>
+                                <div class="order-item<?= $reviewClass ?>">
                                     <div class="item-info">
                                         <div class="item-name"><?= esc($item['name']) ?></div>
                                         <div class="item-details">Qty: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                        <?php if (!empty($productReview)): ?>
+                                            <div class="review-status-note">
+                                                Your rating: <?= str_repeat('★', (int) ($productReview['rating'] ?? 0)) ?><?= str_repeat('☆', 5 - (int) ($productReview['rating'] ?? 0)) ?>
+                                                <span class="review-pill"><?= esc((string) ($productReview['status'] ?? 'pending')) ?></span>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="item-price">
                                         &#8369;<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?>
                                     </div>
+                                    <?php if (($activeTab ?? 'all') === 'to_review' && $needsReview): ?>
+                                        <form method="post" action="<?= site_url('customer/product-review/submit') ?>" class="product-review-form">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                                            <input type="hidden" name="product_id" value="<?= (int) ($item['id'] ?? 0) ?>">
+                                            <div class="product-review-fields">
+                                                <div class="star-rating" data-star-rating>
+                                                    <input type="hidden" name="rating" required value="">
+                                                    <?php for ($star = 1; $star <= 5; $star++): ?>
+                                                        <button type="button"
+                                                                class="star-rating-btn"
+                                                                data-rating-value="<?= $star ?>"
+                                                                aria-label="<?= $star ?> star<?= $star > 1 ? 's' : '' ?>">
+                                                            ★
+                                                        </button>
+                                                    <?php endfor; ?>
+                                                    <span class="star-rating-label">Select rating</span>
+                                                </div>
+                                                <textarea name="review_text" rows="3" maxlength="1000" placeholder="Write your review for this product..."></textarea>
+                                            </div>
+                                            <div>
+                                                <button type="submit" class="btn">Submit Product Review</button>
+                                            </div>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -729,11 +917,13 @@ window.addEventListener('beforeunload', function() {
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
                         <?php endif; ?>
                         <?php if ($order['delivery_status'] === 'completed'): ?>
-                            <button type="button"
-                                    class="btn btn-secondary"
-                                    onclick="openReviewModal(<?= (int) $order['id'] ?>, '<?= esc((string) ($order['reference_number'] ?? 'Order')) ?>')">
-                                Review
-                            </button>
+                            <?php if ((int) ($order['reviewable_count'] ?? 0) > 0): ?>
+                                <a href="<?= site_url('customer/orders?tab=to_review') ?>" class="btn btn-secondary">
+                                    Review Products
+                                </a>
+                            <?php elseif (!empty($order['has_product_reviews'])): ?>
+                                <span class="review-pill">Reviewed</span>
+                            <?php endif; ?>
                         <?php endif; ?>
                         
                         <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship', 'to_receive', 'delivered'])): ?>
@@ -756,6 +946,8 @@ window.addEventListener('beforeunload', function() {
                     <i class="fas fa-truck"></i>
                 <?php elseif (($activeTab ?? 'all') === 'completed'): ?>
                     <i class="fas fa-check-circle"></i>
+                <?php elseif (($activeTab ?? 'all') === 'to_review'): ?>
+                    <i class="fas fa-star"></i>
                 <?php elseif (($activeTab ?? 'all') === 'cancelled'): ?>
                     <i class="fas fa-times-circle"></i>
                 <?php elseif (($activeTab ?? 'all') === 'failed_delivery'): ?>
@@ -776,6 +968,8 @@ window.addEventListener('beforeunload', function() {
                     You don't have any orders out for delivery. Your incoming orders will appear here.
                 <?php elseif (($activeTab ?? 'all') === 'completed'): ?>
                     You don't have any completed orders yet.
+                <?php elseif (($activeTab ?? 'all') === 'to_review'): ?>
+                    You don't have completed products waiting for review.
                 <?php elseif (($activeTab ?? 'all') === 'cancelled'): ?>
                     You don't have any cancelled orders.
                 <?php elseif (($activeTab ?? 'all') === 'failed_delivery'): ?>
@@ -791,85 +985,5 @@ window.addEventListener('beforeunload', function() {
         </div>
     <?php endif; ?>
 </div>
-
-<div id="reviewModal" class="modal" style="display:none;">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="reviewModalTitle">Write a Review</h3>
-                <button type="button" class="close" onclick="closeReviewModal()">&times;</button>
-            </div>
-            <form method="post" action="<?= site_url('customer/review/submit') ?>" id="reviewFormModal">
-                <?= csrf_field() ?>
-                <input type="hidden" name="order_id" id="reviewOrderId">
-                <div class="form-group">
-                    <label for="reviewRating">Rating</label>
-                    <select id="reviewRating" name="rating" required>
-                        <option value="">Select rating</option>
-                        <option value="5">5 Stars</option>
-                        <option value="4">4 Stars</option>
-                        <option value="3">3 Stars</option>
-                        <option value="2">2 Stars</option>
-                        <option value="1">1 Star</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reviewText">Review</label>
-                    <textarea id="reviewText" name="review_text" rows="4" maxlength="1000" placeholder="Share your feedback about this order..."></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn">Submit Review</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<style>
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1300; }
-.modal-dialog { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-.modal-content { width: min(100%, 560px); background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 10px 28px rgba(0,0,0,.2); }
-.modal-header { padding: 1rem 1rem .75rem; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }
-.close { border: none; background: transparent; font-size: 1.5rem; line-height: 1; cursor: pointer; color: #666; }
-#reviewFormModal { padding: 1rem; }
-#reviewFormModal .form-group { margin-bottom: .85rem; }
-#reviewFormModal label { display: block; margin-bottom: .3rem; font-weight: 600; }
-#reviewFormModal select, #reviewFormModal textarea { width: 100%; border: 1px solid #d7dce1; border-radius: 8px; padding: .65rem; font-size: .95rem; }
-#reviewFormModal .form-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; }
-</style>
-
-<script>
-function openReviewModal(orderId, referenceNumber) {
-    document.getElementById('reviewOrderId').value = orderId;
-    document.getElementById('reviewModalTitle').textContent = `Review: ${referenceNumber}`;
-    document.getElementById('reviewRating').value = '';
-    document.getElementById('reviewText').value = '';
-    document.getElementById('reviewModal').style.display = 'block';
-
-    fetch(`<?= site_url('customer/reviews/order') ?>/${orderId}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data && data.success && data.review) {
-            document.getElementById('reviewRating').value = String(data.review.rating ?? '');
-            document.getElementById('reviewText').value = data.review.review_text ?? '';
-        }
-    })
-    .catch(() => {});
-}
-
-function closeReviewModal() {
-    document.getElementById('reviewModal').style.display = 'none';
-}
-
-window.addEventListener('click', function (event) {
-    const modal = document.getElementById('reviewModal');
-    if (event.target === modal) {
-        closeReviewModal();
-    }
-});
-</script>
 
 <?= $this->include('customer/partials/footer') ?>

@@ -192,10 +192,30 @@ class CreateOrderTables extends Migration
                 'unsigned'   => true,
                 'null'       => false,
             ],
+            'assigned_rider_id' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'unsigned'   => true,
+                'null'       => true,
+            ],
             'status' => [
-                'type'       => "ENUM('to_pay','to_ship','to_receive','completed','cancelled','return_refund','failed_delivery')",
+                'type'       => 'VARCHAR',
+                'constraint' => 50,
                 'null'       => false,
                 'default'    => 'to_pay',
+                'comment'    => 'Status can be: to_pay, to_ship, to_receive, completed, cancelled, return_refund, failed_delivery, ready_for_pickup, accepted_by_rider, delivered_to_rider, delivered',
+            ],
+            'assigned_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'picked_up_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'completed_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
             'tracking_number' => [
                 'type'       => 'VARCHAR',
@@ -218,6 +238,22 @@ class CreateOrderTables extends Migration
             'delivered_at' => [
                 'type' => 'DATETIME',
                 'null' => true,
+            ],
+            'delivery_proof_image' => [
+                'type' => 'VARCHAR',
+                'constraint' => 255,
+                'null' => true,
+                'comment' => 'Filename of delivery proof image',
+            ],
+            'delivery_notes' => [
+                'type' => 'TEXT',
+                'null' => true,
+                'comment' => 'Rider notes about delivery',
+            ],
+            'delivery_proof_submitted_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+                'comment' => 'Timestamp when delivery proof was submitted',
             ],
             'notes' => [
                 'type' => 'TEXT',
@@ -303,6 +339,7 @@ class CreateOrderTables extends Migration
         $this->forge->addUniqueKey('order_id', 'uq_order_shipments_order_id');
         $this->forge->addKey('status');
         $this->forge->addForeignKey('order_id', 'orders', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('assigned_rider_id', 'users', 'id', 'CASCADE', 'SET NULL', 'fk_order_shipments_rider');
         $this->forge->createTable('order_shipments', true);
     }
 

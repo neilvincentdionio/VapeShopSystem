@@ -2,6 +2,8 @@
 $products = $products ?? [];
 $categories = $categories ?? [];
 $lowStockProducts = $lowStockProducts ?? [];
+$reviewSummaries = $reviewSummaries ?? [];
+$reviewNotification = $reviewNotification ?? ['total_reviews' => 0, 'unreplied_reviews' => 0, 'latest_review_at' => null];
 
 $categoryOrder = array_values(array_unique(array_filter(array_merge($categories, array_column($products, 'category')))));
 $groupedProducts = [];
@@ -37,11 +39,13 @@ sort($brandOptions);
 
 $lowStockCount = count(array_filter($products, static fn ($product) => (int) ($product['stock_qty'] ?? 0) > 0 && (int) ($product['stock_qty'] ?? 0) <= 10));
 
-$buildProductLines = static function (array $categoryProducts): array {
+$buildProductLines = static function (array $categoryProducts) use ($reviewSummaries): array {
     $lines = [];
 
     foreach ($categoryProducts as $product) {
         $lineKey = strtolower(trim((string) ($product['name'] ?? ''))) . '|' . strtolower(trim((string) ($product['brand'] ?? '')));
+        $productId = (int) ($product['id'] ?? 0);
+        $reviewSummary = $reviewSummaries[$productId] ?? null;
 
         if (! isset($lines[$lineKey])) {
             $lines[$lineKey] = [
@@ -54,6 +58,12 @@ $buildProductLines = static function (array $categoryProducts): array {
                 'prices' => [],
                 'puffs' => [],
                 'flavors' => [],
+                'review_summary' => [
+                    'total_reviews' => 0,
+                    'average_rating' => 0.0,
+                    'unreplied_reviews' => 0,
+                    'latest_review_at' => null,
+                ],
                 'search_parts' => [],
             ];
         }
@@ -72,6 +82,10 @@ $buildProductLines = static function (array $categoryProducts): array {
 
         if ($flavorName !== '') {
             $lines[$lineKey]['flavors'][$flavorName] = $flavorName;
+        }
+
+        if ($reviewSummary !== null && (int) ($reviewSummary['total_reviews'] ?? 0) > (int) ($lines[$lineKey]['review_summary']['total_reviews'] ?? 0)) {
+            $lines[$lineKey]['review_summary'] = $reviewSummary;
         }
 
         $lines[$lineKey]['search_parts'][] = implode(' ', [
@@ -113,6 +127,7 @@ foreach ($groupedProducts as $categoryProducts) {
             --blue: #2563eb;
             --green: #059669;
             --amber: #d97706;
+            --star: #f59e0b;
             --red: #dc2626;
             --violet: #6d5dfc;
             --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
@@ -216,7 +231,7 @@ foreach ($groupedProducts as $categoryProducts) {
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
         }
 
@@ -273,6 +288,12 @@ foreach ($groupedProducts as $categoryProducts) {
             color: #b91c1c;
             background: #fef2f2;
             border-color: #fecaca;
+        }
+
+        .alert-review {
+            color: #92400e;
+            background: #fffbeb;
+            border-color: #fde68a;
         }
 
         .filter-panel {
@@ -635,6 +656,42 @@ foreach ($groupedProducts as $categoryProducts) {
             gap: 0.45rem;
         }
 
+        .review-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            min-height: 30px;
+            padding: 0.35rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .review-badge i {
+            color: var(--star);
+        }
+
+        .review-badge.empty {
+            color: var(--muted);
+            background: #f9fafb;
+            border-color: var(--line);
+        }
+
+        .reply-needed {
+            display: block;
+            margin-top: 0.35rem;
+            color: #b45309;
+            font-size: 0.74rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -714,6 +771,17 @@ foreach ($groupedProducts as $categoryProducts) {
                 </div>
             <?php endif; ?>
 
+            <?php if ((int) ($reviewNotification['unreplied_reviews'] ?? 0) > 0): ?>
+                <div class="alert alert-review">
+                    <i class="fas fa-star"></i>
+                    <span>
+                        <?= number_format((int) $reviewNotification['unreplied_reviews']) ?>
+                        customer review<?= (int) $reviewNotification['unreplied_reviews'] === 1 ? '' : 's' ?> need admin reply.
+                        Check the review badges in the product list.
+                    </span>
+                </div>
+            <?php endif; ?>
+
             <section class="page-hero">
                 <div class="page-title">
                     <h1>Product Management</h1>
@@ -741,6 +809,10 @@ foreach ($groupedProducts as $categoryProducts) {
                 <article class="stat-card">
                     <div class="stat-label">Out of Stock</div>
                     <div class="stat-value stat-red"><?= number_format($outOfStockCount) ?></div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-label">Customer Reviews</div>
+                    <div class="stat-value stat-amber"><?= number_format((int) ($reviewNotification['total_reviews'] ?? 0)) ?></div>
                 </article>
             </section>
 
@@ -844,6 +916,7 @@ foreach ($groupedProducts as $categoryProducts) {
                                             <th>Price</th>
                                             <th>Stock</th>
                                             <th>Status</th>
+                                            <th>Reviews</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -860,6 +933,10 @@ foreach ($groupedProducts as $categoryProducts) {
                                                 sort($prices);
                                                 $stockClass = $stockQty === 0 ? 'stock-empty' : ($stockQty <= 10 ? 'stock-low' : 'stock-ok');
                                                 $statusText = $isActive ? 'Active' : 'Inactive';
+                                                $reviewSummary = $productLine['review_summary'] ?? ['total_reviews' => 0, 'average_rating' => 0.0, 'unreplied_reviews' => 0];
+                                                $reviewCount = (int) ($reviewSummary['total_reviews'] ?? 0);
+                                                $averageRating = (float) ($reviewSummary['average_rating'] ?? 0);
+                                                $unrepliedReviews = (int) ($reviewSummary['unreplied_reviews'] ?? 0);
                                                 $searchText = strtolower(implode(' ', $productLine['search_parts'] ?? []));
                                                 $stockState = $stockQty === 0 ? 'out' : ($stockQty <= 10 ? 'low' : 'ok');
                                                 $priceText = count($prices) > 1
@@ -907,6 +984,19 @@ foreach ($groupedProducts as $categoryProducts) {
                                                 <td><?= esc($priceText) ?></td>
                                                 <td><span class="stock-badge <?= $stockClass ?>"><?= $stockQty ?></span></td>
                                                 <td><span class="status-badge <?= $isActive ? 'status-active' : 'status-inactive' ?>"><?= $statusText ?></span></td>
+                                                <td>
+                                                    <?php if ($reviewCount > 0): ?>
+                                                        <a href="<?= site_url('products/view/' . (int) ($productLine['id'] ?? 0)) ?>#product-reviews" class="review-badge" title="View customer reviews">
+                                                            <i class="fas fa-star"></i>
+                                                            <?= number_format($averageRating, 1) ?> (<?= $reviewCount ?>)
+                                                        </a>
+                                                        <?php if ($unrepliedReviews > 0): ?>
+                                                            <span class="reply-needed"><?= $unrepliedReviews ?> need<?= $unrepliedReviews === 1 ? 's' : '' ?> reply</span>
+                                                        <?php endif; ?>
+                                                    <?php else: ?>
+                                                        <span class="review-badge empty">No reviews</span>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td>
                                                     <div class="actions">
                                                         <a href="<?= site_url('products/view/' . (int) ($productLine['id'] ?? 0)) ?>" class="btn btn-outline btn-icon" title="View product" aria-label="View <?= esc($productLine['name'] ?? 'product') ?>">

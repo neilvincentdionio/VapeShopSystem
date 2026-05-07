@@ -32,7 +32,7 @@ class CreateUsersTable extends Migration
                 'null'       => false,
             ],
             'role' => [
-                'type'    => "ENUM('admin', 'customer')",
+                'type'    => "ENUM('admin','customer','rider')",
                 'null'    => false,
                 'default' => 'customer',
             ],
@@ -81,8 +81,7 @@ class CreateUsersTable extends Migration
                 'unsigned'   => true,
             ],
             'phone_number' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 30,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'legal_age_confirmed' => [
@@ -133,33 +132,27 @@ class CreateUsersTable extends Migration
                 'null'       => false,
             ],
             'address_line' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 255,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'city' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 120,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'country' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 120,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'barangay' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 120,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'province' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 120,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'postal_code' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 20,
+                'type'       => 'TEXT',
                 'null'       => true,
             ],
             'is_primary' => [

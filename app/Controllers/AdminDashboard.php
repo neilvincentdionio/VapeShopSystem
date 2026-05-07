@@ -47,7 +47,7 @@ class AdminDashboard extends BaseController
             'totalOrders' => $db->query("SELECT COUNT(*) as total FROM orders")->getRow()->total,
             'totalProducts' => $db->query("SELECT COUNT(*) as total FROM products")->getRow()->total,
             'pendingReviews' => $db->query("SELECT COUNT(*) as total FROM product_reviews WHERE status = 'pending'")->getRow()->total,
-            'lowStockCount' => $db->query("SELECT COUNT(*) as total FROM products WHERE stock_quantity < 10")->getRow()->total,
+            'lowStockCount' => $db->query("SELECT COUNT(*) as total FROM products WHERE stock_qty < 10")->getRow()->total,
             'todayRevenue' => $db->query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE DATE(created_at) = CURDATE() AND payment_status = 'paid'")->getRow()->total
         ];
     }
@@ -95,26 +95,17 @@ class AdminDashboard extends BaseController
         $db = \Config\Database::connect();
         
         return $db->query("
-            SELECT id, name, stock_quantity, price
+            SELECT id, name, stock_qty AS stock_quantity, price
             FROM products 
-            WHERE stock_quantity < 10
-            ORDER BY stock_quantity ASC
+            WHERE stock_qty < 10
+            ORDER BY stock_qty ASC
             LIMIT 10
         ")->getResult();
     }
 
     private function getRecentReviews()
     {
-        $db = \Config\Database::connect();
-        
-        return $db->query("
-            SELECT pr.*, p.name as product_name, u.name as user_name
-            FROM product_reviews pr
-            JOIN products p ON pr.product_id = p.id
-            JOIN users u ON pr.user_id = u.id
-            ORDER BY pr.created_at DESC
-            LIMIT 5
-        ")->getResult();
+        return $this->reviewModel->getRecentProductReviews(5);
     }
 
     public function getRevenueData()

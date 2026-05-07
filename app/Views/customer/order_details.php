@@ -197,9 +197,6 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <?php if ($order['delivery_status'] === 'delivered'): ?>
                     <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Delivery</a>
                 <?php endif; ?>
-                <?php if ($order['delivery_status'] === 'completed'): ?>
-                    <button type="button" class="btn btn-secondary" onclick="openReviewModal(<?= (int) $order['id'] ?>, '<?= esc((string) ($order['reference_number'] ?? 'Order')) ?>')">Review</button>
-                <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
@@ -210,40 +207,6 @@ if (!function_exists('getDeliveryStatusLabel')) {
             <a href="<?= site_url('customer/orders') ?>" class="btn">Back to Orders</a>
         </div>
     <?php endif; ?>
-</div>
-
-<div id="reviewModal" class="modal review-modal" style="display:none;">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="reviewModalTitle">Write a Review</h3>
-                <button type="button" class="close" onclick="closeReviewModal()">&times;</button>
-            </div>
-            <form method="post" action="<?= site_url('customer/review/submit') ?>" id="reviewFormModal">
-                <?= csrf_field() ?>
-                <input type="hidden" name="order_id" id="reviewOrderId">
-                <div class="form-group">
-                    <label for="reviewRating">Rating</label>
-                    <select id="reviewRating" name="rating" required>
-                        <option value="">Select rating</option>
-                        <option value="5">5 Stars</option>
-                        <option value="4">4 Stars</option>
-                        <option value="3">3 Stars</option>
-                        <option value="2">2 Stars</option>
-                        <option value="1">1 Star</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reviewText">Review</label>
-                    <textarea id="reviewText" name="review_text" rows="4" maxlength="1000" placeholder="Share your feedback about this order..."></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn">Submit Review</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 
 <style>
@@ -668,76 +631,6 @@ if (!function_exists('getDeliveryStatusLabel')) {
         flex-wrap: wrap;
     }
 
-    .review-modal {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,.45);
-        z-index: 1300;
-    }
-
-    .review-modal .modal-dialog {
-        min-height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem;
-    }
-
-    .review-modal .modal-content {
-        width: min(100%, 560px);
-        background: #fff;
-        border-radius: 12px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 10px 28px rgba(0,0,0,.2);
-    }
-
-    .review-modal .modal-header {
-        padding: 1rem 1rem .75rem;
-        border-bottom: 1px solid #eee;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .review-modal .close {
-        border: none;
-        background: transparent;
-        font-size: 1.5rem;
-        line-height: 1;
-        cursor: pointer;
-        color: #666;
-    }
-
-    #reviewFormModal {
-        padding: 1rem;
-    }
-
-    #reviewFormModal .form-group {
-        margin-bottom: .85rem;
-    }
-
-    #reviewFormModal label {
-        display: block;
-        margin-bottom: .3rem;
-        font-weight: 600;
-    }
-
-    #reviewFormModal select,
-    #reviewFormModal textarea {
-        width: 100%;
-        border: 1px solid #d7dce1;
-        border-radius: 8px;
-        padding: .65rem;
-        font-size: .95rem;
-    }
-
-    #reviewFormModal .form-actions {
-        display: flex;
-        gap: .5rem;
-        justify-content: flex-end;
-        margin-top: 1rem;
-    }
-    
     .btn {
         display: inline-flex;
         align-items: center;
@@ -930,36 +823,6 @@ function refreshTracking() {
         }
     }).catch(() => {});
 }
-function openReviewModal(orderId, referenceNumber) {
-    document.getElementById('reviewOrderId').value = orderId;
-    document.getElementById('reviewModalTitle').textContent = `Review: ${referenceNumber}`;
-    document.getElementById('reviewRating').value = '';
-    document.getElementById('reviewText').value = '';
-    document.getElementById('reviewModal').style.display = 'block';
-
-    fetch(`<?= site_url('customer/reviews/order') ?>/${orderId}`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data && data.success && data.review) {
-            document.getElementById('reviewRating').value = String(data.review.rating ?? '');
-            document.getElementById('reviewText').value = data.review.review_text ?? '';
-        }
-    })
-    .catch(() => {});
-}
-
-function closeReviewModal() {
-    document.getElementById('reviewModal').style.display = 'none';
-}
-
-window.addEventListener('click', function (event) {
-    const modal = document.getElementById('reviewModal');
-    if (event.target === modal) {
-        closeReviewModal();
-    }
-});
 document.addEventListener('DOMContentLoaded', () => {
     initTrackingMap();
     refreshTracking();
