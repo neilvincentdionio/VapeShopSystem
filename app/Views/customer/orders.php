@@ -891,6 +891,10 @@ window.addEventListener('beforeunload', function() {
                     <?php endif; ?>
                     
                     <div class="action-buttons">
+                        <a href="<?= site_url('customer/messages?order_id=' . (int) $order['id']) ?>" class="btn">
+                            Contact Seller
+                        </a>
+
                         <?php if ($order['delivery_status'] === 'to_pay'): ?>
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">
                                 <?= ($order['payment_method'] ?? 'cash') === 'cash' ? 'Confirm Payment' : 'Pay Now' ?>

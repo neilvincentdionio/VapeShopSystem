@@ -73,10 +73,16 @@ $routes->get('/customer/cart', 'Dashboard::customerCart', ['filter' => 'auth']);
 $routes->get('/customer/user-management', static function () {
     return redirect()->to('/dashboard')->with('error', 'Access denied.');
 }, ['filter' => 'auth']);
+$routes->get('/customer/messages', 'Messages::customerInbox', ['filter' => 'auth']);
+$routes->post('/customer/messages/send', 'Messages::customerSend', ['filter' => 'auth']);
+$routes->get('/messages/(:num)/poll', 'Messages::poll/$1', ['filter' => 'auth']);
 
 // Rider dashboard routes (Rider only)
 $routes->get('/rider/dashboard', 'Dashboard::riderDashboard', ['filter' => 'auth:rider']);
 $routes->get('/rider/deliveries', 'Dashboard::riderDeliveries', ['filter' => 'auth:rider']);
+$routes->get('/rider/messages', 'Messages::riderInbox', ['filter' => 'auth:rider']);
+$routes->get('/rider/messages/(:num)', 'Messages::riderConversation/$1', ['filter' => 'auth:rider']);
+$routes->post('/rider/messages/(:num)/reply', 'Messages::riderReply/$1', ['filter' => 'auth:rider']);
 $routes->get('/dashboard/live-update-token', 'Dashboard::liveUpdateToken', ['filter' => 'auth']);
 $routes->post('/dashboard/riderUpdateDeliveryStatus', 'Dashboard::riderUpdateDeliveryStatus', ['filter' => 'auth:rider']);
 $routes->post('/dashboard/submitDeliveryProof', 'Dashboard::submitDeliveryProof', ['filter' => 'auth:rider']);
@@ -191,6 +197,11 @@ $routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' 
 $routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1', ['filter' => 'auth:admin']);
 $routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => 'auth:admin']);
 $routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => 'auth:admin']);
+$routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => 'auth']);
+$routes->get('/admin/messages/(:num)', 'Messages::adminConversation/$1', ['filter' => 'auth']);
+$routes->post('/admin/messages/(:num)/reply', 'Messages::adminReply/$1', ['filter' => 'auth']);
+$routes->post('/admin/messages/(:num)/status', 'Messages::updateStatus/$1', ['filter' => 'auth']);
+$routes->post('/admin/messages/(:num)/assign-rider', 'Messages::assignRider/$1', ['filter' => 'auth']);
 
 // Additional routes for index views compatibility
 $routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => 'auth:admin']);

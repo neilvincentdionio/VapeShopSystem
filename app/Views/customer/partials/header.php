@@ -226,6 +226,7 @@
                 <a href="<?= site_url('customer/home') ?>" class="<?= ($active_page ?? '') === 'home' ? 'active' : '' ?>">Home</a>
                 <a href="<?= site_url('customer/products') ?>" class="<?= ($active_page ?? '') === 'products' ? 'active' : '' ?>">Products</a>
                 <a href="<?= site_url('customer/orders') ?>" class="<?= ($active_page ?? '') === 'orders' ? 'active' : '' ?>">Orders</a>
+                <a href="<?= site_url('customer/messages') ?>" class="<?= ($active_page ?? '') === 'messages' ? 'active' : '' ?>">Messages</a>
                 <a href="<?= site_url('customer/cart') ?>" class="cart-link <?= ($active_page ?? '') === 'cart' ? 'active' : '' ?>">Cart &#128722;</a>
             </div>
 

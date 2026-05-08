@@ -1,6 +1,16 @@
-<?= $this->include('admin/partials/header') ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= esc($page_title ?? 'Order Details') ?> - Quick Puff Vape Shop System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <?= $this->include('admin/partials/sidebar_styles') ?>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<?= $this->include('admin/partials/sidebar') ?>
 
 <?php
 // Helper function to get delivery status labels
@@ -67,7 +77,7 @@ if (!function_exists('extractGcashReference')) {
                 </div>
                 <div class="order-total">
                     <h3>Total Amount</h3>
-                    <p class="total-amount">₱<?= number_format((float) $order['total_amount'], 2) ?></p>
+                    <p class="total-amount">&#8369;<?= number_format((float) $order['total_amount'], 2) ?></p>
                 </div>
             </div>
 
@@ -169,10 +179,10 @@ if (!function_exists('extractGcashReference')) {
                         <div class="order-item">
                             <div class="item-info">
                                 <div class="item-name"><?= esc($item['name']) ?></div>
-                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> × ₱<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
                             </div>
                             <div class="item-price">
-                                ₱<?= number_format((float) $item['qty'] * (float) $item['unit_price'], 2) ?>
+                                &#8369;<?= number_format((float) $item['qty'] * (float) $item['unit_price'], 2) ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -184,15 +194,15 @@ if (!function_exists('extractGcashReference')) {
             <div class="order-summary">
                 <div class="summary-row">
                     <span>Subtotal:</span>
-                    <span>₱<?= number_format((float) $order['total_amount'], 2) ?></span>
+                    <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                 </div>
                 <div class="summary-row">
                     <span>Shipping:</span>
-                    <span>₱0.00</span>
+                    <span>&#8369;0.00</span>
                 </div>
                 <div class="summary-row total">
                     <span>Total:</span>
-                    <span>₱<?= number_format((float) $order['total_amount'], 2) ?></span>
+                    <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                 </div>
             </div>
 
@@ -307,8 +317,9 @@ function updateDeliveryStatus(orderId, newStatus) {
 
 <style>
     .orders-container {
-        max-width: 800px;
-        margin: 0 auto;
+        max-width: none;
+        margin-left: 270px;
+        width: calc(100% - 270px);
         padding: 2rem;
     }
     
@@ -591,6 +602,279 @@ function updateDeliveryStatus(orderId, newStatus) {
         margin-bottom: 0.5rem;
         color: #333;
     }
+
+    @media (max-width: 992px) {
+        .orders-container {
+            margin-left: 0;
+            width: 100%;
+            padding: 1rem;
+        }
+    }
+
+    body {
+        background: #f6f8fb;
+        color: #111827;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .orders-container {
+        display: grid;
+        gap: 1rem;
+        margin-left: 270px;
+        width: calc(100% - 270px);
+        min-height: 100vh;
+        padding: 1.5rem;
+        background: #f6f8fb;
+    }
+
+    .orders-header {
+        display: grid;
+        gap: .35rem;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.25rem;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+    }
+
+    .back-link {
+        width: fit-content;
+        color: #047857;
+        margin-bottom: .35rem;
+        font-weight: 700;
+    }
+
+    .back-link:hover {
+        color: #065f46;
+    }
+
+    .orders-header h1 {
+        color: #111827;
+        font-size: 1.65rem;
+        line-height: 1.2;
+    }
+
+    .orders-header p {
+        color: #6b7280;
+        font-size: .98rem;
+    }
+
+    .order-detail-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+    }
+
+    .order-header {
+        gap: 1rem;
+        background: #ffffff;
+        padding: 1.25rem;
+    }
+
+    .order-info h2 {
+        color: #047857;
+        font-size: 1.45rem;
+        letter-spacing: 0;
+    }
+
+    .order-info p,
+    .item-details,
+    .stage-description {
+        color: #6b7280;
+    }
+
+    .order-total {
+        min-width: 210px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 1rem;
+    }
+
+    .order-total h3 {
+        color: #6b7280;
+        font-weight: 700;
+    }
+
+    .total-amount {
+        color: #111827;
+        font-size: 1.7rem;
+    }
+
+    .order-status {
+        border-radius: 999px;
+        font-size: .78rem;
+        letter-spacing: 0;
+        text-transform: none;
+        font-weight: 800;
+    }
+
+    .status-to-pay,
+    .status-to_pay {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .status-to-ship,
+    .status-to_ship,
+    .status-ready-for-pickup,
+    .status-ready_for_pickup,
+    .status-accepted-by-rider,
+    .status-accepted_by_rider,
+    .status-delivered-to-rider,
+    .status-delivered_to_rider {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .status-to-receive,
+    .status-to_receive,
+    .status-delivered {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+
+    .status-completed {
+        background: #dcfce7;
+        color: #047857;
+    }
+
+    .status-cancelled,
+    .status-failed-delivery,
+    .status-failed_delivery {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .tracking-info,
+    .shipping-info,
+    .delivery-tracker,
+    .order-items,
+    .order-summary,
+    .admin-delivery-actions {
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1.25rem;
+    }
+
+    .tracking-info h3,
+    .shipping-info h3,
+    .delivery-tracker h3,
+    .order-items h3,
+    .order-summary h3,
+    .admin-delivery-actions h3 {
+        color: #111827;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .tracker-container {
+        gap: .8rem;
+        padding: .35rem 0;
+    }
+
+    .tracker-icon {
+        width: 44px;
+        height: 44px;
+        background: #f3f4f6;
+        color: #9ca3af;
+    }
+
+    .tracker-step.completed .tracker-icon {
+        background: #dcfce7;
+        color: #047857;
+    }
+
+    .tracker-line {
+        height: 3px;
+        background: #e5e7eb;
+    }
+
+    .tracker-line.completed {
+        background: #22c55e;
+    }
+
+    .stage-name,
+    .item-name,
+    .item-price {
+        color: #111827;
+        font-weight: 800;
+    }
+
+    .order-item {
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .summary-row {
+        color: #374151;
+    }
+
+    .summary-row.total {
+        border-top: 1px solid #d1d5db;
+        color: #111827;
+    }
+
+    .admin-delivery-actions {
+        background: #f9fafb;
+        border-bottom: 0;
+    }
+
+    .btn-checkout,
+    .empty-state .btn {
+        border-radius: 9px;
+        background: #27c56f;
+        color: #ffffff;
+        text-decoration: none;
+        box-shadow: none;
+    }
+
+    .btn-checkout:hover,
+    .empty-state .btn:hover {
+        background: #16a34a;
+        box-shadow: 0 8px 18px rgba(22, 163, 74, .18);
+    }
+
+    #admin_delivery_map {
+        overflow: hidden;
+        border-color: #d1d5db !important;
+        border-radius: 10px !important;
+    }
+
+    @media (max-width: 992px) {
+        .orders-container {
+            margin-left: 0;
+            width: 100%;
+            padding: 1rem;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .order-header {
+            flex-direction: column;
+        }
+
+        .order-total {
+            width: 100%;
+            text-align: left;
+        }
+
+        .tracker-container {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .tracker-step {
+            align-items: flex-start;
+            flex-direction: row;
+            gap: .75rem;
+            width: 100%;
+        }
+
+        .tracker-line {
+            display: none;
+        }
+    }
 </style>
 
-<?= $this->include('admin/partials/footer') ?>
+</body>
+</html>
