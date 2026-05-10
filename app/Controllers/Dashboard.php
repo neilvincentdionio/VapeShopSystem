@@ -9,6 +9,7 @@ use App\Models\OrderModel;
 use App\Models\ReviewModel;
 use App\Models\RecordModel;
 use App\Libraries\SecurityAuditService;
+use App\Libraries\NotificationService;
 
 class Dashboard extends BaseController
 {
@@ -20,6 +21,7 @@ class Dashboard extends BaseController
     protected $recordModel;
     protected $reviewModel;
     protected $securityAuditService;
+    protected NotificationService $notificationService;
 
     public function __construct()
     {
@@ -31,6 +33,7 @@ class Dashboard extends BaseController
         $this->reviewModel = new ReviewModel();
         $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
+        $this->notificationService = new NotificationService();
     }
 
     /**
@@ -624,6 +627,30 @@ class Dashboard extends BaseController
                 }
 
                 $result = $this->orderModel->updateDeliveryStatus($orderId, 'accepted_by_rider', []);
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                            'category' => 'delivery',
+                            'type' => 'delivery_accepted',
+                            'title' => 'Delivery accepted',
+                            'message' => 'Rider accepted order ' . $reference . '.',
+                            'link' => site_url('customer/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                        $this->notificationService->notifyAdmins([
+                            'category' => 'delivery',
+                            'type' => 'delivery_accepted',
+                            'title' => 'Delivery accepted',
+                            'message' => 'Rider accepted order ' . $reference . '.',
+                            'link' => site_url('admin/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                    }
+                }
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Delivery accepted successfully' : 'Unable to accept delivery',
@@ -638,6 +665,21 @@ class Dashboard extends BaseController
                 $result = $this->orderModel->updateDeliveryStatus($orderId, 'delivered_to_rider', [
                     'picked_up_at' => date('Y-m-d H:i:s'),
                 ]);
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                            'category' => 'delivery',
+                            'type' => 'order_picked_up',
+                            'title' => 'Order picked up',
+                            'message' => 'Your order ' . $reference . ' was picked up by the rider.',
+                            'link' => site_url('customer/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                    }
+                }
 
                 return $this->response->setJSON([
                     'success' => (bool) $result,
@@ -678,6 +720,21 @@ class Dashboard extends BaseController
                 }
 
                 $result = $this->orderModel->updateDeliveryStatus($orderId, 'to_receive', $locationData);
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                            'category' => 'delivery',
+                            'type' => 'out_for_delivery',
+                            'title' => 'Out for delivery',
+                            'message' => 'Your order ' . $reference . ' is out for delivery.',
+                            'link' => site_url('dashboard/orderTracking/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                    }
+                }
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Delivery started' : 'Unable to start delivery',
@@ -708,6 +765,30 @@ class Dashboard extends BaseController
                 }
 
                 $result = $this->orderModel->updateDeliveryStatus($orderId, 'failed_delivery', $payload);
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $this->notificationService->notifyOrderAudience($order, [
+                            'category' => 'delivery',
+                            'type' => 'delivery_cancelled',
+                            'title' => 'Delivery cancelled',
+                            'message' => 'Delivery for order ' . $reference . ' was cancelled by the rider.',
+                            'link' => site_url('admin/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ], false, false, true);
+                        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                            'category' => 'delivery',
+                            'type' => 'delivery_cancelled',
+                            'title' => 'Delivery cancelled',
+                            'message' => 'Delivery for your order ' . $reference . ' was cancelled.',
+                            'link' => site_url('customer/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                    }
+                }
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Delivery cancelled successfully' : 'Unable to cancel delivery',
@@ -761,6 +842,28 @@ class Dashboard extends BaseController
         if (! $updated) {
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign rider']);
         }
+        $order = $this->orderModel->getOrder($orderId);
+        if ($order) {
+            $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+            $this->notificationService->notifyUsers([$riderId], [
+                'category' => 'delivery',
+                'type' => 'rider_assigned',
+                'title' => 'New delivery assigned',
+                'message' => 'Order ' . $reference . ' is ready for your pickup.',
+                'link' => site_url('rider/deliveries?order_id=' . $orderId . '#delivery-' . $orderId),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+            $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                'category' => 'delivery',
+                'type' => 'rider_assigned',
+                'title' => 'Rider assigned',
+                'message' => 'A rider was assigned to your order ' . $reference . '.',
+                'link' => site_url('customer/order-details/' . $orderId),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+        }
 
         return $this->response->setJSON(['success' => true, 'message' => 'Rider assigned successfully']);
     }
@@ -800,6 +903,19 @@ class Dashboard extends BaseController
 
         try {
             $this->orderModel->markOrderDeliveredToRider($orderId);
+            $order = $this->orderModel->getOrder((int) $orderId);
+            if ($order) {
+                $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                $this->notificationService->notifyOrderAudience($order, [
+                    'category' => 'delivery',
+                    'type' => 'order_handed_to_rider',
+                    'title' => 'Order handed to rider',
+                    'message' => 'Order ' . $reference . ' was handed to the rider.',
+                    'link' => site_url('rider/order-details/' . (int) $orderId),
+                    'related_type' => 'order',
+                    'related_id' => (int) $orderId,
+                ], false, true, false);
+            }
             return $this->response->setJSON(['success' => true, 'message' => 'Order delivered to rider']);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
@@ -934,6 +1050,19 @@ class Dashboard extends BaseController
                 }
 
                 $this->syncOrderToRecord($orderId);
+                $order = $this->orderModel->getOrder($orderId);
+                if ($order) {
+                    $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                    $this->notificationService->notifyAdmins([
+                        'category' => 'delivery',
+                        'type' => 'delivery_proof',
+                        'title' => 'Delivery proof submitted',
+                        'message' => 'Rider submitted proof for order ' . $reference . '.',
+                        'link' => site_url('admin/order-details/' . $orderId . '#delivery-proof'),
+                        'related_type' => 'order',
+                        'related_id' => $orderId,
+                    ]);
+                }
                 
                 return $this->response->setJSON(['success' => true, 'message' => 'Delivery proof submitted successfully']);
             } else {
@@ -1304,6 +1433,28 @@ class Dashboard extends BaseController
         }
 
         $this->clearCustomerCart();
+        $order = $this->orderModel->getOrder((int) $orderId);
+        if ($order) {
+            $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+            $this->notificationService->notifyUsers([$customerId], [
+                'category' => 'orders',
+                'type' => 'order_created',
+                'title' => 'Order placed',
+                'message' => 'Your order ' . $reference . ' was placed successfully.',
+                'link' => site_url('customer/order-details/' . (int) $orderId),
+                'related_type' => 'order',
+                'related_id' => (int) $orderId,
+            ]);
+            $this->notificationService->notifyAdmins([
+                'category' => 'orders',
+                'type' => 'new_order',
+                'title' => 'New customer order',
+                'message' => 'New direct order ' . $reference . ' needs processing.',
+                'link' => site_url('orders?order_id=' . (int) $orderId . '#order-' . (int) $orderId),
+                'related_type' => 'order',
+                'related_id' => (int) $orderId,
+            ]);
+        }
 
         return $this->response->setStatusCode(200)->setJSON([
             'success' => true,
@@ -1486,6 +1637,30 @@ class Dashboard extends BaseController
             $successMessage = $paymentMethod === 'cash_on_delivery'
                 ? 'Order placed successfully. COD payment is pending.'
                 : 'GCash transaction successful. Your order is marked as paid.';
+            $order = $this->orderModel->getOrder((int) $orderId);
+            if ($order) {
+                $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                $this->notificationService->notifyUsers([$customerId], [
+                    'category' => 'orders',
+                    'type' => 'order_created',
+                    'title' => 'Order placed',
+                    'message' => 'Your order ' . $reference . ' was placed successfully.',
+                    'link' => site_url('customer/order-details/' . (int) $orderId),
+                    'related_type' => 'order',
+                    'related_id' => (int) $orderId,
+                ]);
+                $this->notificationService->notifyAdmins([
+                    'category' => 'orders',
+                    'type' => $paymentMethod === 'gcash' ? 'payment_received' : 'new_order',
+                    'title' => $paymentMethod === 'gcash' ? 'GCash order paid' : 'New COD order',
+                    'message' => 'Order ' . $reference . ' is ready for processing.',
+                    'link' => $paymentMethod === 'gcash'
+                        ? site_url('admin/order-details/' . (int) $orderId)
+                        : site_url('orders?order_id=' . (int) $orderId . '#order-' . (int) $orderId),
+                    'related_type' => 'order',
+                    'related_id' => (int) $orderId,
+                ]);
+            }
             return redirect()->to(site_url('customer/orders?tab=' . $redirectTab))
                 ->with('success', $successMessage);
         } catch (\Throwable $e) {
@@ -2076,9 +2251,26 @@ class Dashboard extends BaseController
             $product['stock'] = array_sum(array_column($product['variants'], 'stock'));
         }
 
+        $highlightReviewId = (int) ($this->request->getGet('review_id') ?? 0);
+        $productReviews = $this->reviewModel->getReviewsForProduct((int) $id, 'approved');
+        if ($highlightReviewId > 0) {
+            $highlightReview = $this->reviewModel->find($highlightReviewId);
+            $alreadyIncluded = array_filter($productReviews, static fn (array $review): bool => (int) ($review['id'] ?? 0) === $highlightReviewId);
+            if (
+                $highlightReview
+                && $alreadyIncluded === []
+                && (int) ($highlightReview['product_id'] ?? 0) === (int) $id
+                && (int) ($highlightReview['user_id'] ?? 0) === (int) $this->session->get('user_id')
+            ) {
+                $productReviews = array_merge([$highlightReview], $productReviews);
+            }
+        }
+
         return view('customer/product_details', $this->getCustomerPageData('Product Details', 'products', [
             'product' => $product,
             'age_allowed' => $this->canCustomerPurchase(),
+            'productReviews' => $productReviews,
+            'highlightReviewId' => $highlightReviewId,
         ]));
     }
 
@@ -2483,6 +2675,43 @@ class Dashboard extends BaseController
 
             if ($result) {
                 $this->syncOrderToRecord($orderId);
+                $updatedOrder = $this->orderModel->getOrder($orderId) ?? $order;
+                $reference = (string) ($updatedOrder['reference_number'] ?? ('#' . $orderId));
+                $customerLink = site_url('customer/order-details/' . $orderId);
+                $riderLink = site_url('rider/order-details/' . $orderId);
+                $adminLink = site_url('admin/order-details/' . $orderId);
+
+                $this->notificationService->notifyUsers([(int) ($updatedOrder['created_by'] ?? 0)], [
+                    'category' => 'orders',
+                    'type' => 'order_status',
+                    'title' => 'Order status updated',
+                    'message' => 'Order ' . $reference . ' is now ' . $this->getStatusLabel((string) $newStatus) . '.',
+                    'link' => $customerLink,
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+                if (! empty($updatedOrder['assigned_rider_id'])) {
+                    $this->notificationService->notifyUsers([(int) $updatedOrder['assigned_rider_id']], [
+                        'category' => 'delivery',
+                        'type' => 'delivery_status',
+                        'title' => 'Delivery status updated',
+                        'message' => 'Order ' . $reference . ' is now ' . $this->getStatusLabel((string) $newStatus) . '.',
+                        'link' => $riderLink,
+                        'related_type' => 'order',
+                        'related_id' => $orderId,
+                    ]);
+                }
+                if (in_array($newStatus, ['completed', 'failed_delivery'], true)) {
+                    $this->notificationService->notifyAdmins([
+                        'category' => 'orders',
+                        'type' => $newStatus === 'completed' ? 'approval' : 'cancellation',
+                        'title' => $newStatus === 'completed' ? 'Order completed' : 'Delivery failed',
+                        'message' => 'Order ' . $reference . ' is now ' . $this->getStatusLabel((string) $newStatus) . '.',
+                        'link' => $adminLink,
+                        'related_type' => 'order',
+                        'related_id' => $orderId,
+                    ]);
+                }
                 return $this->response->setStatusCode(200)->setJSON([
                     'success' => true,
                     'message' => 'Delivery status updated successfully.',
@@ -2623,6 +2852,27 @@ class Dashboard extends BaseController
                 : $this->orderModel->updateOrder($orderId, [], [], $shipmentData);
 
             if ($result) {
+                $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                    'category' => 'delivery',
+                    'type' => 'delivery_info',
+                    'title' => 'Delivery information updated',
+                    'message' => 'Delivery details were updated for order ' . $reference . '.',
+                    'link' => site_url('customer/order-details/' . $orderId),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+                if (! empty($order['assigned_rider_id'])) {
+                    $this->notificationService->notifyUsers([(int) $order['assigned_rider_id']], [
+                        'category' => 'delivery',
+                        'type' => 'delivery_info',
+                        'title' => 'Delivery information updated',
+                        'message' => 'Delivery details changed for order ' . $reference . '.',
+                        'link' => site_url('rider/order-details/' . $orderId),
+                        'related_type' => 'order',
+                        'related_id' => $orderId,
+                    ]);
+                }
                 return $this->response->setJSON([
                     'success' => true,
                     'message' => 'Delivery information saved successfully.',
@@ -3038,6 +3288,26 @@ class Dashboard extends BaseController
         }
 
         $this->syncOrderToRecord((int) ($order['id'] ?? 0));
+        $orderId = (int) ($order['id'] ?? 0);
+        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+            'category' => 'payments',
+            'type' => 'payment_received',
+            'title' => 'Payment processed',
+            'message' => 'Payment for order ' . $reference . ' was processed.',
+            'link' => site_url('customer/order-details/' . $orderId),
+            'related_type' => 'order',
+            'related_id' => $orderId,
+        ]);
+        $this->notificationService->notifyAdmins([
+            'category' => 'payments',
+            'type' => 'payment_received',
+            'title' => 'Payment processed',
+            'message' => 'Customer paid order ' . $reference . '.',
+            'link' => site_url('admin/order-details/' . $orderId),
+            'related_type' => 'order',
+            'related_id' => $orderId,
+        ]);
 
         return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
     }
@@ -3084,6 +3354,17 @@ class Dashboard extends BaseController
         }
 
         $this->syncOrderToRecord((int) ($order['id'] ?? 0));
+        $orderId = (int) ($order['id'] ?? 0);
+        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+        $this->notificationService->notifyAdmins([
+            'category' => 'cancellations',
+            'type' => 'order_cancelled',
+            'title' => 'Order cancelled',
+            'message' => 'Customer cancelled order ' . $reference . '.',
+            'link' => site_url('admin/order-details/' . $orderId),
+            'related_type' => 'order',
+            'related_id' => $orderId,
+        ]);
 
         return redirect()->to('/customer/orders')->with('success', 'Order cancelled successfully.');
     }
@@ -3133,6 +3414,27 @@ class Dashboard extends BaseController
         }
 
         $this->syncOrderToRecord($orderId);
+        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+        $this->notificationService->notifyAdmins([
+            'category' => 'approvals',
+            'type' => 'order_received',
+            'title' => 'Order received confirmed',
+            'message' => 'Customer confirmed receipt of order ' . $reference . '.',
+            'link' => site_url('admin/order-details/' . $orderId),
+            'related_type' => 'order',
+            'related_id' => $orderId,
+        ]);
+        if (! empty($order['assigned_rider_id'])) {
+            $this->notificationService->notifyUsers([(int) $order['assigned_rider_id']], [
+                'category' => 'delivery',
+                'type' => 'order_received',
+                'title' => 'Order received confirmed',
+                'message' => 'Customer confirmed receipt of order ' . $reference . '.',
+                'link' => site_url('rider/order-details/' . $orderId),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+        }
 
         return redirect()->to('/customer/orders?tab=completed')->with('success', 'Order received successfully. Order is now completed.');
     }
@@ -3292,6 +3594,16 @@ class Dashboard extends BaseController
         if (! $saved) {
             return redirect()->back()->withInput()->with('error', 'Failed to save product review. Please try again.');
         }
+        $reviewId = (int) ($existing['id'] ?? $this->reviewModel->getInsertID() ?? 0);
+        $this->notificationService->notifyAdmins([
+            'category' => 'approvals',
+            'type' => 'review_submitted',
+            'title' => 'Product review submitted',
+            'message' => 'A customer submitted a product review for order #' . $orderId . '.',
+            'link' => site_url('products/view/' . $productId . '?review_id=' . $reviewId . '#review-' . $reviewId),
+            'related_type' => 'review',
+            'related_id' => $reviewId,
+        ]);
 
         return redirect()->to('/customer/orders?tab=to_review')->with('success', 'Your product review has been posted.');
     }
@@ -3344,8 +3656,22 @@ class Dashboard extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Invalid review']);
         }
 
+        $review = $this->reviewModel->find($reviewId);
+        $success = (bool) $this->reviewModel->update($reviewId, ['status' => $status]);
+        if ($success && $review) {
+            $this->notificationService->notifyUsers([(int) ($review['user_id'] ?? 0)], [
+                'category' => 'approvals',
+                'type' => 'review_' . $status,
+                'title' => 'Review ' . ucfirst($status),
+                'message' => 'Your product review was ' . $status . '.',
+                'link' => site_url('customer/orders?tab=completed'),
+                'related_type' => 'review',
+                'related_id' => $reviewId,
+            ]);
+        }
+
         return $this->response->setJSON([
-            'success' => (bool) $this->reviewModel->update($reviewId, ['status' => $status]),
+            'success' => $success,
         ]);
     }
 

@@ -5,7 +5,7 @@ $seg2 = service('uri')->getSegment(2);
 $isDashboard = $seg1 === 'dashboard' && !in_array($seg2, ['profile', 'settings'], true);
 $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
-$isOrders = $seg1 === 'orders';
+$isOrders = $seg1 === 'orders' || ($seg1 === 'admin' && str_starts_with((string) $seg2, 'order'));
 $isUsers = $seg1 === 'user-management';
 $isBackup = $seg1 === 'backup';
 $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
@@ -35,11 +35,14 @@ $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
         </div>
 
         <div class="nav-right">
-            <div class="user-info">
-                <div class="user-avatar"><?= strtoupper(substr(session()->get('user_name') ?? 'A', 0, 1)) ?></div>
-                <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link">
-                    <?= esc(session()->get('user_name') ?? 'Administrator') ?>
-                </a>
+            <div class="user-info admin-user-actions">
+                <div class="admin-user-main">
+                    <div class="user-avatar"><?= strtoupper(substr(session()->get('user_name') ?? 'A', 0, 1)) ?></div>
+                    <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link">
+                        <?= esc(session()->get('user_name') ?? 'Administrator') ?>
+                    </a>
+                </div>
+                <?= $this->include('partials/notification_bell') ?>
             </div>
             <a href="<?= site_url('auth/logout') ?>" class="btn-danger" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
         </div>

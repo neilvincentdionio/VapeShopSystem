@@ -4,18 +4,21 @@ namespace App\Controllers;
 
 use App\Models\UserModel;
 use App\Libraries\ActivityLogger;
+use App\Libraries\NotificationService;
 
 class UserManagement extends BaseController
 {
     protected $userModel;
     protected $session;
     protected $activityLogger;
+    protected NotificationService $notificationService;
 
     public function __construct()
     {
         $this->userModel = new UserModel();
         $this->session = session();
         $this->activityLogger = new ActivityLogger();
+        $this->notificationService = new NotificationService();
     }
 
     /**
@@ -213,6 +216,15 @@ class UserManagement extends BaseController
             $db->transComplete();
 
             if ($approved && $db->transStatus() !== false) {
+                $this->notificationService->notifyUsers([(int) $id], [
+                    'category' => 'approvals',
+                    'type' => 'account_approved',
+                    'title' => 'Account approved',
+                    'message' => 'Your customer account has been approved.',
+                    'link' => site_url('customer/home'),
+                    'related_type' => 'user',
+                    'related_id' => (int) $id,
+                ]);
                 return redirect()->to('/user-management')
                                ->with('success', 'Customer account approved successfully.');
             }
@@ -289,6 +301,19 @@ class UserManagement extends BaseController
             $db->transComplete();
             
             if ($result && $db->transStatus() !== false) {
+                $createdUserId = (int) $result;
+                $targetLink = $data['role'] === 'rider'
+                    ? site_url('rider/dashboard')
+                    : ($data['role'] === 'admin' ? site_url('dashboard') : site_url('customer/home'));
+                $this->notificationService->notifyUsers([$createdUserId], [
+                    'category' => 'announcements',
+                    'type' => 'account_created',
+                    'title' => 'Account created',
+                    'message' => 'Your QuickPuff account has been created.',
+                    'link' => $targetLink,
+                    'related_type' => 'user',
+                    'related_id' => $createdUserId,
+                ]);
                 return redirect()->to('/user-management')
                                ->with('success', 'User created successfully.');
             } else {
@@ -449,6 +474,15 @@ class UserManagement extends BaseController
             
             // Consider it successful if the data matches what we tried to update
             if (($result || ($nameUpdated && $emailUpdated && $roleUpdated)) && $db->transStatus() !== false) {
+                $this->notificationService->notifyUsers([(int) $id], [
+                    'category' => 'announcements',
+                    'type' => 'account_updated',
+                    'title' => 'Account updated',
+                    'message' => 'Your account details were updated.',
+                    'link' => site_url('dashboard/profile'),
+                    'related_type' => 'user',
+                    'related_id' => (int) $id,
+                ]);
                 return redirect()->to('/user-management')
                                ->with('success', 'User updated successfully.');
             } else {

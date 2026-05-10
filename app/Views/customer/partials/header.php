@@ -231,6 +231,7 @@
             </div>
 
             <div class="nav-right">
+                <?= $this->include('partials/notification_bell') ?>
                 <a href="<?= site_url('dashboard/profile') ?>" class="user-chip user-chip-link" title="Profile">
                     <span class="avatar"><?= strtoupper(substr((string) ($user_name ?? ''), 0, 1)) ?></span>
                     <span><?= esc($user_name ?? '') ?></span>

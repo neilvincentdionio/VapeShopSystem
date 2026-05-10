@@ -105,7 +105,9 @@
             margin-bottom: 1rem;
         }
         .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
-        input, select, button {
+        .container input,
+        .container select,
+        .container button {
             font-family: inherit;
             border: 1px solid #e0e0e0;
             background: #ffffff;

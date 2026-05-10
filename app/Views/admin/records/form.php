@@ -139,6 +139,9 @@
         }
         .btn-primary { background: #2f6fed; }
         .btn-secondary { background: #6b7280; }
+        .admin-sidebar .notification-bell__button {
+            padding: 0 !important;
+        }
         @media (max-width: 768px) {
             .navbar-content { flex-direction: column; align-items: stretch; gap: .75rem; }
             .navbar-center { justify-content: flex-start; }

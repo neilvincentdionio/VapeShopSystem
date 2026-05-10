@@ -6,12 +6,14 @@ use App\Models\ChatNotificationModel;
 use App\Models\MessageConversationModel;
 use App\Models\OrderModel;
 use App\Models\UserModel;
+use App\Libraries\NotificationService;
 
 class Messages extends BaseController
 {
     protected $session;
     protected MessageConversationModel $conversationModel;
     protected ChatNotificationModel $notificationModel;
+    protected NotificationService $bellNotifications;
     protected OrderModel $orderModel;
     protected UserModel $userModel;
 
@@ -20,6 +22,7 @@ class Messages extends BaseController
         $this->session = session();
         $this->conversationModel = new MessageConversationModel();
         $this->notificationModel = new ChatNotificationModel();
+        $this->bellNotifications = new NotificationService();
         $this->orderModel = new OrderModel();
         $this->userModel = new UserModel();
         helper(['form', 'text']);
@@ -103,6 +106,15 @@ class Messages extends BaseController
                 $notify[] = (int) $conversation['assigned_rider_id'];
             }
             $this->notificationModel->notifyUsers((int) $conversation['id'], $notify, 'Customer replied to a support chat.');
+            $this->bellNotifications->notifyUsers($notify, [
+                'category' => 'messages',
+                'type' => 'support_reply',
+                'title' => 'Support chat reply',
+                'message' => 'Customer replied to a support conversation.',
+                'link' => site_url('admin/messages/' . (int) $conversation['id']),
+                'related_type' => 'conversation',
+                'related_id' => (int) $conversation['id'],
+            ]);
 
             return $this->respondBack('Message sent.');
         }
@@ -129,6 +141,15 @@ class Messages extends BaseController
             $this->getAdminUserIds(),
             'A customer support chat needs attention.'
         );
+        $this->bellNotifications->notifyAdmins([
+            'category' => 'messages',
+            'type' => 'support_escalated',
+            'title' => 'Support chat needs attention',
+            'message' => 'A customer requested human support.',
+            'link' => site_url('admin/messages/' . (int) $conversation['id']),
+            'related_type' => 'conversation',
+            'related_id' => (int) $conversation['id'],
+        ]);
 
         return $this->respondBack('Your chat was escalated to admin support.');
     }
@@ -196,6 +217,15 @@ class Messages extends BaseController
         $this->addMessage($conversationId, $adminId, 'admin', $message);
         $this->conversationModel->touchConversation($conversationId, $adminId);
         $this->notificationModel->notifyUsers($conversationId, [(int) $conversation['customer_id']], 'Admin replied to your support chat.');
+        $this->bellNotifications->notifyUsers([(int) $conversation['customer_id']], [
+            'category' => 'messages',
+            'type' => 'admin_reply',
+            'title' => 'Admin replied',
+            'message' => 'Admin replied to your support chat.',
+            'link' => site_url('customer/messages'),
+            'related_type' => 'conversation',
+            'related_id' => $conversationId,
+        ]);
 
         return $this->respondBack('Reply sent.');
     }
@@ -239,6 +269,15 @@ class Messages extends BaseController
         $this->conversationModel->update($conversationId, ['assigned_rider_id' => $riderId, 'status' => 'open']);
         $this->addMessage($conversationId, (int) $this->session->get('user_id'), 'admin', 'Rider ' . ($rider['name'] ?? '') . ' was added for delivery support.', 'system', true);
         $this->notificationModel->notifyUsers($conversationId, [$riderId], 'You were added to a delivery support chat.');
+        $this->bellNotifications->notifyUsers([$riderId], [
+            'category' => 'messages',
+            'type' => 'rider_assigned_chat',
+            'title' => 'Delivery chat assigned',
+            'message' => 'You were added to a delivery support chat.',
+            'link' => site_url('rider/messages/' . $conversationId),
+            'related_type' => 'conversation',
+            'related_id' => $conversationId,
+        ]);
 
         return redirect()->to('/admin/messages/' . $conversationId)->with('success', 'Rider added to conversation.');
     }
@@ -302,6 +341,24 @@ class Messages extends BaseController
         $this->conversationModel->touchConversation($conversationId);
         $notify = array_filter([(int) ($conversation['customer_id'] ?? 0), (int) ($conversation['assigned_admin_id'] ?? 0)]);
         $this->notificationModel->notifyUsers($conversationId, $notify, 'Rider replied to a delivery support chat.');
+        $this->bellNotifications->notifyUsers([(int) ($conversation['customer_id'] ?? 0)], [
+            'category' => 'messages',
+            'type' => 'rider_reply',
+            'title' => 'Rider replied',
+            'message' => 'Rider replied to a delivery support chat.',
+            'link' => site_url('customer/messages'),
+            'related_type' => 'conversation',
+            'related_id' => $conversationId,
+        ]);
+        $this->bellNotifications->notifyUsers([(int) ($conversation['assigned_admin_id'] ?? 0)], [
+            'category' => 'messages',
+            'type' => 'rider_reply',
+            'title' => 'Rider replied',
+            'message' => 'Rider replied to a delivery support chat.',
+            'link' => site_url('admin/messages/' . $conversationId),
+            'related_type' => 'conversation',
+            'related_id' => $conversationId,
+        ]);
 
         return $this->respondBack('Reply sent.');
     }

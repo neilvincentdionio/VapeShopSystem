@@ -29,7 +29,9 @@ class OrderModel extends Model
             ->orderBy('o.created_at', 'DESC');
 
         if ($deliveryStatus !== null && $deliveryStatus !== 'all') {
-            if ($deliveryStatus === 'to_receive') {
+            if ($deliveryStatus === 'to_ship') {
+                $builder->where("COALESCE(s.status, 'to_pay') IN ('to_ship','ready_for_pickup','accepted_by_rider')", null, false);
+            } elseif ($deliveryStatus === 'to_receive') {
                 $builder->where("COALESCE(s.status, 'to_pay') IN ('delivered_to_rider','to_receive','delivered')", null, false);
             } else {
                 $builder->where("COALESCE(s.status, 'to_pay') = " . $this->db->escape($deliveryStatus), null, false);
@@ -62,7 +64,9 @@ class OrderModel extends Model
 
         foreach ($rows as $row) {
             $status = (string) ($row['delivery_status'] ?? 'to_pay');
-            if (in_array($status, ['delivered_to_rider', 'delivered', 'to_receive'], true)) {
+            if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
+                $status = 'to_ship';
+            } elseif (in_array($status, ['delivered_to_rider', 'delivered', 'to_receive'], true)) {
                 $status = 'to_receive';
             }
             $count = (int) ($row['count'] ?? 0);

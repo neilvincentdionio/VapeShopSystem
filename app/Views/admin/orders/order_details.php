@@ -18,12 +18,16 @@ if (!function_exists('getDeliveryStatusLabel')) {
     function getDeliveryStatusLabel($status) {
         $labels = [
             'to_pay' => 'To Pay',
-            'to_ship' => 'To Ship',
-            'to_receive' => 'To Receive',
+            'to_ship' => 'Order Placed',
+            'ready_for_pickup' => 'Rider Assigned',
+            'accepted_by_rider' => 'Accepted by Rider',
+            'delivered_to_rider' => 'Picked Up',
+            'to_receive' => 'Out for Delivery',
             'delivered' => 'Delivered (Awaiting Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund'
+            'return_refund' => 'Return/Refund',
+            'failed_delivery' => 'Failed Delivery',
         ];
         
         return $labels[$status] ?? ucfirst($status);
@@ -46,13 +50,13 @@ if (!function_exists('extractGcashReference')) {
 }
 ?>
 
-<div class="orders-container">
+<div class="container order-details-page">
     <div class="orders-header">
         <a href="<?= site_url('orders') ?>" class="back-link">
             <i class="fas fa-arrow-left"></i> Back to Orders
         </a>
-        <h1>Order Details - Admin</h1>
-        <p>Manage order delivery status</p>
+        <h1>Order Details</h1>
+        <p>Review order information and delivery progress.</p>
     </div>
 
     <?php if (!empty($order)): ?>
@@ -90,36 +94,27 @@ if (!function_exists('extractGcashReference')) {
 
             <!-- Visual Delivery Status Tracker -->
             <div class="delivery-tracker">
-                <h3><i class="fas fa-map-marked-alt"></i> Delivery Status</h3>
+                <h3><i class="fas fa-map-marked-alt"></i> Delivery Progress</h3>
                 <div class="tracker-progress">
                     <?php
-                    // Determine current stage based on delivery status
+                    $status = (string) ($order['delivery_status'] ?? 'to_pay');
                     $currentStage = 0;
-                    switch($order['delivery_status']) {
-                        case 'to_pay':
-                            $currentStage = 0;
-                            break;
-                        case 'to_ship':
-                            $currentStage = 1;
-                            break;
-                        case 'to_receive':
-                            $currentStage = 2;
-                            break;
-                        case 'completed':
-                            $currentStage = 3;
-                            break;
-                        case 'delivered':
-                            $currentStage = 3;
-                            break;
-                        default:
-                            $currentStage = 0;
+                    if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
+                        $currentStage = 1;
+                    } elseif ($status === 'delivered_to_rider') {
+                        $currentStage = 2;
+                    } elseif ($status === 'to_receive') {
+                        $currentStage = 3;
+                    } elseif (in_array($status, ['delivered', 'completed'], true)) {
+                        $currentStage = 4;
                     }
                     
                     $stages = [
-                        ['name' => 'Ordered', 'icon' => 'fa-clipboard', 'description' => 'Order placed successfully'],
-                        ['name' => 'Packed', 'icon' => 'fa-box', 'description' => 'Order packed and ready'],
-                        ['name' => 'In Transit', 'icon' => 'fa-truck', 'description' => 'Order is on the way'],
-                        ['name' => 'Delivered', 'icon' => 'fa-home', 'description' => 'Order delivered successfully']
+                        ['name' => 'Ordered', 'icon' => 'fa-clipboard', 'description' => 'Order placed'],
+                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Ready for pickup'],
+                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'With rider'],
+                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'On the way'],
+                        ['name' => 'Completed', 'icon' => 'fa-home', 'description' => 'Order closed'],
                     ];
                     ?>
                     
@@ -161,14 +156,36 @@ if (!function_exists('extractGcashReference')) {
             <?php endif; ?>
             <?php if (!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])): ?>
                 <div class="shipping-info">
-                    <h3><i class="fas fa-map"></i> Delivery Location Context</h3>
-                    <div id="admin_delivery_map" style="height:300px;border:1px solid #e0e0e0;border-radius:10px;"></div>
-                    <p style="margin-top:.6rem;">
-                        Store: <?= !empty($order['store_address']) ? esc($order['store_address']) : 'Not set' ?><br>
-                        Customer pin: <?= esc($order['delivery_latitude']) ?>, <?= esc($order['delivery_longitude']) ?><br>
-                        Rider last location:
-                        <?= !empty($order['rider_latitude']) && !empty($order['rider_longitude']) ? esc($order['rider_latitude'] . ', ' . $order['rider_longitude']) : 'No live rider position yet' ?>
-                    </p>
+                    <h3><i class="fas fa-map"></i> Delivery Map</h3>
+                    <div id="admin_delivery_map"></div>
+                    <div class="map-meta">
+                        <span><strong>Store:</strong> <?= !empty($order['store_address']) ? esc($order['store_address']) : 'Not set' ?></span>
+                        <span><strong>Customer:</strong> <?= esc($order['delivery_latitude']) ?>, <?= esc($order['delivery_longitude']) ?></span>
+                        <span><strong>Rider:</strong> <?= !empty($order['rider_latitude']) && !empty($order['rider_longitude']) ? esc($order['rider_latitude'] . ', ' . $order['rider_longitude']) : 'No live position yet' ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($order['delivery_proof_image'])): ?>
+                <div class="delivery-proof-section" id="delivery-proof">
+                    <h3><i class="fas fa-image"></i> Delivery Proof</h3>
+                    <div class="delivery-proof-grid">
+                        <a href="<?= site_url('uploads/delivery_proofs/' . $order['delivery_proof_image']) ?>" target="_blank" rel="noopener" class="delivery-proof-image-link">
+                            <img src="<?= site_url('uploads/delivery_proofs/' . $order['delivery_proof_image']) ?>" alt="Delivery proof for <?= esc($order['reference_number']) ?>">
+                        </a>
+                        <div class="delivery-proof-details">
+                            <p><strong>Submitted:</strong> <?= !empty($order['delivery_proof_submitted_at']) ? date('F j, Y g:i A', strtotime($order['delivery_proof_submitted_at'])) : 'Not recorded' ?></p>
+                            <p><strong>Rider:</strong> <?= esc($order['assigned_rider_name'] ?? $order['rider_name'] ?? 'Assigned rider') ?></p>
+                            <?php if (!empty($order['delivery_notes'])): ?>
+                                <p><strong>Notes:</strong> <?= nl2br(esc($order['delivery_notes'])) ?></p>
+                            <?php else: ?>
+                                <p><strong>Notes:</strong> No notes provided.</p>
+                            <?php endif; ?>
+                            <a href="<?= site_url('uploads/delivery_proofs/' . $order['delivery_proof_image']) ?>" target="_blank" rel="noopener" class="btn-proof-open">
+                                <i class="fas fa-up-right-from-square"></i> Open Proof
+                            </a>
+                        </div>
+                    </div>
                 </div>
             <?php endif; ?>
 
@@ -316,7 +333,7 @@ function updateDeliveryStatus(orderId, newStatus) {
 </script>
 
 <style>
-    .orders-container {
+    .order-details-page {
         max-width: none;
         margin-left: 270px;
         width: calc(100% - 270px);
@@ -408,12 +425,12 @@ function updateDeliveryStatus(orderId, newStatus) {
         margin: 0;
     }
     
-    .tracking-info, .shipping-info, .delivery-tracker, .order-items, .order-summary, .admin-delivery-actions {
+    .tracking-info, .shipping-info, .delivery-proof-section, .delivery-tracker, .order-items, .order-summary, .admin-delivery-actions {
         padding: 1.5rem 2rem;
         border-bottom: 1px solid #e0e0e0;
     }
     
-    .tracking-info h3, .shipping-info h3, .delivery-tracker h3, .order-items h3, .order-summary h3, .admin-delivery-actions h3 {
+    .tracking-info h3, .shipping-info h3, .delivery-proof-section h3, .delivery-tracker h3, .order-items h3, .order-summary h3, .admin-delivery-actions h3 {
         font-size: 1.1rem;
         font-weight: 600;
         color: #333;
@@ -604,7 +621,7 @@ function updateDeliveryStatus(orderId, newStatus) {
     }
 
     @media (max-width: 992px) {
-        .orders-container {
+        .order-details-page {
             margin-left: 0;
             width: 100%;
             padding: 1rem;
@@ -615,9 +632,10 @@ function updateDeliveryStatus(orderId, newStatus) {
         background: #f6f8fb;
         color: #111827;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow-x: hidden;
     }
 
-    .orders-container {
+    .order-details-page {
         display: grid;
         gap: 1rem;
         margin-left: 270px;
@@ -625,6 +643,8 @@ function updateDeliveryStatus(orderId, newStatus) {
         min-height: 100vh;
         padding: 1.5rem;
         background: #f6f8fb;
+        box-sizing: border-box;
+        overflow-x: hidden;
     }
 
     .orders-header {
@@ -748,6 +768,7 @@ function updateDeliveryStatus(orderId, newStatus) {
 
     .tracking-info,
     .shipping-info,
+    .delivery-proof-section,
     .delivery-tracker,
     .order-items,
     .order-summary,
@@ -759,6 +780,7 @@ function updateDeliveryStatus(orderId, newStatus) {
 
     .tracking-info h3,
     .shipping-info h3,
+    .delivery-proof-section h3,
     .delivery-tracker h3,
     .order-items h3,
     .order-summary h3,
@@ -835,13 +857,185 @@ function updateDeliveryStatus(orderId, newStatus) {
     }
 
     #admin_delivery_map {
+        height: 220px;
+        width: 100%;
+        position: relative;
         overflow: hidden;
         border-color: #d1d5db !important;
         border-radius: 10px !important;
+        z-index: 1;
+    }
+
+    #admin_delivery_map .leaflet-pane {
+        z-index: 1;
+    }
+
+    #admin_delivery_map .leaflet-top,
+    #admin_delivery_map .leaflet-bottom {
+        z-index: 2;
+    }
+
+    .map-meta {
+        display: grid;
+        gap: .35rem;
+        margin-top: .75rem;
+        color: #4b5563;
+        font-size: .88rem;
+        line-height: 1.45;
+    }
+
+    .map-meta span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .delivery-proof-section {
+        scroll-margin-top: 24px;
+    }
+
+    .delivery-proof-grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 360px) 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .delivery-proof-image-link {
+        display: block;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #f9fafb;
+    }
+
+    .delivery-proof-image-link img {
+        display: block;
+        width: 100%;
+        max-height: 320px;
+        object-fit: contain;
+        background: #ffffff;
+    }
+
+    .delivery-proof-details {
+        display: grid;
+        gap: .6rem;
+        color: #374151;
+        font-size: .92rem;
+        line-height: 1.5;
+    }
+
+    .delivery-proof-details p {
+        margin: 0;
+    }
+
+    .btn-proof-open {
+        width: fit-content;
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        margin-top: .25rem;
+        padding: .62rem .9rem;
+        border-radius: 8px;
+        background: #111827;
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: .88rem;
+    }
+
+    .btn-proof-open:hover {
+        background: #0f172a;
+    }
+
+    .delivery-tracker {
+        padding-bottom: 1rem;
+    }
+
+    .tracker-progress {
+        overflow-x: auto;
+        padding-bottom: .25rem;
+    }
+
+    .tracker-container {
+        align-items: flex-start;
+        gap: .5rem;
+        min-width: 680px;
+        margin: .5rem 0 0;
+    }
+
+    .tracker-step {
+        min-width: 110px;
+    }
+
+    .tracker-icon {
+        width: 34px;
+        height: 34px;
+        margin-bottom: .4rem;
+        font-size: .82rem;
+    }
+
+    .check-mark {
+        width: 16px;
+        height: 16px;
+        top: -3px;
+        right: -3px;
+        font-size: .58rem;
+    }
+
+    .tracker-line {
+        margin: 17px .25rem 0;
+        min-width: 46px;
+    }
+
+    .stage-name {
+        font-size: .82rem;
+    }
+
+    .stage-description {
+        font-size: .74rem;
+        line-height: 1.3;
+    }
+
+    .tracking-info,
+    .shipping-info,
+    .delivery-proof-section,
+    .delivery-tracker,
+    .order-items,
+    .order-summary,
+    .admin-delivery-actions {
+        padding: 1rem 1.25rem;
+    }
+
+    .order-detail-card {
+        overflow: visible;
+    }
+
+    .order-header {
+        align-items: stretch;
+    }
+
+    .order-info {
+        min-width: 0;
+    }
+
+    .order-info h2 {
+        overflow-wrap: anywhere;
+    }
+
+    .order-total {
+        align-self: flex-start;
+    }
+
+    .leaflet-container {
+        font: inherit;
+    }
+
+    .notification-bell__panel {
+        z-index: 10060 !important;
     }
 
     @media (max-width: 992px) {
-        .orders-container {
+        .order-details-page {
             margin-left: 0;
             width: 100%;
             padding: 1rem;
@@ -861,6 +1055,11 @@ function updateDeliveryStatus(orderId, newStatus) {
         .tracker-container {
             align-items: flex-start;
             flex-direction: column;
+            min-width: 0;
+        }
+
+        .delivery-proof-grid {
+            grid-template-columns: 1fr;
         }
 
         .tracker-step {

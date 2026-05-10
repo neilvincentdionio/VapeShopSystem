@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\ProductModel;
 use App\Models\ReviewModel;
+use App\Libraries\NotificationService;
 
 class Products extends BaseController
 {
@@ -12,12 +13,14 @@ class Products extends BaseController
     protected $session;
     protected $productModel;
     protected $reviewModel;
+    protected NotificationService $notificationService;
 
     public function __construct()
     {
         $this->session = session();
         $this->productModel = new ProductModel();
         $this->reviewModel = new ReviewModel();
+        $this->notificationService = new NotificationService();
         helper(['text', 'form']);
     }
 
@@ -383,6 +386,17 @@ class Products extends BaseController
 
         if (! $saved) {
             return redirect()->back()->with('error', 'Failed to save admin reply.');
+        }
+        if ($reply !== '') {
+            $this->notificationService->notifyUsers([(int) ($review['user_id'] ?? 0)], [
+                'category' => 'messages',
+                'type' => 'review_reply',
+                'title' => 'Admin replied to your review',
+                'message' => 'An admin replied to your product review.',
+                'link' => site_url('customer/product/' . (int) ($review['product_id'] ?? 0) . '?review_id=' . $reviewId . '#admin-reply-' . $reviewId),
+                'related_type' => 'review',
+                'related_id' => $reviewId,
+            ]);
         }
 
         return redirect()->to('/products/view/' . (int) ($review['product_id'] ?? 0))

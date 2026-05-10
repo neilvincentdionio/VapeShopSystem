@@ -5,18 +5,21 @@ namespace App\Controllers;
 use App\Models\OrderModel;
 use App\Models\ProductModel;
 use App\Models\ReviewModel;
+use App\Libraries\NotificationService;
 
 class AdminDashboard extends BaseController
 {
     protected $orderModel;
     protected $productModel;
     protected $reviewModel;
+    protected NotificationService $notificationService;
 
     public function __construct()
     {
         $this->orderModel = new OrderModel();
         $this->productModel = new ProductModel();
         $this->reviewModel = new ReviewModel();
+        $this->notificationService = new NotificationService();
     }
 
     public function index()
@@ -138,16 +141,40 @@ class AdminDashboard extends BaseController
 
     public function approveReview($reviewId)
     {
+        $review = $this->reviewModel->find((int) $reviewId);
         $db = \Config\Database::connect();
         $db->query("UPDATE product_reviews SET status = 'approved' WHERE id = ?", [$reviewId]);
+        if ($review) {
+            $this->notificationService->notifyUsers([(int) ($review['user_id'] ?? 0)], [
+                'category' => 'approvals',
+                'type' => 'review_approved',
+                'title' => 'Review approved',
+                'message' => 'Your product review was approved.',
+                'link' => site_url('customer/orders?tab=completed'),
+                'related_type' => 'review',
+                'related_id' => (int) $reviewId,
+            ]);
+        }
         
         return $this->response->setJSON(['success' => true]);
     }
 
     public function rejectReview($reviewId)
     {
+        $review = $this->reviewModel->find((int) $reviewId);
         $db = \Config\Database::connect();
         $db->query("UPDATE product_reviews SET status = 'rejected' WHERE id = ?", [$reviewId]);
+        if ($review) {
+            $this->notificationService->notifyUsers([(int) ($review['user_id'] ?? 0)], [
+                'category' => 'approvals',
+                'type' => 'review_rejected',
+                'title' => 'Review rejected',
+                'message' => 'Your product review was rejected.',
+                'link' => site_url('customer/orders?tab=completed'),
+                'related_type' => 'review',
+                'related_id' => (int) $reviewId,
+            ]);
+        }
         
         return $this->response->setJSON(['success' => true]);
     }

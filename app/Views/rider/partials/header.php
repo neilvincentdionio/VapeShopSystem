@@ -199,6 +199,7 @@
             </div>
 
             <div class="nav-right">
+                <?= $this->include('partials/notification_bell') ?>
                 <span class="user-chip">
                     <span class="avatar"><?= strtoupper(substr((string) ($user_name ?? 'R'), 0, 1)) ?></span>
                     <span><?= esc($user_name ?? 'Rider') ?></span>

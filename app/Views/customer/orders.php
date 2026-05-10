@@ -967,7 +967,7 @@ window.addEventListener('beforeunload', function() {
                 <?php elseif (($activeTab ?? 'all') === 'to_pay'): ?>
                     You don't have any unpaid orders. Your pending payments will appear here.
                 <?php elseif (($activeTab ?? 'all') === 'to_ship'): ?>
-                    You don't have any orders being shipped. Your shipped orders will appear here.
+                    You don't have any orders waiting to be shipped.
                 <?php elseif (($activeTab ?? 'all') === 'to_receive'): ?>
                     You don't have any orders out for delivery. Your incoming orders will appear here.
                 <?php elseif (($activeTab ?? 'all') === 'completed'): ?>

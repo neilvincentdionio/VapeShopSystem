@@ -256,6 +256,58 @@
     .meta-value {
         color: #666;
     }
+
+    .reviews-section {
+        margin-top: 1.5rem;
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .reviews-section h2 {
+        margin: 0 0 1rem;
+        color: #333;
+        font-size: 1.25rem;
+    }
+
+    .review-item {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #ffffff;
+    }
+
+    .review-item.is-highlighted {
+        border-color: #00bcd4;
+        box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.16);
+    }
+
+    .review-meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: .6rem;
+        color: #555;
+        font-size: .9rem;
+    }
+
+    .review-rating {
+        color: #f59e0b;
+        font-weight: 700;
+    }
+
+    .admin-reply {
+        margin-top: .85rem;
+        padding: .85rem;
+        border-left: 3px solid #00bcd4;
+        border-radius: 8px;
+        background: #f0fbfd;
+        color: #334155;
+    }
     
     @media (max-width: 768px) {
         .product-details-container {
@@ -398,6 +450,34 @@
             </div>
         </div>
     </div>
+
+    <?php
+        $productReviews = $productReviews ?? [];
+        $highlightReviewId = (int) ($highlightReviewId ?? 0);
+    ?>
+    <section class="reviews-section" id="product-reviews">
+        <h2>Customer Reviews</h2>
+        <?php if ($productReviews !== []): ?>
+            <?php foreach ($productReviews as $review): ?>
+                <?php $reviewId = (int) ($review['id'] ?? 0); ?>
+                <article id="review-<?= $reviewId ?>" class="review-item <?= $highlightReviewId === $reviewId ? 'is-highlighted' : '' ?>">
+                    <div class="review-meta-row">
+                        <strong><?= esc($review['user_name'] ?? 'Customer') ?></strong>
+                        <span class="review-rating"><?= str_repeat('*', max(0, min(5, (int) ($review['rating'] ?? 0)))) ?></span>
+                    </div>
+                    <p><?= nl2br(esc($review['review_text'] ?? 'No written comment.')) ?></p>
+                    <?php if (! empty($review['admin_reply'])): ?>
+                        <div class="admin-reply" id="admin-reply-<?= $reviewId ?>">
+                            <strong>Admin reply:</strong>
+                            <div><?= nl2br(esc($review['admin_reply'])) ?></div>
+                        </div>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <p>No reviews yet.</p>
+        <?php endif; ?>
+    </section>
 </div>
 
 <script>

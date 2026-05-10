@@ -281,6 +281,12 @@ $productReviews = $productReviews ?? [];
             background: #ffffff;
         }
 
+        .review-row.is-highlighted {
+            border-color: #f59e0b;
+            background: #fffbeb;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+        }
+
         .review-row-head {
             display: flex;
             justify-content: space-between;
@@ -478,6 +484,7 @@ $productReviews = $productReviews ?? [];
                 </div>
             </section>
 
+            <?php $highlightReviewId = (int) (service('request')->getGet('review_id') ?? 0); ?>
             <section class="reviews-panel" id="product-reviews">
                 <div class="reviews-header">
                     <div>
@@ -493,7 +500,8 @@ $productReviews = $productReviews ?? [];
                 <?php if ($productReviews !== []): ?>
                     <div class="review-list">
                         <?php foreach ($productReviews as $review): ?>
-                            <article class="review-row">
+                            <?php $reviewId = (int) ($review['id'] ?? 0); ?>
+                            <article id="review-<?= $reviewId ?>" class="review-row <?= $highlightReviewId === $reviewId ? 'is-highlighted' : '' ?>">
                                 <div class="review-row-head">
                                     <div>
                                         <div class="reviewer"><?= esc($review['user_name'] ?? 'Customer') ?></div>

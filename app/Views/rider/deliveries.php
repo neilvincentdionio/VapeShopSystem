@@ -114,6 +114,11 @@
         color: #333333;
     }
 
+    .deliveries-table tr.is-highlighted {
+        background: #fff7ed;
+        box-shadow: inset 4px 0 0 #f59e0b;
+    }
+
     .deliveries-table td:last-child {
         vertical-align: middle;
         width: 180px;
@@ -261,6 +266,7 @@
 </style>
 
 <?php
+    $highlightOrderId = (int) (service('request')->getGet('order_id') ?? 0);
     $statusLabels = [
         'to_ship' => 'For Pickup',
         'to_receive' => 'Out for Delivery',
@@ -321,8 +327,11 @@
             </thead>
             <tbody>
                 <?php foreach ($deliveries as $delivery): ?>
-                    <?php $status = (string) ($delivery['delivery_status'] ?? 'to_ship'); ?>
-                    <tr data-delivery-status="<?= esc($status) ?>" data-order-id="<?= (int) ($delivery['id'] ?? 0) ?>">
+                    <?php
+                        $deliveryOrderId = (int) ($delivery['id'] ?? 0);
+                        $status = (string) ($delivery['delivery_status'] ?? 'to_ship');
+                    ?>
+                    <tr id="delivery-<?= $deliveryOrderId ?>" class="<?= $highlightOrderId === $deliveryOrderId ? 'is-highlighted' : '' ?>" data-delivery-status="<?= esc($status) ?>" data-order-id="<?= $deliveryOrderId ?>">
                         <td>
                             <strong><?= esc($delivery['reference_number'] ?? ('Order #' . ($delivery['id'] ?? ''))) ?></strong>
                             <div class="muted"><?= esc(date('M d, Y', strtotime((string) ($delivery['created_at'] ?? 'now')))) ?></div>
@@ -342,9 +351,9 @@
                                     <i class="fas fa-check-circle"></i> Order Completed
                                 </span>
                             <?php else: ?>
-                                <button type="button" class="action-btn btn-pickup" onclick="openOrderDetailsModal(<?= (int) $delivery['id'] ?>)">
+                                <a class="action-btn btn-pickup" href="<?= site_url('rider/order-details/' . (int) $delivery['id']) ?>">
                                     <i class="fas fa-eye"></i> View Details
-                                </button>
+                                </a>
                                 <button type="button" class="action-btn btn-pickup" onclick="openRouteMap(<?= (int) $delivery['id'] ?>)">
                                     <i class="fas fa-map"></i> View Map
                                 </button>

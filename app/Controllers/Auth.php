@@ -8,6 +8,7 @@ use App\Models\LoginAttemptModel;
 use App\Libraries\OtpService;
 use App\Libraries\ActivityLogger;
 use App\Libraries\PasswordResetMailer;
+use App\Libraries\NotificationService;
 
 class Auth extends BaseController
 {
@@ -18,6 +19,7 @@ class Auth extends BaseController
     protected $session;
     protected $activityLogger;
     protected $passwordResetMailer;
+    protected NotificationService $notificationService;
 
     public function __construct()
     {
@@ -28,6 +30,7 @@ class Auth extends BaseController
         $this->session = session();
         $this->activityLogger = new ActivityLogger();
         $this->passwordResetMailer = new PasswordResetMailer();
+        $this->notificationService = new NotificationService();
     }
 
     /**
@@ -109,6 +112,15 @@ class Auth extends BaseController
         // Log account creation
         $userId = $this->userModel->getInsertID();
         $this->activityLogger->logAccountCreated($userId, $data['email']);
+        $this->notificationService->notifyAdmins([
+            'category' => 'approvals',
+            'type' => 'account_pending',
+            'title' => 'Customer approval needed',
+            'message' => $data['name'] . ' submitted an account request.',
+            'link' => site_url('user-management/view/' . (int) $userId),
+            'related_type' => 'user',
+            'related_id' => (int) $userId,
+        ]);
 
         return redirect()->to('/login')
             ->with('success', 'Your account request has been submitted and is pending admin approval.');

@@ -45,6 +45,7 @@ if (!function_exists('extractGcashReference')) {
 
 $ordersList = is_array($orders ?? null) ? $orders : [];
 $hasOrders = ! empty($ordersList);
+$highlightOrderId = (int) (service('request')->getGet('order_id') ?? 0);
 $totalOrders = count($ordersList);
 $totalRevenue = array_sum(array_map(
     static fn ($order) => (($order['payment_status'] ?? 'unpaid') === 'paid') ? (float) ($order['total_amount'] ?? 0) : 0.0,
@@ -408,38 +409,51 @@ $activeDeliveries = count(array_filter(
         }
 
         .table-responsive {
-            overflow-x: auto;
+            overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1400px;
+            min-width: 0;
+            table-layout: fixed;
+            font-size: 0.78rem;
         }
 
         .data-table th {
             background: #f8f9fa;
-            padding: 1rem;
+            padding: 0.75rem 0.5rem;
             text-align: left;
             font-weight: 600;
             color: #333333;
             border-bottom: 1px solid #e0e0e0;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
         }
 
         .data-table td {
-            padding: 1rem;
+            padding: 0.75rem 0.5rem;
             border-bottom: 1px solid #f0f0f0;
             vertical-align: top;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .data-table td:last-child {
             vertical-align: middle;
-            width: 210px;
+            width: 120px;
+            min-width: 120px;
         }
 
         .data-table tr:hover {
             background: #f8f9fa;
+        }
+
+        .data-table tr.is-highlighted {
+            background: #fff7ed;
+            box-shadow: inset 4px 0 0 #f59e0b;
         }
 
         .order-link {
@@ -460,11 +474,11 @@ $activeDeliveries = count(array_filter(
         }
 
         .shipping-text {
-            max-width: 150px;
-            display: inline-block;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            display: inline;
+            max-width: none;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
         }
 
         .action-buttons {
@@ -495,11 +509,11 @@ $activeDeliveries = count(array_filter(
         }
         
         .order-items-preview {
-            max-width: 300px;
+            max-width: none;
         }
         
         .item-preview {
-            font-size: 0.85rem;
+            font-size: 0.78rem;
             color: #666;
             margin-bottom: 0.25rem;
         }
@@ -513,15 +527,20 @@ $activeDeliveries = count(array_filter(
         .order-total {
             font-weight: 700;
             color: #333;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
         }
         
         .order-status {
-            padding: 0.4rem 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.32rem 0.55rem;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.68rem;
             font-weight: 600;
             text-transform: uppercase;
+            line-height: 1.15;
+            text-align: center;
         }
         
         .status-to_pay {
@@ -744,26 +763,39 @@ $activeDeliveries = count(array_filter(
             box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
         }
 
+        .btn-details {
+            background: #111827;
+            color: #ffffff;
+            border: none;
+        }
+
+        .btn-details:hover {
+            background: #0f172a;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.24);
+        }
+
         .action-btn {
             border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-size: 0.85rem;
+            border-radius: 7px;
+            padding: 0.42rem 0.5rem;
+            font-size: 0.72rem;
             font-weight: 600;
             font-family: var(--main-font);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 0.32rem;
             cursor: pointer;
             transition: all 0.2s ease;
             text-decoration: none;
             width: 100%;
             min-width: 0;
+            line-height: 1.2;
         }
 
         .action-btn + .action-btn {
-            margin-top: .35rem;
+            margin-top: .25rem;
         }
 
         .action-meta {
@@ -773,7 +805,7 @@ $activeDeliveries = count(array_filter(
         .action-cell {
             display: flex;
             flex-direction: column;
-            gap: .35rem;
+            gap: .25rem;
             align-items: stretch;
         }
 
@@ -788,6 +820,7 @@ $activeDeliveries = count(array_filter(
         .btn-delivered,
         .btn-delivery,
         .btn-failed,
+        .btn-details,
         .btn-view-proof {
             width: 100%;
             justify-content: center;
@@ -916,24 +949,24 @@ $activeDeliveries = count(array_filter(
             }
             
             .data-table {
-                font-size: 0.72rem;
-                min-width: 1200px;
+                font-size: 0.68rem;
+                min-width: 0;
             }
             
             .data-table th,
             .data-table td {
-                padding: 0.65rem;
+                padding: 0.5rem 0.35rem;
             }
             
             .order-items-preview {
-                max-width: 100px;
+                max-width: none;
             }
         }
-        
+
         @media (max-width: 1024px) {
             .data-table {
-                font-size: 0.78rem;
-                min-width: 1280px;
+                font-size: 0.7rem;
+                min-width: 0;
             }
         }
 </style>
@@ -1046,7 +1079,8 @@ $activeDeliveries = count(array_filter(
                 </thead>
                 <tbody>
                     <?php foreach ($ordersList as $order): ?>
-                        <tr>
+                        <?php $rowOrderId = (int) ($order['id'] ?? 0); ?>
+                        <tr id="order-<?= $rowOrderId ?>" class="<?= $highlightOrderId === $rowOrderId ? 'is-highlighted' : '' ?>">
                             <td>
                                 <div class="order-id">
                                     <a href="<?= site_url('admin/order-details/' . $order['id']) ?>" class="order-link">
@@ -1146,11 +1180,9 @@ $activeDeliveries = count(array_filter(
                                 // Debug: Show actual status (remove this line after fixing)
                                 // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
                                 ?>
-                                <?php if (!in_array($deliveryStatus, ['completed', 'delivered'], true)): ?>
-                                    <button type="button" class="action-btn btn-view-proof" onclick="openOrderDetailsModal(<?= (int) $order['id'] ?>)">
-                                        <i class="fas fa-eye"></i> View Details
-                                    </button>
-                                <?php endif; ?>
+                                <a class="action-btn btn-details" href="<?= site_url('admin/order-details/' . (int) $order['id']) ?>">
+                                    <i class="fas fa-circle-info"></i> Order Details
+                                </a>
                                 <?php if ($deliveryStatus === 'to_ship' || $deliveryStatus === 'ready_for_pickup' || $deliveryStatus === 'accepted_by_rider'): ?>
                                     <button class="action-btn btn-checkout" onclick="assignRider(<?= (int) $order['id'] ?>, <?= (int) ($order['assigned_rider_id'] ?? 0) ?>)">
                                         <i class="fas fa-motorcycle"></i> <?= ($deliveryStatus === 'to_ship') ? 'Assign Rider' : 'Reassign Rider' ?>

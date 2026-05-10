@@ -8,12 +8,17 @@
         padding: 1rem !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
-        z-index: 100 !important;
+        z-index: 10000 !important;
         border-right: 1px solid #e0e0e0 !important;
         border-bottom: none !important;
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.06) !important;
         background: #fff !important;
         text-align: left !important;
+        box-sizing: border-box !important;
+    }
+    .admin-sidebar,
+    .admin-sidebar * {
+        box-sizing: border-box !important;
     }
     .admin-sidebar .navbar-content {
         max-width: none !important;
@@ -129,7 +134,7 @@
         width: 100% !important;
         box-sizing: border-box !important;
     }
-    .admin-sidebar .user-info {
+     .admin-sidebar .user-info {
         justify-content: flex-start !important;
         flex-wrap: wrap !important;
         display: flex !important;
@@ -141,8 +146,20 @@
         box-sizing: border-box !important;
     }
 
+     .admin-sidebar .admin-user-actions {
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+    }
+
+     .admin-sidebar .admin-user-main {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.55rem !important;
+        min-width: 0 !important;
+    }
+
      .admin-sidebar .user-name {
-        max-width: 170px !important;
+        max-width: 150px !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
