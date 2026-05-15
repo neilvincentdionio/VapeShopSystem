@@ -214,13 +214,13 @@ $routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions',
 $routes->get('/admin/activity-logs/details/(:num)', 'AdminController::getLogDetailsById/$1', ['filter' => 'auth:admin']);
 $routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => 'auth:admin']);
 
-// API Authentication routes (JWT)
-$routes->post('/api/auth/login', 'ApiAuth::login');
-$routes->post('/api/auth/mfa/verify', 'ApiAuth::verifyMfa');
-$routes->post('/api/auth/mfa/resend', 'ApiAuth::resendMfa');
-$routes->post('/api/auth/refresh', 'ApiAuth::refresh');
-$routes->post('/api/auth/logout', 'ApiAuth::logout');
-$routes->get('/api/auth/me', 'ApiAuth::me', ['filter' => ['jwtauth', 'permission:read']]);
+// Legacy API authentication routes (kept for backward compatibility)
+$routes->post('/api/internal/auth/login', 'ApiAuth::login');
+$routes->post('/api/internal/auth/mfa/verify', 'ApiAuth::verifyMfa');
+$routes->post('/api/internal/auth/mfa/resend', 'ApiAuth::resendMfa');
+$routes->post('/api/internal/auth/refresh', 'ApiAuth::refresh');
+$routes->post('/api/internal/auth/logout', 'ApiAuth::logout');
+$routes->get('/api/internal/auth/me', 'ApiAuth::me', ['filter' => ['jwtauth', 'permission:read']]);
 
 // Product review and rating routes
 $routes->post('/customer/product-review/submit', 'Dashboard::submitProductReview', ['filter' => 'auth']);
@@ -240,3 +240,28 @@ $routes->post('/admin/reviews/reject/(:num)', 'Dashboard::rejectReview/$1', ['fi
 // Rider-Admin delivery workflow routes
 $routes->post('/dashboard/deliverOrderToRider', 'Dashboard::deliverOrderToRider', ['filter' => 'auth:admin']);
 $routes->get('/dashboard/getOrdersReadyForPickup', 'Dashboard::getOrdersReadyForPickup', ['filter' => 'auth:admin']);
+
+// Mobile customer API routes
+$routes->group('api', static function ($routes) {
+    // Public
+    $routes->get('products', 'Api\ProductController::index');
+    $routes->get('products/(:num)', 'Api\ProductController::show/$1');
+    $routes->get('categories', 'Api\ProductController::categories');
+
+    // Authentication
+    $routes->post('auth/register', 'Api\AuthController::register');
+    $routes->post('auth/login', 'Api\AuthController::login');
+    $routes->post('auth/mfa/verify', 'Api\AuthController::verifyMfa');
+    $routes->post('auth/logout', 'Api\AuthController::logout', ['filter' => 'jwtauth']);
+    $routes->get('auth/me', 'Api\AuthController::me', ['filter' => 'jwtauth']);
+
+    // Customer protected endpoints
+    $routes->get('cart', 'Api\CartController::index', ['filter' => ['jwtauth', 'apicustomer']]);
+    $routes->post('cart', 'Api\CartController::create', ['filter' => ['jwtauth', 'apicustomer']]);
+    $routes->put('cart/(:num)', 'Api\CartController::update/$1', ['filter' => ['jwtauth', 'apicustomer']]);
+    $routes->delete('cart/(:num)', 'Api\CartController::delete/$1', ['filter' => ['jwtauth', 'apicustomer']]);
+
+    $routes->post('orders', 'Api\OrderController::create', ['filter' => ['jwtauth', 'apicustomer']]);
+    $routes->get('orders', 'Api\OrderController::index', ['filter' => ['jwtauth', 'apicustomer']]);
+    $routes->get('orders/(:num)', 'Api\OrderController::show/$1', ['filter' => ['jwtauth', 'apicustomer']]);
+});

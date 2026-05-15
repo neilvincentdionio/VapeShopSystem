@@ -18,16 +18,18 @@ class JwtAuthFilter implements FilterInterface
         $token = JwtService::getTokenFromRequest();
         if ($token === null) {
             return $response->setJSON([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Authorization token required.',
+                'errors' => (object) [],
             ])->setStatusCode(401);
         }
 
         $payload = JwtService::validateToken($token);
         if (!JwtService::isAccessToken($payload)) {
             return $response->setJSON([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Invalid, expired, or wrong token type.',
+                'errors' => (object) [],
             ])->setStatusCode(401);
         }
 
@@ -36,8 +38,9 @@ class JwtAuthFilter implements FilterInterface
 
         if ($userId <= 0 || $userRole === '') {
             return $response->setJSON([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Invalid token payload.',
+                'errors' => (object) [],
             ])->setStatusCode(401);
         }
 
@@ -45,8 +48,9 @@ class JwtAuthFilter implements FilterInterface
         $user = $userModel->find($userId);
         if (!is_array($user) || (int) ($user['is_active'] ?? 0) !== 1) {
             return $response->setJSON([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'User is inactive or not found.',
+                'errors' => (object) [],
             ])->setStatusCode(401);
         }
 
@@ -62,8 +66,9 @@ class JwtAuthFilter implements FilterInterface
 
             if (!$granted) {
                 return $response->setJSON([
-                    'status' => 'error',
+                    'success' => false,
                     'message' => 'Access denied. Insufficient privileges.',
+                    'errors' => (object) [],
                 ])->setStatusCode(403);
             }
         }

@@ -39,6 +39,7 @@ class Filters extends BaseFilters
         'role'          => \App\Filters\RoleFilter::class,
         'permission'    => \App\Filters\PermissionFilter::class,
         'session'       => \App\Filters\SessionFilter::class,
+        'apicustomer'   => \App\Filters\CustomerApiFilter::class,
     ];
 
     /**
@@ -112,6 +113,9 @@ class Filters extends BaseFilters
                 'profile*',
                 'settings*'
             ]
-        ]
+        ],
+        'cors' => [
+            'before' => ['api/*'],
+        ],
     ];
 }
