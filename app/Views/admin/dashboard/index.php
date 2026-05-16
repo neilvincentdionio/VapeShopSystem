@@ -142,7 +142,7 @@
         .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-        .welcome-section, .card, .notifications-panel {
+        .welcome-section {
             background: #ffffff;
             border: 1px solid #e0e0e0;
             border-radius: 20px;
@@ -165,34 +165,6 @@
             text-align: center;
         }
         .stat-value { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.2rem;
-            margin-bottom: 2rem;
-        }
-        .card { padding: 1.5rem; }
-        .card-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-        .card-icon {
-            width: 48px; height: 48px; border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700;
-        }
-        .card-title { font-size: 1.1rem; font-weight: 600; }
-        .card-value { font-size: 2rem; font-weight: 700; color: #27c56f; }
-        .notifications-panel { padding: 1.5rem; }
-        .notification-item {
-            margin-top: .75rem;
-            padding: .75rem;
-            border-radius: 10px;
-            border-left: 4px solid;
-            background: #f8f9fa;
-            color: #333333;
-        }
-        .notification-success { border-left-color: #28a745; }
-        .notification-warning { border-left-color: #ffc107; }
-        .notification-info { border-left-color: #17a2b8; }
 
         @media (max-width: 768px) {
             .navbar-content {
@@ -234,49 +206,6 @@
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="card">
-                <div class="card-header"><div class="card-icon" style="background:#e3f2fd;color:#2196f3;">SP</div><div class="card-title">System Performance</div></div>
-                <div class="card-value"><?= $system_performance ?></div>
-                <div>System performance is optimal.</div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-icon" style="background:#f3e5f5;color:#9c27b0;">NT</div><div class="card-title">Notifications</div></div>
-                <div class="card-value"><?= count($notifications) ?></div>
-                <div>You have <?= count($notifications) ?> new notifications.</div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-icon" style="background:#e8f5e8;color:#4caf50;">GR</div><div class="card-title">Growth</div></div>
-                <div class="card-value"><?= $growth_rate ?></div>
-                <div>Monthly growth compared to the same period last year.</div>
-            </div>
-            <div class="card" id="recent-orders">
-                <div class="card-header"><div class="card-icon" style="background:#fff3e0;color:#ff9800;">RO</div><div class="card-title">Recent Orders</div></div>
-                <div class="card-value"><?= number_format($recent_orders) ?></div>
-                <div>New orders in the last 24 hours.</div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-icon" style="background:#fce4ec;color:#e91e63;">AU</div><div class="card-title">Active Users</div></div>
-                <div class="card-value"><?= number_format($active_sessions) ?></div>
-                <div>Currently active users in the system.</div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-icon" style="background:#e0f2f1;color:#009688;">MR</div><div class="card-title">Monthly Revenue</div></div>
-                <div class="card-value"><?= $monthly_revenue ?></div>
-                <div>Total revenue for the current month.</div>
-            </div>
-        </div>
-
-        <?php if (!empty($notifications)): ?>
-            <div class="notifications-panel" id="offers">
-                <h3>Recent Notifications</h3>
-                <?php foreach ($notifications as $notification): ?>
-                    <div class="notification-item notification-<?= $notification['type'] ?>">
-                        <?= htmlspecialchars($notification['message']) ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
     </div>
 
     <script>

@@ -48,14 +48,12 @@
         text-decoration: none !important;
         color: #1f2937 !important;
     }
-    .admin-sidebar .brand-mark {
+    .admin-sidebar .brand-logo-image {
         display: block !important;
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.03em !important;
-        color: #4c1d95 !important;
-        margin-bottom: 0.2rem !important;
-        text-align: center !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 112px !important;
+        margin: 0 auto !important;
     }
     .admin-sidebar .navbar-center {
         flex: 1 1 auto !important;
@@ -215,6 +213,120 @@
         width: calc(100% - 270px) !important;
         padding: 1.5rem !important;
         overflow-x: hidden !important;
+    }
+
+    /* Unified Admin Button System */
+    .container .btn,
+    .container button.btn,
+    .container a.btn,
+    .container .action-btn,
+    .container .btn-view,
+    .container .btn-edit,
+    .container .btn-delete,
+    .container .btn-view-proof,
+    .container .btn-danger-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.35rem !important;
+        padding: 0.58rem 0.95rem !important;
+        border-radius: 10px !important;
+        border: 1px solid transparent !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        line-height: 1.1 !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        transition: all 0.18s ease !important;
+    }
+
+    .container .btn-sm {
+        padding: 0.42rem 0.72rem !important;
+        font-size: 0.85rem !important;
+        border-radius: 8px !important;
+    }
+
+    .container .btn-lg {
+        padding: 0.72rem 1.15rem !important;
+        font-size: 1rem !important;
+        border-radius: 11px !important;
+    }
+
+    .container .btn-primary,
+    .container .btn-success,
+    .container .btn-checkout,
+    .container .btn-delivered {
+        background: #27c56f !important;
+        border-color: #27c56f !important;
+        color: #ffffff !important;
+    }
+
+    .container .btn-primary:hover,
+    .container .btn-success:hover,
+    .container .btn-checkout:hover,
+    .container .btn-delivered:hover {
+        background: #20ae61 !important;
+        border-color: #20ae61 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .container .btn-secondary {
+        background: #ffffff !important;
+        border-color: #d1d5db !important;
+        color: #374151 !important;
+    }
+
+    .container .btn-secondary:hover {
+        background: #f3f4f6 !important;
+        border-color: #c7cdd5 !important;
+    }
+
+    .container .btn-warning,
+    .container .btn-edit {
+        background: #f59e0b !important;
+        border-color: #f59e0b !important;
+        color: #ffffff !important;
+    }
+
+    .container .btn-warning:hover,
+    .container .btn-edit:hover {
+        background: #d88707 !important;
+        border-color: #d88707 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .container .btn-danger,
+    .container .btn-delete,
+    .container .btn-danger-icon {
+        background: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #ffffff !important;
+    }
+
+    .container .btn-danger:hover,
+    .container .btn-delete:hover,
+    .container .btn-danger-icon:hover {
+        background: #bf2d3b !important;
+        border-color: #bf2d3b !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .container .btn-info,
+    .container .btn-view,
+    .container .btn-details,
+    .container .btn-view-proof {
+        background: #0ea5e9 !important;
+        border-color: #0ea5e9 !important;
+        color: #ffffff !important;
+    }
+
+    .container .btn-info:hover,
+    .container .btn-view:hover,
+    .container .btn-details:hover,
+    .container .btn-view-proof:hover {
+        background: #0b90cc !important;
+        border-color: #0b90cc !important;
+        transform: translateY(-1px) !important;
     }
 
     @media (max-width: 992px) {

@@ -64,7 +64,13 @@
             font-weight: 600;
             transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
         }
+        .backup-page .btn {
+            border-radius: 999px !important;
+            padding: .8rem 1.1rem !important;
+            font-size: .95rem !important;
+        }
         .btn-sm { padding: .65rem .95rem; font-size: .9rem; }
+        .backup-page .btn-sm { padding: .65rem .95rem !important; font-size: .9rem !important; }
         .btn-primary { background: #27c56f; color: #fff; }
         .btn-warning { background: #f59e0b; color: #fff; }
         .btn-danger { background: #ef4444; color: #fff; }
@@ -248,7 +254,7 @@
     </style>
 <?= $this->include('admin/partials/sidebar_styles') ?>
 </head>
-<body>
+<body class="backup-page">
 <?= $this->include('admin/partials/sidebar') ?>
 <div class="container-fluid">
     <div class="row">

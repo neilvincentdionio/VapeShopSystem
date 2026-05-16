@@ -31,12 +31,13 @@
             z-index: 30;
             background: #ffffff;
             border-bottom: 1px solid var(--border);
-            padding: .9rem 1.5rem;
+            padding: .35rem 1.2rem;
+            min-height: 74px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .navbar-content {
-            max-width: 1240px;
+            max-width: 1600px;
             margin: 0 auto;
             display: flex;
             align-items: center;
@@ -45,28 +46,20 @@
         }
 
         .brand {
-            color: #333333;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: .6rem;
-            font-weight: 700;
-            letter-spacing: .2px;
+            gap: .5rem;
             white-space: nowrap;
+            flex: 0 0 auto;
         }
 
-        .brand-logo {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, var(--accent), #7ef0b2);
-            color: #ffffff;
-            font-size: .85rem;
-            font-weight: 700;
-            box-shadow: 0 2px 4px rgba(39, 197, 111, 0.2);
+        .brand-logo-image {
+            height: 62px;
+            width: auto;
+            display: block;
+            transform: scale(1.6);
+            transform-origin: left center;
         }
 
         .nav-links {
@@ -75,6 +68,7 @@
             gap: .5rem;
             flex-wrap: wrap;
             justify-content: center;
+            flex: 1 1 auto;
         }
 
         .nav-links a {
@@ -112,6 +106,8 @@
             display: flex;
             align-items: center;
             gap: .7rem;
+            flex: 0 0 auto;
+            justify-content: flex-end;
         }
 
         .user-chip {
@@ -195,9 +191,11 @@
         }
 
         .container {
-            max-width: 1240px;
+            max-width: 1700px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
+            font-size: 0.86rem;
+            zoom: 0.9;
         }
 
         .page-grid {
@@ -208,8 +206,13 @@
         @media (max-width: 768px) {
             .navbar { padding: .85rem .95rem; }
             .navbar-content { flex-direction: column; align-items: stretch; gap: .65rem; }
+            .brand { flex: 0 0 auto; justify-content: center; }
+            .brand-logo-image {
+                height: 54px;
+                transform: scale(1.28);
+            }
             .nav-links { justify-content: flex-start; }
-            .nav-right { justify-content: space-between; }
+            .nav-right { flex: 0 0 auto; justify-content: space-between; }
             .container { padding: 1.5rem .95rem; }
         }
     </style>
@@ -218,8 +221,7 @@
     <nav class="navbar">
         <div class="navbar-content">
             <a href="<?= site_url('customer/home') ?>" class="brand">
-                <span class="brand-logo">Q</span>
-                <span>QuickPuff Vape Shop</span>
+                <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff Vape Shop" class="brand-logo-image">
             </a>
 
             <div class="nav-links">

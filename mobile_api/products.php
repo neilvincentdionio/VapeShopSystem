@@ -42,47 +42,6 @@ function mobile_product_review_map(PDO $db): array
     return $cached;
 }
 
-function mobile_has_variant_table(PDO $db): bool
-{
-    static $cached = null;
-    if ($cached !== null) {
-        return $cached;
-    }
-
-    try {
-        $stmt = $db->query("SHOW TABLES LIKE 'product_variants'");
-        $cached = $stmt !== false && $stmt->fetch() !== false;
-    } catch (Throwable $e) {
-        $cached = false;
-    }
-
-    return $cached;
-}
-
-function mobile_uses_flavor_selection(string $category): bool
-{
-    return in_array(strtolower(trim($category)), ['pods', 'disposable', 'e-liquid'], true);
-}
-
-function mobile_format_puffs(int $puffs): string
-{
-    return $puffs > 0 ? number_format($puffs) . ' Puffs' : '';
-}
-
-function mobile_build_spec(string $category, int $puffs): string
-{
-    $category = trim($category);
-    $puffLabel = mobile_format_puffs($puffs);
-    if ($category === '') {
-        return $puffLabel;
-    }
-    if ($puffLabel === '') {
-        return $category;
-    }
-
-    return $category . ' • ' . $puffLabel;
-}
-
 /**
  * @return array<int, list<array<string, mixed>>>
  */

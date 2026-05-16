@@ -206,6 +206,7 @@ $activeDeliveries = count(array_filter(
 
         .orders-container {
             width: 100%;
+            zoom: 0.94;
         }
 
         .page-header {
@@ -409,7 +410,7 @@ $activeDeliveries = count(array_filter(
         }
 
         .table-responsive {
-            overflow-x: hidden;
+            overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }
 
@@ -443,8 +444,8 @@ $activeDeliveries = count(array_filter(
 
         .data-table td:last-child {
             vertical-align: middle;
-            width: 120px;
-            min-width: 120px;
+            width: 170px;
+            min-width: 170px;
         }
 
         .data-table tr:hover {
@@ -485,8 +486,8 @@ $activeDeliveries = count(array_filter(
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 0.5rem;
-            min-width: 170px;
+            gap: 0.3rem;
+            min-width: 128px;
         }
         
         .order-id {
@@ -778,20 +779,20 @@ $activeDeliveries = count(array_filter(
         .action-btn {
             border: none;
             border-radius: 7px;
-            padding: 0.42rem 0.5rem;
-            font-size: 0.72rem;
+            padding: 0.34rem 0.42rem;
+            font-size: 0.66rem;
             font-weight: 600;
             font-family: var(--main-font);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.32rem;
+            gap: 0.22rem;
             cursor: pointer;
             transition: all 0.2s ease;
             text-decoration: none;
             width: 100%;
             min-width: 0;
-            line-height: 1.2;
+            line-height: 1.1;
         }
 
         .action-btn + .action-btn {
@@ -813,6 +814,23 @@ $activeDeliveries = count(array_filter(
         .action-cell .action-btn,
         .action-cell .action-meta {
             width: 100%;
+        }
+
+        /* Force compact action buttons on Orders table (override global admin button system) */
+        .action-cell .action-btn,
+        .action-cell .btn-details,
+        .action-cell .btn-checkout,
+        .action-cell .btn-transit,
+        .action-cell .btn-delivered,
+        .action-cell .btn-delivery,
+        .action-cell .btn-failed,
+        .action-cell .btn-view-proof {
+            padding: 0.3rem 0.4rem !important;
+            font-size: 0.64rem !important;
+            border-radius: 6px !important;
+            gap: 0.2rem !important;
+            line-height: 1.05 !important;
+            min-height: 26px !important;
         }
 
         .btn-checkout,
@@ -971,6 +989,34 @@ $activeDeliveries = count(array_filter(
         }
 </style>
 <?= $this->include('admin/partials/sidebar_styles') ?>
+<style>
+/* Final Orders-page override (must be after sidebar_styles include) */
+.action-cell .action-btn,
+.action-cell .btn-details,
+.action-cell .btn-checkout,
+.action-cell .btn-transit,
+.action-cell .btn-delivered,
+.action-cell .btn-delivery,
+.action-cell .btn-failed,
+.action-cell .btn-view-proof {
+    padding: 0.28rem 0.38rem !important;
+    font-size: 0.62rem !important;
+    border-radius: 6px !important;
+    gap: 0.16rem !important;
+    line-height: 1 !important;
+    min-height: 24px !important;
+}
+
+.action-buttons {
+    min-width: 118px !important;
+    gap: 0.25rem !important;
+}
+
+.data-table td:last-child {
+    width: 138px !important;
+    min-width: 138px !important;
+}
+</style>
 </head>
 <body>
     <?= $this->include('admin/partials/sidebar') ?>

@@ -16,7 +16,7 @@ $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
         <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
-            <span class="brand-mark">QuickPuff VapeShop</span>
+            <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo-image">
         </a>
 
         <div class="navbar-center">
