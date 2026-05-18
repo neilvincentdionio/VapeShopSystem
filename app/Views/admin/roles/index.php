@@ -45,6 +45,12 @@
 <body>
 <?= $this->include('admin/partials/sidebar') ?>
 <div class="container">
+    <?php
+    $pageHeaderTitle = 'Roles Management';
+    $pageHeaderSubtitle = 'Define system roles and assign permission access policies.';
+    ?>
+    <?= $this->include('admin/partials/page_header') ?>
+
     <?php if (session()->getFlashdata('success')): ?><div class="alert alert-success"><?= esc(session()->getFlashdata('success')) ?></div><?php endif; ?>
     <?php if (session()->getFlashdata('error')): ?><div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div><?php endif; ?>
 

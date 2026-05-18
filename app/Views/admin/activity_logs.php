@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title><?= htmlspecialchars($page_title ?? 'Activity Logs') ?> - Quick Puff Vape Shop System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -319,6 +318,12 @@
     <?= $this->include('admin/partials/sidebar') ?>
 
     <div class="container">
+        <?php
+        $pageHeaderTitle = 'Activity Logs';
+        $pageHeaderSubtitle = 'Track system events, user actions, and security-relevant activity.';
+        ?>
+        <?= $this->include('admin/partials/page_header') ?>
+
         <?php if (session()->getFlashdata('success')): ?>
             <div class="alert alert-success"><?= htmlspecialchars(session()->getFlashdata('success')) ?></div>
         <?php endif; ?>
@@ -327,9 +332,6 @@
         <?php endif; ?>
 
         <div class="welcome-section">
-            <h2>Activity Logs</h2>
-            <p>Monitor and track user activities across the system.</p>
-            
             <div class="stats-grid">
                 <div class="stat-item">
                     <div class="stat-value"><?= $activityStats['last_24h'] ?? 0 ?></div>
@@ -447,6 +449,9 @@
                 <div class="card-icon" style="background:#fce4ec;color:#e91e63;">AL</div>
                 <div class="card-title">Recent Activity</div>
                 <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+                    <button class="btn btn-danger" onclick="cleanupLogs()">
+                        Cleanup 90d+
+                    </button>
                     <button class="btn btn-primary" onclick="refreshLogs()">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
@@ -536,6 +541,14 @@
     <script>
         // Base URL for AJAX requests
         const baseUrl = '<?= site_url() ?>';
+        const csrfTokenName = '<?= csrf_token() ?>';
+        let csrfHash = '<?= csrf_hash() ?>';
+
+        function setCsrfFromResponse(data) {
+            if (data && typeof data.csrfHash === 'string' && data.csrfHash !== '') {
+                csrfHash = data.csrfHash;
+            }
+        }
         
         function viewLogDetails(logId) {
             // Show modal
@@ -544,9 +557,10 @@
             // Show loading
             document.getElementById('logDetailsContent').innerHTML = '<div style="text-align: center;"><div style="border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div></div>';
             
-            fetch(`${baseUrl}/admin/get-log-details/${logId}`)
+            fetch(`${baseUrl}/admin/activity-logs/details/${logId}`)
                 .then(response => response.json())
                 .then(data => {
+                    setCsrfFromResponse(data);
                     if (!data.success) {
                         document.getElementById('logDetailsContent').innerHTML = `<div class="alert alert-error">${data.message || 'Unknown error'}</div>`;
                         return;
@@ -652,20 +666,45 @@
             form.method = 'GET';
             form.action = `${baseUrl}/admin/export-logs?type=${type}`;
             form.target = '_blank';
-            
-            // Add any necessary CSRF token if present
-            const csrfToken = document.querySelector('meta[name="csrf-token"]');
-            if (csrfToken) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = csrfToken.getAttribute('name') || 'csrf_token';
-                input.value = csrfToken.getAttribute('content');
-                form.appendChild(input);
-            }
-            
+
             document.body.appendChild(form);
             form.submit();
             document.body.removeChild(form);
+        }
+
+        function cleanupLogs() {
+            if (!confirm('Delete activity logs older than 90 days?')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append(csrfTokenName, csrfHash);
+
+            fetch(`${baseUrl}/admin/activity-logs/cleanup`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                setCsrfFromResponse(data);
+                if (data.success) {
+                    alert(`Cleaned up ${data.count || 0} old log(s).`);
+                    refreshLogs();
+                } else {
+                    alert(data.message || 'Failed to clean up logs.');
+                }
+            })
+            .catch(error => {
+                alert('Error cleaning up logs: ' + error.message);
+            });
         }
 
         function exportSecurityReport(format = 'csv') {

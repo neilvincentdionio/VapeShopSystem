@@ -2535,8 +2535,8 @@ class Dashboard extends BaseController
 
         $userRole = (string) $this->session->get('user_role');
 
-        if ($userRole === 'customer') {
-            // For customers, redirect to profile
+        if (in_array($userRole, ['customer', 'rider'], true)) {
+            // Customers and riders manage account details through profile page.
             return redirect()->to('/dashboard/profile');
         }
 
@@ -3088,6 +3088,13 @@ class Dashboard extends BaseController
             ]));
         }
 
+        if ($userRole === 'rider') {
+            $riderAccount = $this->userModel->find((int) $this->session->get('user_id'));
+            return view('rider/profile', $this->getRiderPageData('Profile', 'profile', [
+                'rider_account' => $riderAccount,
+            ]));
+        }
+
         $data = [
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
@@ -3100,20 +3107,30 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Update customer profile details from profile settings.
+     * Update customer/rider profile details from profile settings.
      */
     public function updateCustomerProfile()
     {
-        $accessCheck = $this->checkCustomerAccess();
-        if ($accessCheck !== true) {
-            return $accessCheck;
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        $userRole = (string) $this->session->get('user_role');
+        if (!in_array($userRole, ['customer', 'rider'], true)) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied.');
         }
 
         $userId = (int) $this->session->get('user_id');
-        $customer = $this->userModel->find($userId);
+        $account = $this->userModel->find($userId);
 
-        if (!$customer || (string) ($customer['role'] ?? '') !== 'customer') {
-            return redirect()->to('/dashboard/profile')->with('error', 'Customer account not found.');
+        if (!$account || !in_array((string) ($account['role'] ?? ''), ['customer', 'rider'], true)) {
+            return redirect()->to('/dashboard/profile')->with('error', 'Account not found.');
         }
 
         $name = trim((string) $this->request->getPost('name'));

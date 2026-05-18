@@ -215,6 +215,32 @@
         overflow-x: hidden !important;
     }
 
+    .container .admin-page-header,
+    .container-fluid .admin-page-header {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 14px !important;
+        padding: 1.1rem 1.2rem !important;
+        margin-bottom: 1rem !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+    }
+
+    .container .admin-page-header h1,
+    .container-fluid .admin-page-header h1 {
+        font-size: 2rem !important;
+        line-height: 1.1 !important;
+        font-weight: 700 !important;
+        color: #1f2937 !important;
+        margin: 0 0 .35rem 0 !important;
+    }
+
+    .container .admin-page-header p,
+    .container-fluid .admin-page-header p {
+        font-size: .92rem !important;
+        color: #6b7280 !important;
+        margin: 0 !important;
+    }
+
     /* Unified Admin Button System */
     .container .btn,
     .container button.btn,

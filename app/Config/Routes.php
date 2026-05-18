@@ -211,11 +211,8 @@ $routes->get('/test-products', function() {
 
 // Session and Activity Logs routes (Admin only)
 $routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' => 'auth:admin']);
-$routes->get('/admin/get-session-details/(.+)', 'AdminController::getSessionDetails/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/end-session/(.+)', 'AdminController::endSession/$1', ['filter' => 'auth:admin']);
 
 $routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => 'auth:admin']);
-$routes->get('/admin/get-log-details/(:num)', 'AdminController::getLogDetails/$1', ['filter' => 'auth:admin']);
 $routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => 'auth:admin']);
 $routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => 'auth:admin']);
 $routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => 'auth']);
@@ -226,11 +223,11 @@ $routes->post('/admin/messages/(:num)/assign-rider', 'Messages::assignRider/$1',
 
 // Additional routes for index views compatibility
 $routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/session-logs/end/(:num)', 'AdminController::endSessionById/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions', ['filter' => 'auth:admin']);
+$routes->post('/admin/session-logs/end/(:num)', 'AdminController::endSessionById/$1', ['filter' => ['auth:admin', 'csrf']]);
+$routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions', ['filter' => ['auth:admin', 'csrf']]);
 
 $routes->get('/admin/activity-logs/details/(:num)', 'AdminController::getLogDetailsById/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => 'auth:admin']);
+$routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => ['auth:admin', 'csrf']]);
 
 // Legacy API authentication routes (kept for backward compatibility)
 $routes->post('/api/internal/auth/login', 'ApiAuth::login');

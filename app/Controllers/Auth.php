@@ -202,10 +202,11 @@ class Auth extends BaseController
 
             $issued = $this->otpService->issueOtp((int) $user['id'], (string) $user['email']);
 
-            if (!$issued['sent']) {
-                $this->session->setFlashdata('otp_debug', $issued['otp']);
-                $this->session->setFlashdata('otp_email_error', (string) ($issued['email_error'] ?? 'Unable to send OTP email.'));
-            }
+            $this->setOtpTestingHint(
+                !($issued['sent'] ?? false),
+                (string) ($issued['otp'] ?? ''),
+                (string) ($issued['email_error'] ?? 'Unable to send OTP email.')
+            );
 
             return redirect()->to('/otp')
                 ->with('success', 'Password verified. Enter the OTP to finish signing in.');
@@ -332,10 +333,11 @@ class Auth extends BaseController
             );
         }
 
-        if (!($result['sent'] ?? false)) {
-            $this->session->setFlashdata('otp_debug', (string) ($result['otp'] ?? ''));
-            $this->session->setFlashdata('otp_email_error', (string) ($result['email_error'] ?? 'Unable to send OTP email.'));
-        }
+        $this->setOtpTestingHint(
+            !($result['sent'] ?? false),
+            (string) ($result['otp'] ?? ''),
+            (string) ($result['email_error'] ?? 'Unable to send OTP email.')
+        );
 
         return redirect()->to('/otp')->with('success', 'A new OTP has been sent.');
     }
@@ -373,7 +375,22 @@ class Auth extends BaseController
             'otp_user_role',
             'otp_user_role_id',
             'otp_user_shop_name',
+            'otp_debug',
+            'otp_email_error',
         ];
+    }
+
+    private function setOtpTestingHint(bool $hasEmailFailure, string $otp = '', string $emailError = ''): void
+    {
+        if (!$hasEmailFailure) {
+            $this->session->remove(['otp_debug', 'otp_email_error']);
+            return;
+        }
+
+        $this->session->set([
+            'otp_debug' => $otp,
+            'otp_email_error' => $emailError !== '' ? $emailError : 'Unable to send OTP email.',
+        ]);
     }
 
     /**

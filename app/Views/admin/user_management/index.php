@@ -461,6 +461,12 @@
 
     <!-- Main Content -->
     <div class="container">
+        <?php
+        $pageHeaderTitle = 'User Management';
+        $pageHeaderSubtitle = 'Manage system users, roles, and account status.';
+        ?>
+        <?= $this->include('admin/partials/page_header') ?>
+
         <?php if (session()->getFlashdata('success')): ?>
             <div class="alert alert-success">
                 <?= htmlspecialchars(session()->getFlashdata('success')) ?>
@@ -472,11 +478,6 @@
                 <?= htmlspecialchars(session()->getFlashdata('error')) ?>
             </div>
         <?php endif; ?>
-
-        <div class="page-header">
-            <h1>User Management</h1>
-            <p>Manage system users, roles, and permissions</p>
-        </div>
 
         <div class="actions-bar">
             <div class="search-box">

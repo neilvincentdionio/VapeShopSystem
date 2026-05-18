@@ -180,6 +180,24 @@
         }
         .card-title { font-size: 1.1rem; font-weight: 600; }
         .card-value { font-size: 2rem; font-weight: 700; color: #27c56f; }
+        .filters {
+            display: grid;
+            grid-template-columns: 170px 1fr auto;
+            gap: .75rem;
+            margin-bottom: 1rem;
+            align-items: center;
+        }
+        .filters input,
+        .filters select {
+            padding: .55rem .7rem;
+            border: 1px solid #dcdcdc;
+            border-radius: 8px;
+            width: 100%;
+        }
+        .filters .filter-actions {
+            display: flex;
+            gap: .5rem;
+        }
         
         .table-responsive {
             overflow-x: auto;
@@ -208,6 +226,7 @@
         .badge-info { background: #17a2b8; color: white; padding: .25rem .5rem; border-radius: 5px; font-size: .8rem; }
         .badge-warning { background: #ffc107; color: #212529; padding: .25rem .5rem; border-radius: 5px; font-size: .8rem; }
         .badge-danger { background: #dc3545; color: white; padding: .25rem .5rem; border-radius: 5px; font-size: .8rem; }
+        .badge-secondary { background: #6c757d; color: white; padding: .25rem .5rem; border-radius: 5px; font-size: .8rem; }
         
         .btn {
             padding: .5rem 1rem;
@@ -274,6 +293,9 @@
             .nav-right { justify-content: space-between; }
             .container { padding: 0 1rem; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .filters {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
     <?= $this->include('admin/partials/sidebar_styles') ?>
@@ -282,6 +304,12 @@
     <?= $this->include('admin/partials/sidebar') ?>
 
     <div class="container">
+        <?php
+        $pageHeaderTitle = 'Session Logs';
+        $pageHeaderSubtitle = 'Monitor and manage user session activity across the system.';
+        ?>
+        <?= $this->include('admin/partials/page_header') ?>
+
         <?php if (session()->getFlashdata('success')): ?>
             <div class="alert alert-success"><?= htmlspecialchars(session()->getFlashdata('success')) ?></div>
         <?php endif; ?>
@@ -290,9 +318,6 @@
         <?php endif; ?>
 
         <div class="welcome-section">
-            <h2>Session Logs</h2>
-            <p>Monitor and manage user sessions in the system.</p>
-            
             <div class="stats-grid">
                 <div class="stat-item">
                     <div class="stat-value"><?= $activeSessions ?? 0 ?></div>
@@ -316,7 +341,7 @@
         <div class="card">
             <div class="card-header">
                 <div class="card-icon" style="background:#e3f2fd;color:#2196f3;">SL</div>
-                <div class="card-title">Active Sessions</div>
+                <div class="card-title">Session List</div>
                 <button class="btn btn-primary" onclick="refreshSessions()" style="margin-left: auto;">
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                         <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
@@ -325,46 +350,81 @@
                     Refresh
                 </button>
             </div>
+            <div class="filters">
+                <select id="statusFilter">
+                    <option value="" <?= ($statusFilter ?? '') === '' ? 'selected' : '' ?>>All Status</option>
+                    <option value="active" <?= ($statusFilter ?? '') === 'active' ? 'selected' : '' ?>>Active</option>
+                    <option value="inactive" <?= ($statusFilter ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                    <option value="expired" <?= ($statusFilter ?? '') === 'expired' ? 'selected' : '' ?>>Expired</option>
+                </select>
+                <input type="text" id="userFilter" placeholder="Search by user name or email..." value="<?= esc($userFilter ?? '') ?>">
+                <div class="filter-actions">
+                    <button class="btn btn-primary" type="button" onclick="filterSessions()">Filter</button>
+                    <button class="btn btn-info" type="button" onclick="clearFilters()">Clear</button>
+                    <button class="btn btn-danger" type="button" onclick="cleanupOldSessions()">Cleanup 30d+</button>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>User</th>
                             <th>Email</th>
+                            <th>Session ID</th>
                             <th>IP Address</th>
                             <th>Login Time</th>
                             <th>Last Activity</th>
+                            <th>Logout Time</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
+                        <?php if (empty($sessions)): ?>
+                        <tr>
+                            <td colspan="9" style="text-align:center;">No sessions found for current filters.</td>
+                        </tr>
+                        <?php else: ?>
                         <?php foreach ($sessions as $session): ?>
+                        <?php
+                            $status = strtolower((string) ($session['status'] ?? 'inactive'));
+                            $statusClass = 'badge-secondary';
+                            if ($status === 'active') {
+                                $statusClass = 'badge-success';
+                            } elseif ($status === 'expired') {
+                                $statusClass = 'badge-warning';
+                            }
+                        ?>
                         <tr>
                             <td><?= esc($session['name'] ?? 'Unknown') ?></td>
-                            <td><?= esc($session['email']) ?></td>
+                            <td><?= esc((string) ($session['email'] ?? 'N/A')) ?></td>
+                            <td><small><code><?= esc((string) ($session['session_id'] ?? '')) ?></code></small></td>
                             <td><?= esc($session['ip_address']) ?></td>
-                            <td><?= date('M j, Y H:i', strtotime($session['login_time'])) ?></td>
-                            <td><?= date('M j, Y H:i', strtotime($session['last_activity'])) ?></td>
+                            <td><?= !empty($session['login_time']) ? esc(date('M j, Y H:i', strtotime((string) $session['login_time']))) : '-' ?></td>
+                            <td><?= !empty($session['last_activity']) ? esc(date('M j, Y H:i', strtotime((string) $session['last_activity']))) : '-' ?></td>
+                            <td><?= !empty($session['logout_time']) ? esc(date('M j, Y H:i', strtotime((string) $session['logout_time']))) : '-' ?></td>
                             <td>
-                                <span class="badge-success"><?= esc($session['status']) ?></span>
+                                <span class="<?= $statusClass ?>"><?= esc(ucfirst($status)) ?></span>
                             </td>
                             <td>
-                                <button class="btn btn-info btn-sm" onclick="viewSessionDetails('<?= $session['session_id'] ?>')" title="Session ID: <?= $session['session_id'] ?>">
+                                <button class="btn btn-info btn-sm" onclick="viewSessionDetails('<?= (int) $session['id'] ?>')" title="Session ID: <?= esc((string) ($session['session_id'] ?? '')) ?>">
                                     <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                         <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                                         <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
                                     </svg>
                                 </button>
-                                <button class="btn btn-danger btn-sm" onclick="endSession('<?= $session['session_id'] ?>')">
+                                <?php if ($status === 'active'): ?>
+                                <button class="btn btn-danger btn-sm" onclick="endSession('<?= (int) $session['id'] ?>')">
                                     <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                         <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
                                         <path d="M4.5 8a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5z"/>
                                     </svg>
                                 </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -396,6 +456,27 @@
     <script>
         // Base URL for AJAX requests
         const baseUrl = '<?= site_url() ?>';
+        const csrfTokenName = '<?= csrf_token() ?>';
+        let csrfHash = '<?= csrf_hash() ?>';
+        
+        function setCsrfFromResponse(data) {
+            if (data && typeof data.csrfHash === 'string' && data.csrfHash !== '') {
+                csrfHash = data.csrfHash;
+            }
+        }
+        
+        function filterSessions() {
+            const status = document.getElementById('statusFilter').value;
+            const user = document.getElementById('userFilter').value.trim();
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (user) params.append('user', user);
+            window.location.href = '<?= site_url('/admin/session-logs') ?>' + (params.toString() ? '?' + params.toString() : '');
+        }
+        
+        function clearFilters() {
+            window.location.href = '<?= site_url('/admin/session-logs') ?>';
+        }
         
         function viewSessionDetails(sessionId) {
             console.log('Loading session details for:', sessionId);
@@ -408,7 +489,7 @@
             
             // Fetch session details
             const encodedSessionId = encodeURIComponent(sessionId);
-            fetch(`${baseUrl}/admin/get-session-details/${encodedSessionId}`)
+            fetch(`${baseUrl}/admin/session-logs/details/${encodedSessionId}`)
                 .then(response => {
                     console.log('Response status:', response.status);
                     if (!response.ok) {
@@ -418,49 +499,30 @@
                 })
                 .then(data => {
                     console.log('Session data:', data);
+                    setCsrfFromResponse(data);
                     
                     if (!data.success) {
                         document.getElementById('sessionDetailsContent').innerHTML = `<div class="alert alert-error">${data.message || 'Unknown error'}</div>`;
                         return;
                     }
                     
-                    const session = data.session;
-                    const userLogs = data.userLogs || [];
+                    const session = data.data || {};
                     
                     let html = `
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
                             <div>
                                 <h6>Session Information</h6>
                                 <table style="width: 100%; border-collapse: collapse;">
+                                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>User:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.user_name || 'N/A'} (${session.user_email || 'N/A'})</td></tr>
                                     <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>User ID:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.user_id || 'N/A'}</td></tr>
                                     <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Session ID:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><code>${session.session_id || 'N/A'}</code></td></tr>
                                     <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>IP Address:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.ip_address || 'N/A'}</td></tr>
                                     <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Login Time:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.login_time ? new Date(session.login_time).toLocaleString() : 'N/A'}</td></tr>
                                     <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Last Activity:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.last_activity ? new Date(session.last_activity).toLocaleString() : 'N/A'}</td></tr>
-                                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Status:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><span class="badge-success">${session.status || 'N/A'}</span></td></tr>
+                                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Logout Time:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;">${session.logout_time ? new Date(session.logout_time).toLocaleString() : 'N/A'}</td></tr>
+                                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>Status:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><span class="${session.status === 'active' ? 'badge-success' : (session.status === 'expired' ? 'badge-warning' : 'badge-secondary')}">${session.status || 'N/A'}</span></td></tr>
+                                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><strong>User Agent:</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #f0f0f0;"><small>${session.user_agent || 'N/A'}</small></td></tr>
                                 </table>
-                            </div>
-                            <div>
-                                <h6>Recent Activity</h6>
-                                <div style="max-height: 200px; overflow-y: auto;">
-                    `;
-                    
-                    if (userLogs.length > 0) {
-                        userLogs.forEach(log => {
-                            html += `
-                                <div style="border-bottom: 1px solid #f0f0f0; padding: 0.5rem 0; margin-bottom: 0.5rem;">
-                                    <small style="color: #666;">${log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</small><br>
-                                    <strong>${log.action_type || 'N/A'}</strong><br>
-                                    ${log.action || 'N/A'}
-                                </div>
-                            `;
-                        });
-                    } else {
-                        html += '<p style="color: #666;">No recent activity found</p>';
-                    }
-                    
-                    html += `
-                                </div>
                             </div>
                         </div>
                     `;
@@ -479,11 +541,11 @@
             }
             
             const formData = new FormData();
-            formData.append('session_id', sessionId);
+            formData.append(csrfTokenName, csrfHash);
             
             const encodedSessionId = encodeURIComponent(sessionId);
             
-            fetch(`${baseUrl}/admin/end-session/${encodedSessionId}`, {
+            fetch(`${baseUrl}/admin/session-logs/end/${encodedSessionId}`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -497,6 +559,7 @@
                 return response.json();
             })
             .then(data => {
+                setCsrfFromResponse(data);
                 if (data.success) {
                     alert('Session ended successfully');
                     refreshSessions();
@@ -507,6 +570,42 @@
             .catch(error => {
                 console.error('Error ending session:', error);
                 alert('Error ending session: ' + error.message);
+            });
+        }
+
+        function cleanupOldSessions() {
+            if (!confirm('Delete stored sessions older than 30 days?')) {
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append(csrfTokenName, csrfHash);
+            
+            fetch(`${baseUrl}/admin/session-logs/cleanup`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                setCsrfFromResponse(data);
+                if (data.success) {
+                    alert(`Cleaned up ${data.count || 0} old session(s).`);
+                    refreshSessions();
+                } else {
+                    alert(data.message || 'Failed to clean up sessions');
+                }
+            })
+            .catch(error => {
+                console.error('Error cleaning up sessions:', error);
+                alert('Error cleaning up sessions: ' + error.message);
             });
         }
 

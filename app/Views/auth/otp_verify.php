@@ -45,10 +45,10 @@
             <div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
         <?php endif; ?>
 
-        <?php if (session()->getFlashdata('otp_email_error')): ?>
+        <?php if (session()->get('otp_email_error')): ?>
             <div class="alert alert-warn">
                 Email delivery failed. For testing, use this OTP:
-                <strong><code><?= esc(session()->getFlashdata('otp_debug') ?? '') ?></code></strong>
+                <strong><code><?= esc(session()->get('otp_debug') ?? '') ?></code></strong>
             </div>
         <?php endif; ?>
 

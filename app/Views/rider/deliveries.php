@@ -132,6 +132,9 @@
 
     .status-badge {
         display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .35rem;
         border-radius: 999px;
         padding: .35rem .7rem;
         border: 1px solid #27c56f;
@@ -140,6 +143,15 @@
         font-size: .82rem;
         font-weight: 700;
         white-space: nowrap;
+        line-height: 1;
+    }
+
+    .status-badge i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .85em;
+        line-height: 1;
     }
 
     .action-btn {

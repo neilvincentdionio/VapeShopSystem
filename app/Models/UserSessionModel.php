@@ -160,6 +160,34 @@ class UserSessionModel extends Model
     }
 
     /**
+     * Get sessions with optional admin filters.
+     */
+    public function getSessionsForAdmin(?string $statusFilter = null, ?string $userFilter = null): array
+    {
+        $db = \Config\Database::connect();
+        $builder = $db->table('user_sessions');
+        $builder->select('user_sessions.*, users.name, users.email');
+        $builder->join('users', 'users.id = user_sessions.user_id', 'left');
+
+        $statusFilter = trim((string) $statusFilter);
+        if ($statusFilter !== '' && in_array($statusFilter, ['active', 'inactive', 'expired'], true)) {
+            $builder->where('user_sessions.status', $statusFilter);
+        }
+
+        $userFilter = trim((string) $userFilter);
+        if ($userFilter !== '') {
+            $builder->groupStart()
+                ->like('users.email', $userFilter)
+                ->orLike('users.name', $userFilter)
+                ->groupEnd();
+        }
+
+        $builder->orderBy('user_sessions.login_time', 'DESC');
+
+        return $builder->get()->getResultArray();
+    }
+
+    /**
      * Get session statistics
      */
     public function getSessionStats(): array

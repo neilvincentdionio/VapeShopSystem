@@ -65,11 +65,16 @@ class AdminController extends BaseController
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
+        $statusFilter = trim((string) $this->request->getGet('status'));
+        $userFilter = trim((string) $this->request->getGet('user'));
+
         $data = [
             'title' => 'Session Management',
             'activeSessions' => $this->sessionModel->getActiveSessionCount(),
             'sessionStats' => $this->sessionModel->getSessionStats(),
-            'sessions' => $this->sessionModel->getAllActiveSessions(),
+            'sessions' => $this->sessionModel->getSessionsForAdmin($statusFilter, $userFilter),
+            'statusFilter' => $statusFilter,
+            'userFilter' => $userFilter,
         ];
 
         return view('admin/session_logs', $data);
@@ -347,7 +352,11 @@ class AdminController extends BaseController
             }
         }
 
-        return $this->response->setJSON(['success' => true, 'data' => $session]);
+        return $this->response->setJSON([
+            'success' => true,
+            'data' => $session,
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 
     /**
@@ -356,16 +365,28 @@ class AdminController extends BaseController
     public function endSessionById($sessionId)
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Access denied',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         $session = $this->sessionModel->find($sessionId);
         if (!$session) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Session not found']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Session not found',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         if ($session['status'] !== 'active') {
-            return $this->response->setJSON(['success' => false, 'message' => 'Session is not active']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Session is not active',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         // End the session
@@ -383,10 +404,18 @@ class AdminController extends BaseController
                 'success'
             );
             
-            return $this->response->setJSON(['success' => true, 'message' => 'Session ended successfully']);
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Session ended successfully',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
-        return $this->response->setJSON(['success' => false, 'message' => 'Failed to end session']);
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Failed to end session',
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 
     /**
@@ -395,12 +424,20 @@ class AdminController extends BaseController
     public function cleanupSessions()
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Access denied',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         $count = $this->sessionModel->cleanupOldSessions(30);
         
-        return $this->response->setJSON(['success' => true, 'count' => $count]);
+        return $this->response->setJSON([
+            'success' => true,
+            'count' => $count,
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 
     /**
@@ -409,12 +446,20 @@ class AdminController extends BaseController
     public function getLogDetailsById($logId)
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Access denied',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         $log = $this->activityModel->find($logId);
         if (!$log) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Log not found']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Log not found',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         // Get user information
@@ -427,7 +472,12 @@ class AdminController extends BaseController
             }
         }
 
-        return $this->response->setJSON(['success' => true, 'data' => $log]);
+        return $this->response->setJSON([
+            'success' => true,
+            'data' => $log,
+            'log' => $log,
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 
     /**
@@ -436,11 +486,19 @@ class AdminController extends BaseController
     public function cleanupLogs()
     {
         if (!$this->isAdmin()) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Access denied',
+                'csrfHash' => csrf_hash(),
+            ]);
         }
 
         $count = $this->activityModel->cleanupOldLogs(90);
         
-        return $this->response->setJSON(['success' => true, 'count' => $count]);
+        return $this->response->setJSON([
+            'success' => true,
+            'count' => $count,
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 }

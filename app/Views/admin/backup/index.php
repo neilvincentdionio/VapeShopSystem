@@ -15,7 +15,7 @@
         .container-fluid {
             max-width: none;
             margin: 0;
-            padding: 2rem;
+            padding: 1.35rem;
         }
         .card {
             background: #ffffff;
@@ -25,7 +25,7 @@
             overflow: hidden;
         }
         .card-header {
-            padding: 1.25rem 1.5rem;
+            padding: .9rem 1.1rem;
             border-bottom: 1px solid #eef2f7;
             display: flex;
             justify-content: space-between;
@@ -34,16 +34,16 @@
             flex-wrap: wrap;
         }
         .card-title {
-            font-size: 1.4rem;
+            font-size: 1.12rem;
             font-weight: 700;
         }
         .card-copy {
             color: #6b7280;
-            font-size: .95rem;
-            margin-top: .35rem;
+            font-size: .78rem;
+            margin-top: .2rem;
         }
         .card-body {
-            padding: 1.5rem;
+            padding: 1rem;
         }
         .card-tools {
             display: flex;
@@ -53,8 +53,8 @@
         .btn {
             border: 0;
             border-radius: 999px;
-            padding: .8rem 1.1rem;
-            font-size: .95rem;
+            padding: .58rem .85rem;
+            font-size: .8rem;
             cursor: pointer;
             text-decoration: none;
             display: inline-flex;
@@ -66,11 +66,11 @@
         }
         .backup-page .btn {
             border-radius: 999px !important;
-            padding: .8rem 1.1rem !important;
-            font-size: .95rem !important;
+            padding: .58rem .85rem !important;
+            font-size: .8rem !important;
         }
-        .btn-sm { padding: .65rem .95rem; font-size: .9rem; }
-        .backup-page .btn-sm { padding: .65rem .95rem !important; font-size: .9rem !important; }
+        .btn-sm { padding: .5rem .75rem; font-size: .76rem; }
+        .backup-page .btn-sm { padding: .5rem .75rem !important; font-size: .76rem !important; }
         .btn-primary { background: #27c56f; color: #fff; }
         .btn-warning { background: #f59e0b; color: #fff; }
         .btn-danger { background: #ef4444; color: #fff; }
@@ -82,82 +82,111 @@
             flex-wrap: wrap;
             gap: 1rem;
         }
-        .mb-4 { margin-bottom: 1.5rem; }
+        .mb-4 { margin-bottom: .95rem; }
         .col-12 { width: 100%; }
         .col-md-3 { flex: 1 1 220px; }
         .info-box {
             border: 1px solid #e5e7eb;
             border-radius: 18px;
-            padding: 1rem;
+            padding: .72rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
-            min-height: 100px;
+            gap: .7rem;
+            min-height: 78px;
             background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         }
         .info-box-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 14px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             color: #fff;
             font-weight: 700;
         }
-        .bg-info { background: #0ea5e9; }
-        .bg-success { background: #22c55e; }
-        .bg-warning { background: #f59e0b; }
-        .bg-primary { background: #3b82f6; }
+        .bg-info,
+        .bg-success,
+        .bg-warning,
+        .bg-primary {
+            background: #cbd5e1;
+            color: #475569;
+        }
         .info-box-text {
             display: block;
             color: #6b7280;
-            font-size: .85rem;
-            margin-bottom: .25rem;
+            font-size: .7rem;
+            margin-bottom: .12rem;
         }
         .info-box-number {
-            font-size: 1.05rem;
+            font-size: .9rem;
             font-weight: 700;
             word-break: break-word;
         }
-        .text-sm { font-size: .85rem; }
+        .text-sm { font-size: .72rem; }
         .table-responsive { overflow-x: auto; }
         table {
             width: 100%;
             border-collapse: collapse;
         }
         th, td {
-            padding: .9rem .85rem;
+            padding: .66rem .72rem;
             border-bottom: 1px solid #eef2f7;
             text-align: left;
             vertical-align: middle;
         }
         th {
-            font-size: .8rem;
+            font-size: .66rem;
             text-transform: uppercase;
             letter-spacing: .04em;
             color: #6b7280;
+            font-weight: 700;
+            white-space: nowrap;
         }
+        td {
+            font-size: .8rem;
+            color: #334155;
+        }
+        .col-filename { width: 44%; }
+        .col-actions { width: 220px; text-align: right; }
+        .filename {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: .72rem;
+            color: #0f172a;
+            word-break: break-all;
+        }
+        .created-at { white-space: nowrap; color: #475569; font-size: .75rem; }
         .text-center { text-align: center; }
+        .empty-state {
+            text-align: center;
+            color: #6b7280;
+            padding: 1.4rem 1rem;
+            font-size: .92rem;
+        }
         .badge {
             display: inline-flex;
             border-radius: 999px;
-            padding: .25rem .6rem;
-            font-size: .75rem;
+            padding: .18rem .5rem;
+            font-size: .62rem;
             font-weight: 700;
             color: #fff;
+            text-transform: uppercase;
+            letter-spacing: .03em;
         }
         .badge-success { background: #16a34a; }
         .badge-secondary { background: #64748b; }
         .btn-group {
             display: inline-flex;
             gap: .4rem;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: flex-end;
         }
         .btn-group-sm .btn {
-            padding: .55rem .85rem;
-            min-width: 92px;
-            font-size: .82rem;
+            padding: .42rem .72rem;
+            min-width: 78px;
+            font-size: .7rem;
+            white-space: nowrap;
         }
         .btn-label {
             line-height: 1;
@@ -245,10 +274,19 @@
             }
             .btn-group {
                 width: 100%;
+                justify-content: flex-start;
+                flex-wrap: wrap;
             }
             .btn-group-sm .btn {
                 flex: 1 1 calc(50% - .4rem);
                 min-width: 0;
+            }
+            .col-actions {
+                width: auto;
+                text-align: left;
+            }
+            .created-at {
+                white-space: normal;
             }
         }
     </style>
@@ -257,14 +295,16 @@
 <body class="backup-page">
 <?= $this->include('admin/partials/sidebar') ?>
 <div class="container-fluid">
+    <?php
+    $pageHeaderTitle = 'Database Backup Management';
+    $pageHeaderSubtitle = 'Create, download, restore, and delete database backups from one place.';
+    ?>
+    <?= $this->include('admin/partials/page_header') ?>
+
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <div>
-                        <h3 class="card-title">Database Backup Management</h3>
-                        <p class="card-copy">Create, download, restore, and delete database backups from one place.</p>
-                    </div>
                     <div class="card-tools">
                         <button type="button" class="btn btn-primary btn-sm" id="createBackupBtn">Create Backup</button>
                     </div>
@@ -315,31 +355,31 @@
                         <table class="table table-bordered table-striped">
                             <thead>
                                 <tr>
-                                    <th>Filename</th>
+                                    <th class="col-filename">Filename</th>
                                     <th>Size</th>
                                     <th>Created</th>
                                     <th>Type</th>
-                                    <th>Actions</th>
+                                    <th class="col-actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($backups)): ?>
                                     <tr>
-                                        <td colspan="5" class="text-center">No backups found</td>
+                                        <td colspan="5" class="empty-state">No backups found yet. Click <strong>Create Backup</strong> to generate one.</td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($backups as $backup): ?>
                                         <tr>
-                                            <td><?= htmlspecialchars($backup['filename']) ?></td>
+                                            <td class="filename"><?= htmlspecialchars($backup['filename']) ?></td>
                                             <td><?= esc(formatBytes((int) $backup['size'])) ?></td>
-                                            <td><?= date('M d, Y g:i:s A', strtotime($backup['created_at'])) ?></td>
+                                            <td class="created-at"><?= date('M d, Y g:i:s A', strtotime($backup['created_at'])) ?></td>
                                             <td>
                                                 <span class="badge badge-<?= $backup['type'] === 'gz' ? 'success' : 'secondary' ?>">
                                                     <?= strtoupper($backup['type']) ?>
                                                 </span>
                                             </td>
-                                            <td>
-                                                <div class="btn-group btn-group-sm">
+                                            <td class="col-actions">
+                                                <div class="btn-group btn-group-sm" role="group" aria-label="Backup actions">
                                                     <a href="<?= site_url('backup/download/' . $backup['filename']) ?>" 
                                                        class="btn btn-primary" title="Download">
                                                         <span class="btn-label">Download</span>
