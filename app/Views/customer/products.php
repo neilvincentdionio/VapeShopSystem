@@ -772,7 +772,6 @@
     }
 
     .flavor-dropdown-menu {
-        display: none;
         position: absolute;
         top: calc(100% + .35rem);
         left: 0;
@@ -784,10 +783,18 @@
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
         max-height: 230px;
         overflow-y: auto;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-6px);
+        pointer-events: none;
+        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
     }
 
     .flavor-dropdown-menu.show {
-        display: block;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
     }
 
     .flavor-option {
@@ -1276,15 +1283,15 @@
         </div>
         <div class="flavor-choice-list">
             <div class="flavor-dropdown">
-                <button type="button" id="flavorSelectTrigger" class="flavor-select-trigger" onclick="toggleFlavorDropdown()">
+                <button type="button" id="flavorSelectTrigger" class="flavor-select-trigger" aria-haspopup="listbox" aria-expanded="false">
                     <span id="flavorSelectText">Select flavor</span>
-                    <span aria-hidden="true">▼</span>
+                    <span class="flavor-select-caret" aria-hidden="true">▼</span>
                 </button>
                 <div id="flavorDropdownMenu" class="flavor-dropdown-menu"></div>
             </div>
             <div class="flavor-choice-stock" id="flavorStockInfo"></div>
         </div>
-        <button type="button" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()">Add Selected Flavor</button>
+        <button type="button" id="flavorConfirmBtn" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()" disabled>Add Selected Flavor</button>
     </div>
 </div>
 
@@ -1915,6 +1922,41 @@ function beginAddToCart(productId) {
     addToCart(productId);
 }
 
+function updateFlavorConfirmButton() {
+    const confirmBtn = document.getElementById('flavorConfirmBtn');
+    if (!confirmBtn) {
+        return;
+    }
+    const hasSelection = Boolean(pendingFlavorVariantId);
+    confirmBtn.disabled = !hasSelection || !pendingFlavorProductId;
+}
+
+function selectFlavorVariant(variant) {
+    if (!variant) {
+        return;
+    }
+
+    pendingFlavorVariantId = String(variant.id);
+    const triggerText = document.getElementById('flavorSelectText');
+    const stockInfo = document.getElementById('flavorStockInfo');
+    const menu = document.getElementById('flavorDropdownMenu');
+
+    if (triggerText) {
+        triggerText.textContent = `${variant.flavor} (${variant.stock} left)`;
+    }
+    if (stockInfo) {
+        stockInfo.textContent = `${variant.stock} left in stock`;
+    }
+    if (menu) {
+        menu.querySelectorAll('.flavor-option').forEach((el) => {
+            el.classList.toggle('active', el.dataset.variantId === String(variant.id));
+        });
+    }
+
+    closeFlavorDropdown();
+    updateFlavorConfirmButton();
+}
+
 function openFlavorModal(product) {
     pendingFlavorProductId = parseInt(product.id, 10);
     pendingFlavorVariantId = null;
@@ -1930,74 +1972,85 @@ function openFlavorModal(product) {
     title.textContent = product.name || 'Select Flavor';
     subtitle.textContent = 'Choose a flavor before adding this product to cart.';
     menu.innerHTML = '';
-    triggerBtn.classList.remove('open');
-    menu.classList.remove('show');
+    closeFlavorDropdown();
 
     const availableVariants = [];
     product.variants.forEach((variant) => {
-        const disabled = parseInt(variant.stock, 10) <= 0;
-        if (!disabled) {
+        if (parseInt(variant.stock, 10) > 0) {
             availableVariants.push(variant);
         }
     });
 
     if (!availableVariants.length) {
         triggerText.textContent = 'No available flavors';
-        pendingFlavorVariantId = null;
         stockInfo.textContent = 'Out of stock';
+        updateFlavorConfirmButton();
         modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
         return;
     }
 
     pendingFlavorVariants = availableVariants;
-    pendingFlavorVariantId = String(availableVariants[0].id);
-    triggerText.textContent = `${availableVariants[0].flavor} (${availableVariants[0].stock} left)`;
-    stockInfo.textContent = `${availableVariants[0].stock} left`;
+    triggerText.textContent = 'Select flavor';
+    stockInfo.textContent = 'Pick a flavor from the list';
 
-    availableVariants.forEach((variant, index) => {
+    availableVariants.forEach((variant) => {
         const optionBtn = document.createElement('button');
         optionBtn.type = 'button';
-        optionBtn.className = 'flavor-option' + (index === 0 ? ' active' : '');
+        optionBtn.className = 'flavor-option';
         optionBtn.textContent = `${variant.flavor} (${variant.stock} left)`;
         optionBtn.dataset.variantId = String(variant.id);
-        optionBtn.addEventListener('click', function () {
-            pendingFlavorVariantId = String(variant.id);
-            triggerText.textContent = `${variant.flavor} (${variant.stock} left)`;
-            stockInfo.textContent = `${variant.stock} left`;
-            menu.querySelectorAll('.flavor-option').forEach((el) => el.classList.remove('active'));
-            optionBtn.classList.add('active');
-            closeFlavorDropdown();
+        optionBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectFlavorVariant(variant);
         });
         menu.appendChild(optionBtn);
     });
 
+    updateFlavorConfirmButton();
     modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
 }
 
 function closeFlavorModal() {
     const modal = document.getElementById('flavorModal');
     modal?.classList.remove('show');
+    document.body.style.overflow = '';
     closeFlavorDropdown();
     pendingFlavorProductId = null;
     pendingFlavorVariantId = null;
     pendingFlavorVariants = [];
+    updateFlavorConfirmButton();
 }
 
-function toggleFlavorDropdown() {
+function toggleFlavorDropdown(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
     const triggerBtn = document.getElementById('flavorSelectTrigger');
     const menu = document.getElementById('flavorDropdownMenu');
-    if (!triggerBtn || !menu) return;
+    if (!triggerBtn || !menu || triggerBtn.disabled) {
+        return;
+    }
+
     const willOpen = !menu.classList.contains('show');
     menu.classList.toggle('show', willOpen);
     triggerBtn.classList.toggle('open', willOpen);
+    triggerBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
 }
 
 function closeFlavorDropdown() {
     const triggerBtn = document.getElementById('flavorSelectTrigger');
     const menu = document.getElementById('flavorDropdownMenu');
-    if (!triggerBtn || !menu) return;
+    if (!triggerBtn || !menu) {
+        return;
+    }
     menu.classList.remove('show');
     triggerBtn.classList.remove('open');
+    triggerBtn.setAttribute('aria-expanded', 'false');
 }
 
 function confirmFlavorAddToCart() {
@@ -2361,8 +2414,7 @@ function closeProductModal() {
     }
 }
 
-// Close modal when clicking outside
-window.onclick = function(event) {
+function handleDocumentClick(event) {
     const checkoutModal = document.getElementById('checkoutModal');
     if (event.target === checkoutModal) {
         closeCheckoutModal();
@@ -2383,12 +2435,20 @@ window.onclick = function(event) {
         closeReviewsModal();
     }
 
-    const dropdown = document.getElementById('flavorDropdownMenu');
-    const trigger = document.getElementById('flavorSelectTrigger');
-    if (dropdown && trigger && !dropdown.contains(event.target) && !trigger.contains(event.target)) {
+    const flavorPicker = document.querySelector('.flavor-dropdown');
+    if (flavorPicker && !flavorPicker.contains(event.target)) {
         closeFlavorDropdown();
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const flavorTrigger = document.getElementById('flavorSelectTrigger');
+    if (flavorTrigger) {
+        flavorTrigger.addEventListener('click', toggleFlavorDropdown);
+    }
+});
+
+document.addEventListener('click', handleDocumentClick);
 </script>
 
 <?= $this->include('customer/partials/footer') ?>

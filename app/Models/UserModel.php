@@ -576,6 +576,13 @@ class UserModel extends Model
             return false;
         }
 
+        if ($this->userHasRole($user, 'admin')) {
+            $rbac = new \App\Libraries\RbacService();
+            $rbac->ensureAdminRoleActive();
+
+            return true;
+        }
+
         if (
             !$this->db->tableExists('roles')
             || !$this->db->tableExists('permissions')
@@ -644,6 +651,26 @@ class UserModel extends Model
 
         if ($roleId <= 0) {
             return [];
+        }
+
+        if (is_array($userRow) && $this->userHasRole($userRow, 'admin')) {
+            (new \App\Libraries\RbacService())->ensureAdminRoleActive();
+
+            if ($this->db->tableExists('permissions')) {
+                $rows = $this->db->table('permissions')->select('name')->orderBy('name', 'ASC')->get()->getResultArray();
+
+                return array_values(array_unique(array_map(
+                    static fn ($row) => (string) ($row['name'] ?? ''),
+                    $rows
+                )));
+            }
+        }
+
+        if ($this->db->tableExists('roles') && $this->db->fieldExists('status', 'roles')) {
+            $roleRow = $this->db->table('roles')->where('id', $roleId)->get()->getRowArray();
+            if (is_array($roleRow) && strtolower((string) ($roleRow['status'] ?? 'active')) !== 'active') {
+                return [];
+            }
         }
 
         $rows = $this->db->table('role_permissions rp')

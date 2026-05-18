@@ -76,7 +76,34 @@ class AccessControlService
             return false;
         }
 
-        return $this->userModel->userHasPermission($targetUser, $permissionName);
+        $targetPermission = strtolower(trim($permissionName));
+        if ($targetPermission === '') {
+            return false;
+        }
+
+        if ($user === null) {
+            $sessionPermissions = session()->get('user_permissions');
+            if (is_array($sessionPermissions) && $sessionPermissions !== []) {
+                foreach ($sessionPermissions as $permission) {
+                    if (hash_equals(strtolower((string) $permission), $targetPermission)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        $allowed = $this->userModel->userHasPermission($targetUser, $permissionName);
+
+        if ($user === null && $allowed) {
+            session()->set(
+                'user_permissions',
+                $this->userModel->getPermissionNamesForUser((int) ($targetUser['id'] ?? 0), $targetUser)
+            );
+        }
+
+        return $allowed;
     }
 }
 

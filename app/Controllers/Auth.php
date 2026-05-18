@@ -282,6 +282,15 @@ class Auth extends BaseController
         }
 
         session()->regenerate();
+
+        $rbac = new \App\Libraries\RbacService();
+        $rbac->repairAdminAccess();
+
+        $user = $this->userModel->find($userId);
+        $permissionNames = is_array($user)
+            ? $this->userModel->getPermissionNamesForUser($userId, $user)
+            : [];
+
         $this->session->set([
             'user_id' => $userId,
             'user_name' => (string) ($this->session->get('otp_user_name') ?? ''),
@@ -289,6 +298,7 @@ class Auth extends BaseController
             'user_role' => (string) ($this->session->get('otp_user_role') ?? ''),
             'user_role_id' => (int) ($this->session->get('otp_user_role_id') ?? 0),
             'user_shop_name' => $this->session->get('otp_user_shop_name'),
+            'user_permissions' => $permissionNames,
             'logged_in' => true,
             'last_activity' => time(),
         ]);

@@ -106,6 +106,24 @@ $routes->get('/user-management/edit/(:num)', 'UserManagement::edit/$1', ['filter
 $routes->post('/user-management/update/(:num)', 'UserManagement::update/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
 $routes->get('/user-management/delete/(:num)', 'UserManagement::delete/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
 $routes->post('/user-management/destroy/(:num)', 'UserManagement::destroy/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles', 'AdminRoles::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles/create', 'AdminRoles::create', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/roles/store', 'AdminRoles::store', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles/permissions/(:num)', 'AdminRoles::permissions/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles/assign-users/(:num)', 'AdminRoles::assignUsers/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/roles/assign-users/(:num)', 'AdminRoles::saveAssignedUsers/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles/view/(:num)', 'AdminRoles::view/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/roles/edit/(:num)', 'AdminRoles::edit/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/roles/update/(:num)', 'AdminRoles::update/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/roles/toggle/(:num)', 'AdminRoles::toggleStatus/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/roles/delete/(:num)', 'AdminRoles::destroy/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/permissions', 'AdminPermissions::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/permissions/create', 'AdminPermissions::create', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/permissions/store', 'AdminPermissions::store', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/permissions/view/(:num)', 'AdminPermissions::view/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->get('/admin/permissions/edit/(:num)', 'AdminPermissions::edit/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/permissions/update/(:num)', 'AdminPermissions::update/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
+$routes->post('/admin/permissions/delete/(:num)', 'AdminPermissions::destroy/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
 
 // Records module routes (Task 3)
 $routes->group('records', ['filter' => 'auth'], static function ($routes) {

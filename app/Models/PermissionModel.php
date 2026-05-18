@@ -11,7 +11,7 @@ class PermissionModel extends Model
     protected $returnType = 'array';
     protected $useAutoIncrement = true;
     protected $protectFields = true;
-    protected $allowedFields = ['name', 'description'];
+    protected $allowedFields = ['name', 'description', 'module_name'];
 
     protected $useTimestamps = true;
     protected $dateFormat = 'datetime';
@@ -22,6 +22,39 @@ class PermissionModel extends Model
     {
         $permission = $this->where('name', strtolower(trim($permissionName)))->first();
         return is_array($permission) ? $permission : null;
+    }
+
+    public function ensureExists(string $name, string $description, string $moduleName = 'General'): int
+    {
+        $normalized = strtolower(trim($name));
+        if ($normalized === '') {
+            return 0;
+        }
+
+        $existing = $this->findByName($normalized);
+        if (is_array($existing)) {
+            $update = ['description' => $description, 'updated_at' => date('Y-m-d H:i:s')];
+            if ($this->db->fieldExists('module_name', $this->table)) {
+                $update['module_name'] = $moduleName;
+            }
+            $this->update((int) $existing['id'], $update);
+            return (int) ($existing['id'] ?? 0);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $payload = [
+            'name' => $normalized,
+            'description' => $description,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+        if ($this->db->fieldExists('module_name', $this->table)) {
+            $payload['module_name'] = $moduleName;
+        }
+
+        $this->insert($payload);
+
+        return (int) $this->getInsertID();
     }
 }
 

@@ -3,6 +3,7 @@
 namespace App\Filters;
 
 use App\Libraries\AccessControlService;
+use App\Libraries\RbacService;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -46,6 +47,14 @@ class AuthFilter implements FilterInterface
 
         // Update last activity
         $session->set('last_activity', time());
+
+        if (
+            strtolower((string) $session->get('user_role')) === 'admin'
+            && !$session->get('admin_access_repaired')
+        ) {
+            (new RbacService())->repairAdminAccess();
+            $session->set('admin_access_repaired', true);
+        }
 
         // Check role-based access if arguments are provided
         if ($arguments && !empty($arguments)) {

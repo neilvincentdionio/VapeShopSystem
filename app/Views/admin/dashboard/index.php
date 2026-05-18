@@ -164,7 +164,114 @@
             border-radius: 15px;
             text-align: center;
         }
-        .stat-value { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; color: #27c56f; }
+
+        .dashboard-section {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.08);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .section-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #333333;
+            margin-bottom: 1rem;
+            padding-bottom: 0.65rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .chart-wrap { position: relative; height: 300px; }
+        .chart-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .chart-total {
+            font-size: 0.9rem;
+            color: #666666;
+        }
+        .chart-total strong {
+            color: #27c56f;
+            font-size: 1.1rem;
+        }
+        .dashboard-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .panel-list { display: flex; flex-direction: column; gap: 0.65rem; }
+        .list-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 0.85rem;
+            border: 1px solid #eef2f7;
+            border-radius: 12px;
+            background: #fafbfc;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .list-row:hover {
+            border-color: #c8e6d0;
+            box-shadow: 0 2px 8px rgba(39, 197, 111, 0.08);
+        }
+        .list-row-main { min-width: 0; flex: 1; }
+        .list-row-title {
+            font-weight: 700;
+            color: #333333;
+            font-size: 0.92rem;
+            margin-bottom: 0.2rem;
+        }
+        .list-row-sub {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        .list-row-end { text-align: right; white-space: nowrap; }
+        .list-row-amount {
+            font-weight: 700;
+            color: #27c56f;
+            font-size: 0.95rem;
+        }
+        .status-pill {
+            display: inline-block;
+            margin-top: 0.35rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: capitalize;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status-pill.warn { background: #fff3e0; color: #e65100; }
+        .status-pill.muted { background: #f3f4f6; color: #6b7280; }
+        .stock-pill {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #dc3545;
+        }
+        .stock-pill.ok { color: #f59e0b; }
+        .empty-panel {
+            text-align: center;
+            color: #6b7280;
+            padding: 2rem 1rem;
+            font-size: 0.9rem;
+        }
+        .panel-link {
+            display: inline-block;
+            margin-top: 0.85rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #27c56f;
+            text-decoration: none;
+        }
+        .panel-link:hover { text-decoration: underline; }
 
         @media (max-width: 768px) {
             .navbar-content {
@@ -177,6 +284,8 @@
             .customer-actions { width: 100%; margin-left: 0; }
             .nav-right { justify-content: space-between; }
             .container { padding: 0 1rem; }
+            .dashboard-split { grid-template-columns: 1fr; }
+            .chart-wrap { height: 240px; }
         }
     </style>
 <?= $this->include('admin/partials/sidebar_styles') ?>
@@ -202,16 +311,151 @@
                 <div class="stat-item"><div class="stat-value"><?= number_format($total_products) ?></div><div>Total Products</div></div>
                 <div class="stat-item"><div class="stat-value"><?= number_format($orders_today) ?></div><div>Orders Today</div></div>
                 <div class="stat-item"><div class="stat-value"><?= $revenue_today ?></div><div>Revenue Today</div></div>
-                <div class="stat-item"><div class="stat-value"><?= $system_uptime ?></div><div>System Uptime</div></div>
+                <div class="stat-item"><div class="stat-value"><?= number_format((int) ($total_customers ?? 0)) ?></div><div>Customers</div></div>
             </div>
+        </div>
+
+        <?php
+        $chartData = $revenue_chart ?? ['labels' => [], 'amounts' => [], 'total' => 0, 'days' => 7];
+        $recentOrders = $recent_orders_list ?? [];
+        $lowStock = $low_stock_products ?? [];
+        ?>
+
+        <section class="dashboard-section">
+            <h3 class="section-title">Revenue Chart</h3>
+            <div class="chart-meta">
+                <span class="chart-total">Last <?= (int) ($chartData['days'] ?? 7) ?> days: <strong>₱<?= number_format((float) ($chartData['total'] ?? 0), 2) ?></strong></span>
+                <span class="chart-total" style="font-size:0.82rem;">Paid orders only</span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="revenueChart" aria-label="Revenue chart for the last seven days"></canvas>
+            </div>
+        </section>
+
+        <div class="dashboard-split">
+            <section class="dashboard-section" style="margin-bottom:0;">
+                <h3 class="section-title">Recent Orders</h3>
+                <?php if (empty($recentOrders)): ?>
+                    <p class="empty-panel">No orders yet.</p>
+                <?php else: ?>
+                    <div class="panel-list">
+                        <?php foreach ($recentOrders as $order): ?>
+                            <?php
+                            $orderId = (int) ($order['id'] ?? 0);
+                            $ref = trim((string) ($order['reference_number'] ?? ''));
+                            $label = $ref !== '' ? $ref : ('#' . $orderId);
+                            $customer = trim((string) ($order['customer_name'] ?? 'Guest'));
+                            $createdAt = !empty($order['created_at']) ? date('M j, g:i A', strtotime($order['created_at'])) : '';
+                            $amount = (float) ($order['total_amount'] ?? 0);
+                            $payStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+                            $pillClass = $payStatus === 'paid' ? '' : ($payStatus === 'pending' ? 'warn' : 'muted');
+                            ?>
+                            <a href="<?= site_url('admin/order-details/' . $orderId) ?>" class="list-row" style="text-decoration:none;color:inherit;">
+                                <div class="list-row-main">
+                                    <div class="list-row-title"><?= esc($label) ?></div>
+                                    <div class="list-row-sub"><?= esc($customer) ?><?= $createdAt !== '' ? ' · ' . esc($createdAt) : '' ?></div>
+                                </div>
+                                <div class="list-row-end">
+                                    <div class="list-row-amount">₱<?= number_format($amount, 2) ?></div>
+                                    <span class="status-pill <?= esc($pillClass) ?>"><?= esc($payStatus) ?></span>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <a href="<?= site_url('orders') ?>" class="panel-link">View all orders →</a>
+                <?php endif; ?>
+            </section>
+
+            <section class="dashboard-section" style="margin-bottom:0;">
+                <h3 class="section-title">Low Stock</h3>
+                <?php if (empty($lowStock)): ?>
+                    <p class="empty-panel">All products are well stocked.</p>
+                <?php else: ?>
+                    <div class="panel-list">
+                        <?php foreach ($lowStock as $product): ?>
+                            <?php
+                            $productId = (int) ($product['id'] ?? 0);
+                            $stockQty = (int) ($product['stock_qty'] ?? 0);
+                            $stockClass = $stockQty <= 3 ? '' : 'ok';
+                            ?>
+                            <a href="<?= site_url('products/edit/' . $productId) ?>" class="list-row" style="text-decoration:none;color:inherit;">
+                                <div class="list-row-main">
+                                    <div class="list-row-title"><?= esc($product['name'] ?? 'Product') ?></div>
+                                    <div class="list-row-sub"><?= esc($product['category'] ?? 'Uncategorized') ?></div>
+                                </div>
+                                <div class="list-row-end">
+                                    <div class="stock-pill <?= esc($stockClass) ?>"><?= $stockQty ?> left</div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <a href="<?= site_url('products') ?>" class="panel-link">Manage products →</a>
+                <?php endif; ?>
+            </section>
         </div>
 
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         setTimeout(function () {
             document.querySelectorAll('.alert').forEach(function (el) { el.style.display = 'none'; });
         }, 5000);
+
+        (function () {
+            var canvas = document.getElementById('revenueChart');
+            if (!canvas || typeof Chart === 'undefined') {
+                return;
+            }
+
+            var labels = <?= json_encode(array_values($chartData['labels'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var amounts = <?= json_encode(array_values($chartData['amounts'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Revenue (₱)',
+                        data: amounts,
+                        backgroundColor: 'rgba(39, 197, 111, 0.75)',
+                        borderColor: '#27c56f',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        maxBarThickness: 48
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (ctx) {
+                                    var v = ctx.parsed.y || 0;
+                                    return '₱' + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function (value) {
+                                    return '₱' + Number(value).toLocaleString();
+                                }
+                            },
+                            grid: { color: 'rgba(0,0,0,0.06)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        })();
     </script>
 </body>
 </html>

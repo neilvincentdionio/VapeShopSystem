@@ -272,6 +272,9 @@ class Dashboard extends BaseController
         
         $totalProducts = $this->dashboardModel->getTotalProducts($userRole, $shopName);
         $recentRegistrations = $this->dashboardModel->getRecentRegistrations();
+        $revenueChart = $this->dashboardModel->getRevenueChartData(7);
+        $recentOrdersList = $this->dashboardModel->getRecentOrdersList(8);
+        $lowStockProducts = $this->dashboardModel->getLowStockProducts(10, 8);
 
         $data = [
             'user_name' => $this->session->get('user_name'),
@@ -283,7 +286,7 @@ class Dashboard extends BaseController
             'total_products' => $totalProducts,
             'orders_today' => $analytics['orders'],
             'revenue_today' => $analytics['revenue'],
-            'system_uptime' => $systemMetrics['uptime'],
+            'total_customers' => $this->dashboardModel->getTotalCustomers(),
             'active_sessions' => $analytics['active_sessions'],
             'new_users' => $analytics['new_users'],
             'recent_registrations' => $recentRegistrations,
@@ -294,7 +297,10 @@ class Dashboard extends BaseController
             'notifications' => $this->getNotifications($analytics['orders'], $analytics['revenue']),
             'growth_rate' => $this->dashboardModel->getGrowthRate($userRole, $shopName),
             'recent_orders' => $analytics['orders'],
-            'monthly_revenue' => $monthlyAnalytics['revenue']
+            'monthly_revenue' => $monthlyAnalytics['revenue'],
+            'revenue_chart' => $revenueChart,
+            'recent_orders_list' => $recentOrdersList,
+            'low_stock_products' => $lowStockProducts,
         ];
 
         return view('admin/dashboard/index', $data);

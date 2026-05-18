@@ -11,7 +11,7 @@ class RoleModel extends Model
     protected $returnType = 'array';
     protected $useAutoIncrement = true;
     protected $protectFields = true;
-    protected $allowedFields = ['name', 'description'];
+    protected $allowedFields = ['name', 'description', 'status', 'is_system_role'];
 
     protected $useTimestamps = true;
     protected $dateFormat = 'datetime';

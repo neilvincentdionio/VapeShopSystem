@@ -7,6 +7,8 @@ $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
 $isOrders = $seg1 === 'orders' || ($seg1 === 'admin' && str_starts_with((string) $seg2, 'order'));
 $isUsers = $seg1 === 'user-management';
+$isRoles = $seg1 === 'admin' && $seg2 === 'roles';
+$isPermissions = $seg1 === 'admin' && $seg2 === 'permissions';
 $isBackup = $seg1 === 'backup';
 $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
 $isSessionLogs = $seg1 === 'admin' && $seg2 === 'session-logs';
@@ -29,6 +31,8 @@ $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
                 <a href="<?= site_url('admin/session-logs') ?>" class="nav-link <?= $isSessionLogs ? 'active' : '' ?>">Session Logs</a>
                 <a href="<?= site_url('admin/activity-logs') ?>" class="nav-link <?= $isActivityLogs ? 'active' : '' ?>">Activity Logs</a>
                 <a href="<?= site_url('user-management') ?>" class="nav-link <?= $isUsers ? 'active' : '' ?>">User Management</a>
+                <a href="<?= site_url('admin/roles') ?>" class="nav-link <?= $isRoles ? 'active' : '' ?>">Roles</a>
+                <a href="<?= site_url('admin/permissions') ?>" class="nav-link <?= $isPermissions ? 'active' : '' ?>">Permissions</a>
                 <a href="<?= site_url('backup') ?>" class="nav-link <?= $isBackup ? 'active' : '' ?>">Backup</a>
                 <a href="<?= site_url('dashboard/settings') ?>" class="nav-link <?= $isSettings ? 'active' : '' ?>">Settings</a>
             </div>
