@@ -56,6 +56,8 @@ $buildProductLines = static function (array $categoryProducts) use ($reviewSumma
                 'is_active' => false,
                 'stock_qty' => 0,
                 'prices' => [],
+                'unit_prices' => [],
+                'selling_prices' => [],
                 'puffs' => [],
                 'flavors' => [],
                 'review_summary' => [
@@ -71,10 +73,14 @@ $buildProductLines = static function (array $categoryProducts) use ($reviewSumma
         $flavorName = trim((string) ($product['flavor'] ?? ''));
         $puffs = (int) ($product['puffs'] ?? 0);
         $price = (float) ($product['price'] ?? 0);
+        $unitPrice = (float) ($product['unit_price'] ?? 0);
+        $sellingPrice = (float) ($product['selling_price'] ?? $price);
 
         $lines[$lineKey]['is_active'] = $lines[$lineKey]['is_active'] || (int) ($product['is_active'] ?? 0) === 1;
         $lines[$lineKey]['stock_qty'] += (int) ($product['stock_qty'] ?? 0);
         $lines[$lineKey]['prices'][] = $price;
+        $lines[$lineKey]['unit_prices'][] = $unitPrice;
+        $lines[$lineKey]['selling_prices'][] = $sellingPrice;
 
         if ($puffs > 0) {
             $lines[$lineKey]['puffs'][$puffs] = $puffs;
@@ -102,9 +108,18 @@ $buildProductLines = static function (array $categoryProducts) use ($reviewSumma
 };
 
 $totalProductLines = 0;
-foreach ($groupedProducts as $categoryProducts) {
+$categoriesWithProducts = [];
+foreach ($categoryOrder as $categoryName) {
+    $categoryProducts = $groupedProducts[$categoryName] ?? [];
+    if ($categoryProducts === []) {
+        continue;
+    }
+    $categoriesWithProducts[] = $categoryName;
     $totalProductLines += count($buildProductLines($categoryProducts));
 }
+$defaultCategorySlug = $categoriesWithProducts !== []
+    ? strtolower((string) $categoriesWithProducts[0])
+    : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -302,9 +317,62 @@ foreach ($groupedProducts as $categoryProducts) {
 
         .filters-grid {
             display: grid;
-            grid-template-columns: minmax(260px, 1.3fr) minmax(170px, 0.8fr) minmax(170px, 0.8fr) minmax(170px, 0.8fr) auto;
+            grid-template-columns: minmax(260px, 1.4fr) minmax(170px, 0.9fr) minmax(170px, 0.9fr) auto;
             gap: 0.9rem;
             align-items: end;
+        }
+
+        .category-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            padding: 0 1.25rem 1.15rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .category-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 38px;
+            padding: 0.45rem 0.95rem;
+            border: 1px solid var(--line-strong);
+            border-radius: 999px;
+            background: #ffffff;
+            color: #374151;
+            font: inherit;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+
+        .category-btn:hover {
+            border-color: #93c5fd;
+            background: #f8fafc;
+        }
+
+        .category-btn.is-active {
+            color: #ffffff;
+            background: #16a34a;
+            border-color: #16a34a;
+        }
+
+        .category-btn-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.35rem;
+            min-height: 1.35rem;
+            padding: 0 0.35rem;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.08);
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .category-btn.is-active .category-btn-count {
+            background: rgba(255, 255, 255, 0.22);
         }
 
         .field label {
@@ -741,7 +809,8 @@ foreach ($groupedProducts as $categoryProducts) {
                 grid-template-columns: 1fr;
             }
 
-            .category-pills {
+            .category-pills,
+            .category-nav {
                 justify-content: flex-start;
             }
 
@@ -823,15 +892,6 @@ foreach ($groupedProducts as $categoryProducts) {
                         <input class="control" id="productSearch" type="search" placeholder="Search name, category, brand, or flavor">
                     </div>
                     <div class="field">
-                        <label for="categoryFilter">Category</label>
-                        <select class="control" id="categoryFilter">
-                            <option value="">All Categories</option>
-                            <?php foreach ($categoryOrder as $categoryName): ?>
-                                <option value="<?= esc(strtolower($categoryName)) ?>"><?= esc($categoryName) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="field">
                         <label for="statusFilter">Status</label>
                         <select class="control" id="statusFilter">
                             <option value="">All</option>
@@ -859,9 +919,35 @@ foreach ($groupedProducts as $categoryProducts) {
 
             <section class="inventory-panel">
                 <div class="inventory-header">
-                    <h2>Product Inventory (<span id="visibleProductCount"><?= number_format($totalProductLines) ?></span> products)</h2>
+                    <?php
+                        $initialVisibleCount = $totalProductLines;
+                        if ($categoriesWithProducts !== []) {
+                            $initialVisibleCount = count($buildProductLines($groupedProducts[$categoriesWithProducts[0]] ?? []));
+                        }
+                    ?>
+                    <h2>Product Inventory (<span id="visibleProductCount"><?= number_format($initialVisibleCount) ?></span> products)</h2>
                     <div class="inventory-total"><?= number_format($totalStock) ?> total stock</div>
                 </div>
+
+                <?php if (! empty($categoriesWithProducts)): ?>
+                    <nav class="category-nav" aria-label="Product categories">
+                        <?php foreach ($categoriesWithProducts as $categoryName): ?>
+                            <?php
+                                $categorySlug = strtolower($categoryName);
+                                $categoryLineCount = count($buildProductLines($groupedProducts[$categoryName] ?? []));
+                            ?>
+                            <button
+                                type="button"
+                                class="category-btn <?= $categorySlug === $defaultCategorySlug ? 'is-active' : '' ?>"
+                                data-category-btn
+                                data-category="<?= esc($categorySlug) ?>"
+                            >
+                                <?= esc($categoryName) ?>
+                                <span class="category-btn-count"><?= $categoryLineCount ?></span>
+                            </button>
+                        <?php endforeach; ?>
+                    </nav>
+                <?php endif; ?>
 
                 <?php if (empty($products)): ?>
                     <div class="empty-state">
@@ -886,8 +972,10 @@ foreach ($groupedProducts as $categoryProducts) {
                             $categoryStock = array_sum(array_map(static fn ($product) => (int) ($product['stock_qty'] ?? 0), $categoryProducts));
                             $categoryLow = count(array_filter($categoryProducts, static fn ($product) => (int) ($product['stock_qty'] ?? 0) > 0 && (int) ($product['stock_qty'] ?? 0) <= 10));
                             $isSimpleCategory = strtolower($categoryName) === 'device' || strtolower($categoryName) === 'devices';
+                            $categorySlug = strtolower($categoryName);
+                            $isDefaultCategory = $categorySlug === $defaultCategorySlug;
                         ?>
-                        <article class="category-section" data-category-section data-category="<?= esc(strtolower($categoryName)) ?>">
+                        <article class="category-section<?= $isDefaultCategory ? '' : ' hidden-by-filter' ?>" data-category-section data-category="<?= esc($categorySlug) ?>">
                             <div class="category-top">
                                 <div class="category-title">
                                     <h3><?= esc($categoryName) ?></h3>
@@ -913,7 +1001,8 @@ foreach ($groupedProducts as $categoryProducts) {
                                                 <th>Flavor Options</th>
                                                 <th>Puffs</th>
                                             <?php endif; ?>
-                                            <th>Price</th>
+                                            <th>Cost Price</th>
+                                            <th>Selling Price</th>
                                             <th>Stock</th>
                                             <th>Status</th>
                                             <th>Reviews</th>
@@ -929,8 +1018,12 @@ foreach ($groupedProducts as $categoryProducts) {
                                                 $flavors = array_values($productLine['flavors'] ?? []);
                                                 $puffGroups = array_values($productLine['puffs'] ?? []);
                                                 $prices = array_values(array_unique(array_map(static fn ($price) => number_format((float) $price, 2, '.', ''), $productLine['prices'] ?? [])));
+                                                $unitPrices = array_values(array_unique(array_map(static fn ($price) => number_format((float) $price, 2, '.', ''), $productLine['unit_prices'] ?? [])));
+                                                $sellingPrices = array_values(array_unique(array_map(static fn ($price) => number_format((float) $price, 2, '.', ''), $productLine['selling_prices'] ?? $productLine['prices'] ?? [])));
                                                 sort($puffGroups);
                                                 sort($prices);
+                                                sort($unitPrices);
+                                                sort($sellingPrices);
                                                 $stockClass = $stockQty === 0 ? 'stock-empty' : ($stockQty <= 10 ? 'stock-low' : 'stock-ok');
                                                 $statusText = $isActive ? 'Active' : 'Inactive';
                                                 $reviewSummary = $productLine['review_summary'] ?? ['total_reviews' => 0, 'average_rating' => 0.0, 'unreplied_reviews' => 0];
@@ -939,9 +1032,17 @@ foreach ($groupedProducts as $categoryProducts) {
                                                 $unrepliedReviews = (int) ($reviewSummary['unreplied_reviews'] ?? 0);
                                                 $searchText = strtolower(implode(' ', $productLine['search_parts'] ?? []));
                                                 $stockState = $stockQty === 0 ? 'out' : ($stockQty <= 10 ? 'low' : 'ok');
-                                                $priceText = count($prices) > 1
-                                                    ? 'PHP ' . number_format((float) min($prices), 2) . ' - PHP ' . number_format((float) max($prices), 2)
-                                                    : 'PHP ' . number_format((float) ($prices[0] ?? 0), 2);
+                                                $formatPriceRange = static function (array $values): string {
+                                                    if ($values === []) {
+                                                        return 'PHP 0.00';
+                                                    }
+
+                                                    return count($values) > 1
+                                                        ? 'PHP ' . number_format((float) min($values), 2) . ' - PHP ' . number_format((float) max($values), 2)
+                                                        : 'PHP ' . number_format((float) ($values[0] ?? 0), 2);
+                                                };
+                                                $unitPriceText = $formatPriceRange($unitPrices);
+                                                $sellingPriceText = $formatPriceRange($sellingPrices);
                                                 $puffsText = $puffGroups === []
                                                     ? 'N/A'
                                                     : implode(', ', array_map(static fn ($puffs) => number_format((int) $puffs), $puffGroups));
@@ -981,7 +1082,8 @@ foreach ($groupedProducts as $categoryProducts) {
                                                     </td>
                                                     <td><span class="muted-text"><?= esc($puffsText) ?></span></td>
                                                 <?php endif; ?>
-                                                <td><?= esc($priceText) ?></td>
+                                                <td><?= esc($unitPriceText) ?></td>
+                                                <td><?= esc($sellingPriceText) ?></td>
                                                 <td><span class="stock-badge <?= $stockClass ?>"><?= $stockQty ?></span></td>
                                                 <td><span class="status-badge <?= $isActive ? 'status-active' : 'status-inactive' ?>"><?= $statusText ?></span></td>
                                                 <td>
@@ -1021,7 +1123,7 @@ foreach ($groupedProducts as $categoryProducts) {
                     <div class="empty-state hidden-by-filter" id="noFilterResults">
                         <i class="fas fa-magnifying-glass"></i>
                         <h3>No matching products</h3>
-                        <p>Try adjusting the search, category, status, or brand filters.</p>
+                        <p>Try adjusting the search, status, or brand filters.</p>
                     </div>
                 <?php endif; ?>
             </section>
@@ -1036,33 +1138,41 @@ foreach ($groupedProducts as $categoryProducts) {
         }
 
         const searchInput = document.getElementById('productSearch');
-        const categoryFilter = document.getElementById('categoryFilter');
         const statusFilter = document.getElementById('statusFilter');
         const brandFilter = document.getElementById('brandFilter');
         const resetButton = document.getElementById('resetFilters');
         const visibleProductCount = document.getElementById('visibleProductCount');
         const noFilterResults = document.getElementById('noFilterResults');
+        const categoryButtons = document.querySelectorAll('[data-category-btn]');
+        let activeCategory = <?= json_encode($defaultCategorySlug) ?>;
+
+        function setActiveCategory(categoryValue) {
+            activeCategory = categoryValue || '';
+            categoryButtons.forEach((button) => {
+                button.classList.toggle('is-active', button.dataset.category === activeCategory);
+            });
+            applyFilters();
+        }
 
         function applyFilters() {
             const searchValue = (searchInput?.value || '').trim().toLowerCase();
-            const categoryValue = categoryFilter?.value || '';
             const statusValue = statusFilter?.value || '';
             const brandValue = brandFilter?.value || '';
             const sections = document.querySelectorAll('[data-category-section]');
             let visibleRows = 0;
 
             sections.forEach((section) => {
+                const isSelectedCategory = section.dataset.category === activeCategory;
                 const rows = section.querySelectorAll('[data-product-row]');
                 let sectionVisibleRows = 0;
 
                 rows.forEach((row) => {
                     const matchesSearch = !searchValue || row.dataset.search.includes(searchValue);
-                    const matchesCategory = !categoryValue || row.dataset.category === categoryValue;
                     const matchesBrand = !brandValue || row.dataset.brand === brandValue;
                     const matchesStatus = !statusValue
                         || row.dataset.status === statusValue
                         || row.dataset.stockState === statusValue;
-                    const isVisible = matchesSearch && matchesCategory && matchesBrand && matchesStatus;
+                    const isVisible = isSelectedCategory && matchesSearch && matchesBrand && matchesStatus;
 
                     row.classList.toggle('hidden-by-filter', !isVisible);
 
@@ -1072,7 +1182,7 @@ foreach ($groupedProducts as $categoryProducts) {
                     }
                 });
 
-                section.classList.toggle('hidden-by-filter', sectionVisibleRows === 0);
+                section.classList.toggle('hidden-by-filter', !isSelectedCategory || sectionVisibleRows === 0);
                 const countNode = section.querySelector('[data-category-count]');
                 if (countNode) {
                     countNode.textContent = sectionVisibleRows;
@@ -1088,14 +1198,19 @@ foreach ($groupedProducts as $categoryProducts) {
             }
         }
 
-        [searchInput, categoryFilter, statusFilter, brandFilter].forEach((control) => {
+        categoryButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setActiveCategory(button.dataset.category || '');
+            });
+        });
+
+        [searchInput, statusFilter, brandFilter].forEach((control) => {
             control?.addEventListener('input', applyFilters);
             control?.addEventListener('change', applyFilters);
         });
 
         resetButton?.addEventListener('click', () => {
             if (searchInput) searchInput.value = '';
-            if (categoryFilter) categoryFilter.value = '';
             if (statusFilter) statusFilter.value = '';
             if (brandFilter) brandFilter.value = '';
             applyFilters();

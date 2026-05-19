@@ -486,8 +486,8 @@
                         <tr>
                             <td class="item-name"><?= esc($item['name']) ?></td>
                             <td class="item-quantity"><?= (int) $item['qty'] ?></td>
-                            <td class="item-price">₱<?= number_format((float) $item['unit_price'], 2) ?></td>
-                            <td class="item-price">₱<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?></td>
+                            <td class="item-price">₱<?= number_format(\App\Models\OrderModel::resolveItemSellingPrice($item), 2) ?></td>
+                            <td class="item-price">₱<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) $item['qty'], 2) ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -583,7 +583,7 @@
                 <?php foreach ($items as $item): ?>
                     <div class="receipt-item">
                         <span><?= esc($item['name']) ?> x<?= (int) $item['qty'] ?></span>
-                        <span>₱<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?></span>
+                        <span>₱<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) $item['qty'], 2) ?></span>
                     </div>
                 <?php endforeach; ?>
                 <div class="receipt-total">

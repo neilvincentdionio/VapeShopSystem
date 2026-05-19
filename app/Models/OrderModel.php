@@ -16,6 +16,8 @@ class OrderModel extends Model
         'description',
         'order_date',
         'status',
+        'total_amount',
+        'total_profit',
         'notes',
     ];
     protected $useTimestamps = true;
@@ -199,26 +201,89 @@ class OrderModel extends Model
         $orderId = (int) $insertOk;
         $timestamp = date('Y-m-d H:i:s');
         $itemRows = [];
+        $totalAmount = 0.0;
+        $totalProfit = 0.0;
 
         foreach ($items as $item) {
+            $line = self::computeOrderLine($item);
+            $totalAmount += $line['subtotal'];
+            $totalProfit += $line['profit'];
+
             $itemRows[] = [
                 'order_id' => $orderId,
                 'product_id' => ! empty($item['id']) ? (int) $item['id'] : null,
                 'product_name' => (string) ($item['name'] ?? 'Product'),
-                'quantity' => (int) ($item['qty'] ?? $item['quantity'] ?? 0),
-                'unit_price' => (float) ($item['unit_price'] ?? $item['price'] ?? 0),
+                'quantity' => $line['quantity'],
+                'unit_price' => $line['unit_price'],
+                'selling_price' => $line['selling_price'],
+                'subtotal' => $line['subtotal'],
+                'profit' => $line['profit'],
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ];
         }
 
         $this->db->table('order_items')->insertBatch($itemRows);
+
+        parent::update($orderId, [
+            'total_amount' => round($totalAmount, 2),
+            'total_profit' => round($totalProfit, 2),
+        ]);
+
+        if (empty($paymentData['amount'])) {
+            $paymentData['amount'] = round($totalAmount, 2);
+        }
+
         $this->upsertPayment($orderId, $paymentData);
         $this->upsertShipment($orderId, $shipmentData);
 
         $this->db->transComplete();
 
         return $this->db->transStatus() ? $orderId : false;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array{quantity:int,unit_price:float,selling_price:float,subtotal:float,profit:float}
+     */
+    public static function computeOrderLine(array $item): array
+    {
+        $quantity = max(0, (int) ($item['qty'] ?? $item['quantity'] ?? 0));
+        $sellingPrice = round((float) ($item['selling_price'] ?? $item['price'] ?? 0), 2);
+        $unitCost = round((float) ($item['unit_price'] ?? $item['cost_price'] ?? 0), 2);
+
+        // Legacy payloads stored only one price in unit_price (actually selling).
+        if ($sellingPrice <= 0 && $unitCost > 0 && ! array_key_exists('selling_price', $item) && ! array_key_exists('price', $item)) {
+            $sellingPrice = $unitCost;
+            $unitCost = 0.0;
+        }
+
+        if ($sellingPrice <= 0 && $unitCost > 0) {
+            $sellingPrice = $unitCost;
+        }
+
+        if ($unitCost <= 0 && $sellingPrice > 0) {
+            $unitCost = round(max(0.0, $sellingPrice - 50.0), 2);
+        }
+
+        $subtotal = round($sellingPrice * $quantity, 2);
+        $capital = round($unitCost * $quantity, 2);
+        $profit = round($subtotal - $capital, 2);
+
+        return [
+            'quantity' => $quantity,
+            'unit_price' => $unitCost,
+            'selling_price' => $sellingPrice,
+            'subtotal' => $subtotal,
+            'profit' => $profit,
+        ];
+    }
+
+    public static function resolveItemSellingPrice(array $item): float
+    {
+        $selling = (float) ($item['selling_price'] ?? 0);
+
+        return $selling > 0 ? $selling : (float) ($item['unit_price'] ?? 0);
     }
 
     public function updateOrder(int $orderId, array $orderData = [], array $paymentData = [], array $shipmentData = []): bool
@@ -269,7 +334,10 @@ class OrderModel extends Model
 
             if (($payment['status'] ?? 'unpaid') !== 'paid') {
                 $totalRow = $this->db->table('order_items')
-                    ->select('COALESCE(SUM(quantity * unit_price), 0) AS total_amount', false)
+                    ->select(
+                        'COALESCE(SUM(subtotal), SUM(quantity * COALESCE(NULLIF(selling_price, 0), unit_price)), 0) AS total_amount',
+                        false
+                    )
                     ->where('order_id', $orderId)
                     ->get()
                     ->getRowArray();
@@ -291,7 +359,7 @@ class OrderModel extends Model
     public function getOrderItems(int $orderId): array
     {
         return $this->db->table('order_items')
-            ->select('product_id AS id, product_name AS name, quantity AS qty, unit_price')
+            ->select('product_id AS id, product_name AS name, quantity AS qty, unit_price, selling_price, subtotal, profit')
             ->where('order_id', $orderId)
             ->orderBy('id', 'ASC')
             ->get()
@@ -403,12 +471,15 @@ class OrderModel extends Model
 
     private function baseOrderQuery()
     {
-        $itemsSubquery = '(SELECT oi.order_id, COALESCE(SUM(oi.quantity), 0) AS total_quantity, COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_amount FROM order_items oi GROUP BY oi.order_id)';
+        $itemsSubquery = '(SELECT oi.order_id, COALESCE(SUM(oi.quantity), 0) AS total_quantity, '
+            . 'COALESCE(SUM(oi.subtotal), SUM(oi.quantity * COALESCE(NULLIF(oi.selling_price, 0), oi.unit_price)), 0) AS total_amount, '
+            . 'COALESCE(SUM(oi.profit), 0) AS total_profit '
+            . 'FROM order_items oi GROUP BY oi.order_id)';
 
         return $this->db->table('orders o')
             ->select(
                 'o.id, o.reference_number, o.title, o.description, o.order_date AS date, o.order_date AS record_date, o.status, o.notes, o.customer_id AS created_by, o.created_at, o.updated_at, ' .
-                'COALESCE(i.total_quantity, 0) AS quantity, COALESCE(i.total_amount, 0) AS total_amount, ' .
+                'COALESCE(i.total_quantity, 0) AS quantity, COALESCE(o.total_amount, i.total_amount, 0) AS total_amount, COALESCE(o.total_profit, i.total_profit, 0) AS total_profit, ' .
                 "COALESCE(p.method, 'cash') AS payment_method, CASE WHEN COALESCE(s.status, o.status) = 'completed' THEN 'paid' ELSE COALESCE(p.status, 'unpaid') END AS payment_status, " .
                 'p.amount_received, p.change_amount, ' .
                 "COALESCE(s.status, 'to_pay') AS delivery_status, s.tracking_number, s.shipping_address, s.contact_number, s.shipped_at, s.delivered_at, s.notes AS shipment_notes, " .
@@ -417,7 +488,7 @@ class OrderModel extends Model
                 's.store_latitude, s.store_longitude, s.store_address, s.delivered_latitude, s.delivered_longitude',
                 false
             )
-            ->select('CASE WHEN COALESCE(i.total_quantity, 0) > 0 THEN ROUND(COALESCE(i.total_amount, 0) / i.total_quantity, 2) ELSE 0 END AS unit_price', false)
+            ->select('CASE WHEN COALESCE(i.total_quantity, 0) > 0 THEN ROUND(COALESCE(o.total_amount, i.total_amount, 0) / i.total_quantity, 2) ELSE 0 END AS unit_price', false)
             ->select("'sales' AS record_type", false)
             ->join("({$itemsSubquery}) i", 'i.order_id = o.id', 'left', false)
             ->join('order_payments p', 'p.order_id = o.id', 'left')
@@ -432,7 +503,7 @@ class OrderModel extends Model
 
         $orderIds = array_values(array_unique(array_map(static fn ($row) => (int) ($row['id'] ?? 0), $orders)));
         $itemRows = $this->db->table('order_items')
-            ->select('order_id, product_id AS id, product_name AS name, quantity AS qty, unit_price')
+            ->select('order_id, product_id AS id, product_name AS name, quantity AS qty, unit_price, selling_price, subtotal, profit')
             ->whereIn('order_id', $orderIds)
             ->orderBy('id', 'ASC')
             ->get()

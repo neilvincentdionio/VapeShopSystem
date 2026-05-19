@@ -292,7 +292,7 @@ class DashboardModel extends Model
 
         $itemTotalsSql = '';
         if ($this->db->tableExists('order_items')) {
-            $itemTotalsSql = ', (SELECT COALESCE(SUM(oi.quantity * oi.unit_price), 0) FROM order_items oi WHERE oi.order_id = o.id) AS items_total';
+            $itemTotalsSql = ', (SELECT COALESCE(SUM(oi.subtotal), SUM(oi.quantity * COALESCE(NULLIF(oi.selling_price, 0), oi.unit_price)), 0) FROM order_items oi WHERE oi.order_id = o.id) AS items_total';
         }
 
         $builder = $this->db->table('orders o')
@@ -350,5 +350,241 @@ class DashboardModel extends Model
             ->limit($limit)
             ->get()
             ->getResultArray();
+    }
+
+    /**
+     * Lifetime admin dashboard summary (paid orders).
+     *
+     * @return array{
+     *   total_revenue: float,
+     *   total_profit: float,
+     *   total_orders: int,
+     *   total_products_sold: int,
+     *   low_stock_count: int
+     * }
+     */
+    public function getAdminSummaryStats(int $lowStockThreshold = 10): array
+    {
+        $stats = [
+            'total_revenue' => 0.0,
+            'total_profit' => 0.0,
+            'total_orders' => 0,
+            'total_products_sold' => 0,
+            'low_stock_count' => 0,
+        ];
+
+        if ($this->db->tableExists('orders')) {
+            $stats['total_orders'] = (int) $this->db->table('orders')
+                ->where('status !=', 'cancelled')
+                ->countAllResults();
+        }
+
+        if ($this->db->tableExists('order_payments') && $this->db->tableExists('orders')) {
+            $revenueRow = $this->db->table('order_payments op')
+                ->selectSum('op.amount', 'total')
+                ->join('orders o', 'o.id = op.order_id', 'inner')
+                ->where('op.status', 'paid')
+                ->where('o.status !=', 'cancelled')
+                ->get()
+                ->getRowArray();
+            $stats['total_revenue'] = round((float) ($revenueRow['total'] ?? 0), 2);
+
+            $profitRow = $this->db->table('orders o')
+                ->selectSum('o.total_profit', 'total')
+                ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid')
+                ->where('o.status !=', 'cancelled')
+                ->get()
+                ->getRowArray();
+            $stats['total_profit'] = round((float) ($profitRow['total'] ?? 0), 2);
+
+            if ($stats['total_profit'] <= 0 && $this->db->tableExists('order_items')) {
+                $itemProfitRow = $this->db->table('order_items oi')
+                    ->selectSum('oi.profit', 'total')
+                    ->join('orders o', 'o.id = oi.order_id', 'inner')
+                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                    ->where('op.status', 'paid')
+                    ->where('o.status !=', 'cancelled')
+                    ->get()
+                    ->getRowArray();
+                $stats['total_profit'] = round((float) ($itemProfitRow['total'] ?? 0), 2);
+            }
+
+            if ($this->db->tableExists('order_items')) {
+                $soldRow = $this->db->table('order_items oi')
+                    ->selectSum('oi.quantity', 'total')
+                    ->join('orders o', 'o.id = oi.order_id', 'inner')
+                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                    ->where('op.status', 'paid')
+                    ->where('o.status !=', 'cancelled')
+                    ->get()
+                    ->getRowArray();
+                $stats['total_products_sold'] = (int) ($soldRow['total'] ?? 0);
+            }
+        } elseif ($this->db->tableExists('orders')) {
+            $amountRow = $this->db->table('orders')
+                ->selectSum('total_amount', 'total')
+                ->where('status', 'completed')
+                ->get()
+                ->getRowArray();
+            $stats['total_revenue'] = round((float) ($amountRow['total'] ?? 0), 2);
+
+            $profitRow = $this->db->table('orders')
+                ->selectSum('total_profit', 'total')
+                ->where('status', 'completed')
+                ->get()
+                ->getRowArray();
+            $stats['total_profit'] = round((float) ($profitRow['total'] ?? 0), 2);
+        }
+
+        if ($this->db->tableExists('products')) {
+            $lowStockThreshold = max(1, $lowStockThreshold);
+            $stats['low_stock_count'] = (int) $this->db->table('products')
+                ->where('is_active', 1)
+                ->where('stock_qty <=', $lowStockThreshold)
+                ->countAllResults();
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Daily paid sales for chart (alias of revenue chart with 14-day default).
+     *
+     * @return array{labels: string[], amounts: float[], total: float, days: int}
+     */
+    public function getDailySalesChartData(int $days = 14): array
+    {
+        return $this->getRevenueChartData($days);
+    }
+
+    /**
+     * Monthly profit for paid orders (last N months).
+     *
+     * @return array{labels: string[], amounts: float[], total: float, months: int}
+     */
+    public function getMonthlyProfitChartData(int $months = 12): array
+    {
+        $months = max(1, min(24, $months));
+        $labels = [];
+        $amounts = [];
+        $monthKeys = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $monthKey = date('Y-m', strtotime('first day of -' . $i . ' months'));
+            $monthKeys[] = $monthKey;
+            $labels[] = date('M Y', strtotime($monthKey . '-01'));
+            $amounts[$monthKey] = 0.0;
+        }
+
+        if ($this->db->tableExists('orders') && $this->db->tableExists('order_payments')) {
+            $start = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
+            $rows = $this->db->table('orders o')
+                ->select("DATE_FORMAT(COALESCE(op.paid_at, op.updated_at, o.created_at), '%Y-%m') AS profit_month", false)
+                ->selectSum('o.total_profit', 'total')
+                ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid')
+                ->where('o.status !=', 'cancelled')
+                ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) >=', $start)
+                ->groupBy('profit_month')
+                ->orderBy('profit_month', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            foreach ($rows as $row) {
+                $key = (string) ($row['profit_month'] ?? '');
+                if ($key !== '' && array_key_exists($key, $amounts)) {
+                    $amounts[$key] = (float) ($row['total'] ?? 0);
+                }
+            }
+
+            if (array_sum($amounts) <= 0 && $this->db->tableExists('order_items')) {
+                $itemRows = $this->db->table('order_items oi')
+                    ->select("DATE_FORMAT(COALESCE(op.paid_at, op.updated_at, o.created_at), '%Y-%m') AS profit_month", false)
+                    ->selectSum('oi.profit', 'total')
+                    ->join('orders o', 'o.id = oi.order_id', 'inner')
+                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                    ->where('op.status', 'paid')
+                    ->where('o.status !=', 'cancelled')
+                    ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) >=', $start)
+                    ->groupBy('profit_month')
+                    ->orderBy('profit_month', 'ASC')
+                    ->get()
+                    ->getResultArray();
+
+                foreach ($itemRows as $row) {
+                    $key = (string) ($row['profit_month'] ?? '');
+                    if ($key !== '' && array_key_exists($key, $amounts)) {
+                        $amounts[$key] = (float) ($row['total'] ?? 0);
+                    }
+                }
+            }
+        }
+
+        $orderedAmounts = [];
+        foreach ($monthKeys as $monthKey) {
+            $orderedAmounts[] = round((float) ($amounts[$monthKey] ?? 0), 2);
+        }
+
+        return [
+            'labels' => $labels,
+            'amounts' => $orderedAmounts,
+            'total' => round(array_sum($orderedAmounts), 2),
+            'months' => $months,
+        ];
+    }
+
+    /**
+     * Top selling products by quantity (paid orders).
+     *
+     * @return array{labels: string[], quantities: int[], total: int, limit: int}
+     */
+    public function getBestSellingProductsChartData(int $limit = 8): array
+    {
+        $limit = max(1, min(15, $limit));
+        $labels = [];
+        $quantities = [];
+
+        if (!$this->db->tableExists('order_items') || !$this->db->tableExists('orders')) {
+            return [
+                'labels' => $labels,
+                'quantities' => $quantities,
+                'total' => 0,
+                'limit' => $limit,
+            ];
+        }
+
+        $builder = $this->db->table('order_items oi')
+            ->select('oi.product_name, SUM(oi.quantity) AS sold_qty', false)
+            ->join('orders o', 'o.id = oi.order_id', 'inner')
+            ->where('o.status !=', 'cancelled')
+            ->groupBy('oi.product_id, oi.product_name')
+            ->orderBy('sold_qty', 'DESC')
+            ->limit($limit);
+
+        if ($this->db->tableExists('order_payments')) {
+            $builder->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid');
+        } else {
+            $builder->where('o.status', 'completed');
+        }
+
+        $rows = $builder->get()->getResultArray();
+
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['product_name'] ?? 'Product'));
+            if (strlen($name) > 42) {
+                $name = substr($name, 0, 39) . '...';
+            }
+            $labels[] = $name !== '' ? $name : 'Product';
+            $quantities[] = (int) ($row['sold_qty'] ?? 0);
+        }
+
+        return [
+            'labels' => $labels,
+            'quantities' => $quantities,
+            'total' => array_sum($quantities),
+            'limit' => $limit,
+        ];
     }
 }

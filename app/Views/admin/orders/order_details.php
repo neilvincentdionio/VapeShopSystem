@@ -237,10 +237,10 @@ $isReturnFlow = function_exists('is_return_refund_status') && is_return_refund_s
                         <div class="order-item">
                             <div class="item-info">
                                 <div class="item-name"><?= esc($item['name']) ?></div>
-                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                <div class="item-details">Quantity: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format(\App\Models\OrderModel::resolveItemSellingPrice($item), 2) ?></div>
                             </div>
                             <div class="item-price">
-                                &#8369;<?= number_format((float) $item['qty'] * (float) $item['unit_price'], 2) ?>
+                                &#8369;<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) $item['qty'], 2) ?>
                             </div>
                         </div>
                     <?php endforeach; ?>

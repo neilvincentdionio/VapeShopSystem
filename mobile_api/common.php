@@ -192,3 +192,28 @@ if (!function_exists('mobile_build_spec')) {
     }
 }
 
+if (!function_exists('compute_mobile_order_line')) {
+    /**
+     * @return array{quantity:int,unit_price:float,selling_price:float,subtotal:float,profit:float}
+     */
+    function compute_mobile_order_line(int $quantity, float $unitCost, float $sellingPrice): array
+    {
+        $quantity = max(0, $quantity);
+        $sellingPrice = round($sellingPrice, 2);
+        $unitCost = round($unitCost, 2);
+        if ($unitCost <= 0 && $sellingPrice > 0) {
+            $unitCost = round(max(0.0, $sellingPrice - 50.0), 2);
+        }
+        $subtotal = round($sellingPrice * $quantity, 2);
+        $capital = round($unitCost * $quantity, 2);
+
+        return [
+            'quantity' => $quantity,
+            'unit_price' => $unitCost,
+            'selling_price' => $sellingPrice,
+            'subtotal' => $subtotal,
+            'profit' => round($subtotal - $capital, 2),
+        ];
+    }
+}
+

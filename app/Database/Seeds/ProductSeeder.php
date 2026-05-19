@@ -17,6 +17,8 @@ class ProductSeeder extends Seeder
             if ($seedName !== '' && isset($imageMap[$seedName]) && trim((string) $imageMap[$seedName]) !== '') {
                 $product['image_url'] = trim((string) $imageMap[$seedName]);
             }
+
+            $this->applySeedProductPricing($product);
         }
         unset($product);
 
@@ -34,25 +36,27 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'BLACK',
                 'image_url' => null,
+                'selling_price' => 400.00,
+                'unit_price' => 350.00,
                 'is_active' => 1,
                 'puffs' => 12000,
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
-                    ['name' => 'Red Pulp (Watermelon)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Yellow Summer (Mango)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Rainbow Punch (Kool-Aid)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Very Baguio (Strawberry)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Green Tokyo (Matcha)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Bacteria Monster (Yakult)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Trouble Purple (Grapes)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Very More (Mixedberries)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Sweet Forest (Green Apple)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Yellow Green (Lemon Lime)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Black Wave (Black Currant)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Sticky Worms (Gummy Worms)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Tangy Plump (Nerdz)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
-                    ['name' => 'Round Melo (Melon)', 'price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Red Pulp (Watermelon)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Yellow Summer (Mango)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Rainbow Punch (Kool-Aid)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Very Baguio (Strawberry)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Green Tokyo (Matcha)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Bacteria Monster (Yakult)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Trouble Purple (Grapes)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Very More (Mixedberries)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Sweet Forest (Green Apple)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Yellow Green (Lemon Lime)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Black Wave (Black Currant)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Sticky Worms (Gummy Worms)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Tangy Plump (Nerdz)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
+                    ['name' => 'Round Melo (Melon)', 'selling_price' => 400.00, 'stock_qty' => 10, 'puffs' => 12000],
                 ],
             ],
             [
@@ -60,7 +64,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'BLACK',
                 'image_url' => null,
-                'price' => 400.00,
+                'selling_price' => 400.00,
+                'unit_price' => 350.00,
                 'is_active' => 1,
                 'puffs' => 8000,
                 'created_at' => $timestamp,
@@ -89,7 +94,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'BLACK',
                 'image_url' => null,
-                'price' => 500.00,
+                'selling_price' => 500.00,
+                'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 25000,
                 'created_at' => $timestamp,
@@ -113,7 +119,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'CRYSM',
                 'image_url' => null,
-                'price' => 500.00,
+                'selling_price' => 500.00,
+                'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 30000,
                 'created_at' => $timestamp,
@@ -137,7 +144,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'VAPOR',
                 'image_url' => null,
-                'price' => 500.00,
+                'selling_price' => 500.00,
+                'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 25000,
                 'created_at' => $timestamp,
@@ -161,7 +169,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'UOTOFO',
                 'image_url' => null,
-                'price' => 500.00,
+                'selling_price' => 500.00,
+                'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 20000,
                 'created_at' => $timestamp,
@@ -184,7 +193,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'XVAPE',
                 'image_url' => null,
-                'price' => 395.00,
+                'selling_price' => 395.00,
+                'unit_price' => 345.00,
                 'is_active' => 1,
                 'puffs' => 15000,
                 'created_at' => $timestamp,
@@ -209,7 +219,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Pods',
                 'brand' => 'KALO',
                 'image_url' => null,
-                'price' => 270.00,
+                'selling_price' => 270.00,
+                'unit_price' => 220.00,
                 'is_active' => 1,
                 'puffs' => 20000,
                 'created_at' => $timestamp,
@@ -234,7 +245,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Device',
                 'brand' => 'ASPIRE',
                 'image_url' => null,
-                'price' => 800.00,
+                'selling_price' => 800.00,
+                'unit_price' => 750.00,
                 'stock_qty' => 35,
                 'is_active' => 1,
                 'flavor' => null,
@@ -247,7 +259,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Device',
                 'brand' => 'BLACK',
                 'image_url' => null,
-                'price' => 300.00,
+                'selling_price' => 300.00,
+                'unit_price' => 250.00,
                 'stock_qty' => 75,
                 'is_active' => 1,
                 'flavor' => null,
@@ -260,7 +273,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Device',
                 'brand' => 'X-VAPE',
                 'image_url' => null,
-                'price' => 395.00,
+                'selling_price' => 395.00,
+                'unit_price' => 345.00,
                 'stock_qty' => 60,
                 'is_active' => 1,
                 'flavor' => null,
@@ -275,7 +289,8 @@ class ProductSeeder extends Seeder
                 'category' => 'E-liquid',
                 'brand' => 'CODED',
                 'image_url' => null,
-                'price' => 180.00,
+                'selling_price' => 180.00,
+                'unit_price' => 130.00,
                 'is_active' => 1,
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
@@ -293,7 +308,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Disposable',
                 'brand' => 'STORM',
                 'image_url' => null,
-                'price' => 450.00,
+                'selling_price' => 450.00,
+                'unit_price' => 400.00,
                 'is_active' => 1,
                 'puffs' => 15000,
                 'created_at' => $timestamp,
@@ -314,7 +330,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Disposable',
                 'brand' => 'BL?ACK',
                 'image_url' => null,
-                'price' => 380.00,
+                'selling_price' => 380.00,
+                'unit_price' => 330.00,
                 'is_active' => 1,
                 'puffs' => 30000,
                 'created_at' => $timestamp,
@@ -337,7 +354,8 @@ class ProductSeeder extends Seeder
                 'category' => 'Disposable',
                 'brand' => 'VI BAR',
                 'image_url' => null,
-                'price' => 380.00,
+                'selling_price' => 380.00,
+                'unit_price' => 330.00,
                 'is_active' => 1,
                 'puffs' => 30000,
                 'created_at' => $timestamp,
@@ -407,7 +425,7 @@ class ProductSeeder extends Seeder
         return [
             $baseProduct + $this->buildVariantData($seedProduct, [
                 'flavor' => $seedProduct['flavor'] ?? null,
-                'price' => $seedProduct['price'] ?? 0,
+                'selling_price' => $seedProduct['selling_price'] ?? 0,
                 'stock_qty' => $seedProduct['stock_qty'] ?? 0,
                 'puffs' => $seedProduct['puffs'] ?? null,
             ]),
@@ -422,12 +440,63 @@ class ProductSeeder extends Seeder
 
         $flavor = $variantSeed['flavor'] ?? $variantSeed['name'] ?? null;
 
+        $sellingPrice = (float) (
+            $variantSeed['selling_price']
+            ?? $variantSeed['price']
+            ?? $seedProduct['selling_price']
+            ?? $seedProduct['price']
+            ?? 0
+        );
+
         return [
-            'price' => (float) ($variantSeed['price'] ?? $seedProduct['price'] ?? 0),
+            'price' => $sellingPrice,
+            'selling_price' => $sellingPrice,
             'stock_qty' => (int) ($variantSeed['stock_qty'] ?? $seedProduct['stock_qty'] ?? 0),
             'flavor' => $this->normalizeNullableString($flavor),
             'puffs' => $this->normalizeNullableInt($variantSeed['puffs'] ?? $seedProduct['puffs'] ?? null),
         ];
+    }
+
+    /**
+     * Cost price is always PHP 50 below the selling price (minimum 0).
+     */
+    private function deriveUnitPriceFromSelling(float $sellingPrice): float
+    {
+        return round(max(0.0, $sellingPrice - 50.0), 2);
+    }
+
+    /**
+     * @param array<string, mixed> $seedProduct
+     */
+    private function applySeedProductPricing(array &$seedProduct): void
+    {
+        $sellingPrice = (float) ($seedProduct['selling_price'] ?? $seedProduct['price'] ?? 0);
+
+        if ($sellingPrice <= 0 && ! empty($seedProduct['flavors']) && is_array($seedProduct['flavors'])) {
+            $firstFlavor = $seedProduct['flavors'][0];
+            if (is_array($firstFlavor)) {
+                $sellingPrice = (float) (
+                    $firstFlavor['selling_price']
+                    ?? $firstFlavor['price']
+                    ?? $seedProduct['selling_price']
+                    ?? $seedProduct['price']
+                    ?? 0
+                );
+            }
+        }
+
+        if ($sellingPrice <= 0) {
+            return;
+        }
+
+        $unitPrice = (float) ($seedProduct['unit_price'] ?? 0);
+        if ($unitPrice <= 0) {
+            $unitPrice = $this->deriveUnitPriceFromSelling($sellingPrice);
+        }
+
+        $seedProduct['selling_price'] = $sellingPrice;
+        $seedProduct['price'] = $sellingPrice;
+        $seedProduct['unit_price'] = $unitPrice;
     }
 
     private function normalizeNullableString($value): ?string
@@ -450,17 +519,30 @@ class ProductSeeder extends Seeder
         $variants = $this->buildSeedVariants($seedProduct);
         $totalStock = array_sum(array_map(static fn ($variant) => (int) ($variant['stock_qty'] ?? 0), $variants));
         $firstVariant = $variants[0] ?? [
-            'price' => $seedProduct['price'] ?? 0,
+            'selling_price' => $seedProduct['selling_price'] ?? $seedProduct['price'] ?? 0,
             'puffs' => $seedProduct['puffs'] ?? null,
             'stock_qty' => $seedProduct['stock_qty'] ?? 0,
         ];
+
+        $sellingPrice = (float) (
+            $seedProduct['selling_price']
+            ?? $firstVariant['selling_price']
+            ?? $firstVariant['price']
+            ?? 0
+        );
+        $unitPrice = (float) ($seedProduct['unit_price'] ?? 0);
+        if ($unitPrice <= 0 && $sellingPrice > 0) {
+            $unitPrice = $this->deriveUnitPriceFromSelling($sellingPrice);
+        }
 
         $productData = [
             'name' => trim((string) ($seedProduct['name'] ?? '')),
             'category' => trim((string) ($seedProduct['category'] ?? '')),
             'brand' => $this->normalizeNullableString($seedProduct['brand'] ?? null),
             'flavor' => null,
-            'price' => (float) ($firstVariant['price'] ?? 0),
+            'unit_price' => $unitPrice,
+            'selling_price' => $sellingPrice,
+            'price' => $sellingPrice,
             'puffs' => $this->normalizeNullableInt($firstVariant['puffs'] ?? null),
             'image_url' => $this->normalizeNullableString($seedProduct['image_url'] ?? null),
             'stock_qty' => $totalStock,
@@ -505,7 +587,7 @@ class ProductSeeder extends Seeder
         return [
             $this->buildVariantData($seedProduct, [
                 'flavor' => $seedProduct['flavor'] ?? null,
-                'price' => $seedProduct['price'] ?? 0,
+                'selling_price' => $seedProduct['selling_price'] ?? $seedProduct['price'] ?? 0,
                 'stock_qty' => $seedProduct['stock_qty'] ?? 0,
                 'puffs' => $seedProduct['puffs'] ?? null,
             ]),

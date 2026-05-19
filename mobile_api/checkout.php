@@ -34,7 +34,10 @@ try {
 
     $cartId = (int) $cart['id'];
     $itemsStmt = $db->prepare(
-        'SELECT ci.id, ci.product_id, ci.quantity, p.name AS product_name, p.price AS unit_price, p.stock_qty, p.is_active
+        'SELECT ci.id, ci.product_id, ci.quantity, p.name AS product_name,
+                p.unit_price AS product_unit_price,
+                COALESCE(p.selling_price, p.price) AS selling_price,
+                p.stock_qty, p.is_active
          FROM cart_items ci
          INNER JOIN products p ON p.id = ci.product_id
          WHERE ci.cart_id = :cart_id'
@@ -47,12 +50,18 @@ try {
     }
 
     $computedTotal = 0.0;
+    $computedProfit = 0.0;
     $itemCount = 0;
+    $preparedLines = [];
     foreach ($cartItems as $item) {
         $qty = (int) ($item['quantity'] ?? 0);
-        $price = (float) ($item['unit_price'] ?? 0);
         $stock = (int) ($item['stock_qty'] ?? 0);
         $active = (int) ($item['is_active'] ?? 0) === 1;
+        $line = compute_mobile_order_line(
+            $qty,
+            (float) ($item['product_unit_price'] ?? 0),
+            (float) ($item['selling_price'] ?? 0)
+        );
 
         if ($qty <= 0) {
             json_response(false, 'Invalid item quantity found in cart.', null, 400);
@@ -66,7 +75,9 @@ try {
             json_response(false, 'Insufficient stock for one or more cart items.', null, 400);
         }
 
-        $computedTotal += $qty * $price;
+        $preparedLines[] = $item + $line;
+        $computedTotal += $line['subtotal'];
+        $computedProfit += $line['profit'];
         $itemCount += $qty;
     }
 
@@ -85,8 +96,8 @@ try {
     $reference = 'ORD-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2)));
 
     $orderInsert = $db->prepare(
-        'INSERT INTO orders (customer_id, reference_number, title, description, order_date, status, notes, created_at, updated_at)
-         VALUES (:customer_id, :reference_number, :title, :description, :order_date, :status, :notes, :created_at, :updated_at)'
+        'INSERT INTO orders (customer_id, reference_number, title, description, order_date, status, total_amount, total_profit, notes, created_at, updated_at)
+         VALUES (:customer_id, :reference_number, :title, :description, :order_date, :status, :total_amount, :total_profit, :notes, :created_at, :updated_at)'
     );
     $orderInsert->execute([
         ':customer_id' => $userId,
@@ -95,6 +106,8 @@ try {
         ':description' => 'Order submitted via mobile API checkout.',
         ':order_date' => date('Y-m-d'),
         ':status' => 'pending',
+        ':total_amount' => $computedTotal,
+        ':total_profit' => round($computedProfit, 2),
         ':notes' => 'Created from mobile_api/checkout.php',
         ':created_at' => $now,
         ':updated_at' => $now,
@@ -102,8 +115,8 @@ try {
     $orderId = (int) $db->lastInsertId();
 
     $itemInsert = $db->prepare(
-        'INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, created_at, updated_at)
-         VALUES (:order_id, :product_id, :product_name, :quantity, :unit_price, :created_at, :updated_at)'
+        'INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, selling_price, subtotal, profit, created_at, updated_at)
+         VALUES (:order_id, :product_id, :product_name, :quantity, :unit_price, :selling_price, :subtotal, :profit, :created_at, :updated_at)'
     );
 
     $stockUpdate = $db->prepare(
@@ -111,10 +124,9 @@ try {
          WHERE id = :product_id AND stock_qty >= :quantity_check'
     );
 
-    foreach ($cartItems as $item) {
+    foreach ($preparedLines as $item) {
         $qty = (int) $item['quantity'];
         $productId = (int) $item['product_id'];
-        $unitPrice = (float) $item['unit_price'];
         $productName = (string) $item['product_name'];
 
         $itemInsert->execute([
@@ -122,7 +134,10 @@ try {
             ':product_id' => $productId,
             ':product_name' => $productName,
             ':quantity' => $qty,
-            ':unit_price' => $unitPrice,
+            ':unit_price' => (float) $item['unit_price'],
+            ':selling_price' => (float) $item['selling_price'],
+            ':subtotal' => (float) $item['subtotal'],
+            ':profit' => (float) $item['profit'],
             ':created_at' => $now,
             ':updated_at' => $now,
         ]);

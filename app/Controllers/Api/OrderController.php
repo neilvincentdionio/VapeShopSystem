@@ -30,7 +30,7 @@ class OrderController extends BaseApiController
         $userId = $this->currentUserId();
         $cartId = $this->cartModel->getOrCreateCartId($userId);
         $cartItems = $this->cartItemModel
-            ->select('cart_items.*, p.name, p.price')
+            ->select('cart_items.*, p.name, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price')
             ->join('products p', 'p.id = cart_items.product_id', 'inner')
             ->where('cart_items.cart_id', $cartId)
             ->findAll();
@@ -44,13 +44,21 @@ class OrderController extends BaseApiController
 
         foreach ($cartItems as $item) {
             $qty = (int) $item['quantity'];
-            $price = (float) $item['price'];
-            $total += ($qty * $price);
+            $costPrice = (float) ($item['unit_price'] ?? 0);
+            $sellingPrice = (float) ($item['selling_price'] ?? $item['price'] ?? 0);
+            $line = OrderModel::computeOrderLine([
+                'qty' => $qty,
+                'unit_price' => $costPrice,
+                'selling_price' => $sellingPrice,
+            ]);
+            $total += $line['subtotal'];
             $items[] = [
                 'id' => (int) $item['product_id'],
                 'name' => (string) $item['name'],
                 'qty' => $qty,
-                'price' => $price,
+                'unit_price' => $line['unit_price'],
+                'selling_price' => $line['selling_price'],
+                'price' => $line['selling_price'],
                 'variant_id' => isset($item['variant_id']) ? (int) $item['variant_id'] : null,
             ];
         }

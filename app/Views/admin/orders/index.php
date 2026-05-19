@@ -54,6 +54,39 @@ $totalRevenue = array_sum(array_map(
     static fn ($order) => (($order['payment_status'] ?? 'unpaid') === 'paid') ? (float) ($order['total_amount'] ?? 0) : 0.0,
     $ordersList
 ));
+$resolveOrderProfit = static function (array $order): float {
+    $orderProfit = (float) ($order['total_profit'] ?? 0);
+
+    if ($orderProfit !== 0.0) {
+        return $orderProfit;
+    }
+
+    foreach ($order['items'] ?? [] as $item) {
+        if (! is_array($item)) {
+            continue;
+        }
+
+        $lineProfit = (float) ($item['profit'] ?? 0);
+        if ($lineProfit !== 0.0) {
+            $orderProfit += $lineProfit;
+            continue;
+        }
+
+        $qty = (int) ($item['qty'] ?? 0);
+        $subtotal = (float) ($item['subtotal'] ?? 0);
+        if ($subtotal <= 0) {
+            $subtotal = \App\Models\OrderModel::resolveItemSellingPrice($item) * $qty;
+        }
+
+        $orderProfit += $subtotal - ((float) ($item['unit_price'] ?? 0) * $qty);
+    }
+
+    return round($orderProfit, 2);
+};
+$totalProfit = array_sum(array_map(
+    static fn ($order) => (($order['payment_status'] ?? 'unpaid') === 'paid') ? $resolveOrderProfit($order) : 0.0,
+    $ordersList
+));
 $completedOrders = count(array_filter(
     $ordersList,
     static fn ($order) => ($order['delivery_status'] ?? 'to_pay') === 'completed'
@@ -286,6 +319,11 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
         .stat-icon.info {
             background: rgba(0, 188, 212, 0.1);
             color: #00bcd4;
+        }
+
+        .stat-icon.profit {
+            background: rgba(103, 58, 183, 0.12);
+            color: #673ab7;
         }
 
         .stat-content h3 {
@@ -1079,7 +1117,6 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                 </div>
             </div>
     
-    <?php if ($hasOrders): ?>
         <div class="dashboard-stats">
             <div class="stat-card">
                 <div class="stat-icon">
@@ -1097,6 +1134,15 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                 <div class="stat-content">
                     <h3>&#8369;<?= number_format((float) $totalRevenue, 2) ?></h3>
                     <p>Total Revenue</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon profit">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>&#8369;<?= number_format((float) $totalProfit, 2) ?></h3>
+                    <p>Total Profit</p>
                 </div>
             </div>
             <div class="stat-card">
@@ -1118,7 +1164,8 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                 </div>
             </div>
         </div>
-        
+
+    <?php if ($hasOrders): ?>
         <div class="data-card">
             <div class="data-card-header">
                 <h3>Orders List</h3>

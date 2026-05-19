@@ -29,7 +29,7 @@ try {
     $orders = $ordersStmt->fetchAll();
 
     $itemStmt = $db->prepare(
-        'SELECT product_name, quantity, unit_price
+        'SELECT product_name, quantity, unit_price, selling_price, subtotal, profit
          FROM order_items
          WHERE order_id = :order_id
          ORDER BY id ASC'
@@ -57,12 +57,24 @@ try {
         $total = 0.0;
         foreach ($itemsRows as $row) {
             $qty = (int) ($row['quantity'] ?? 0);
-            $unit = (float) ($row['unit_price'] ?? 0);
-            $total += $qty * $unit;
+            $cost = (float) ($row['unit_price'] ?? 0);
+            $selling = (float) ($row['selling_price'] ?? 0);
+            if ($selling <= 0) {
+                $selling = $cost;
+                $cost = 0.0;
+            }
+            $subtotal = (float) ($row['subtotal'] ?? 0);
+            if ($subtotal <= 0) {
+                $subtotal = round($selling * $qty, 2);
+            }
+            $total += $subtotal;
             $items[] = [
                 'product_name' => (string) ($row['product_name'] ?? ''),
                 'quantity' => $qty,
-                'unit_price' => $unit,
+                'unit_price' => $cost,
+                'selling_price' => $selling,
+                'subtotal' => $subtotal,
+                'profit' => (float) ($row['profit'] ?? round($subtotal - ($cost * $qty), 2)),
             ];
         }
 

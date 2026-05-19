@@ -63,6 +63,7 @@ class Products extends BaseController
         $data = [
             'title' => 'Add New Product',
             'categories' => $this->productModel->getCategoryOptions(),
+            'brands' => $this->productModel->getBrandOptions(),
         ];
 
         return view('admin/products/create', $data);
@@ -110,9 +111,10 @@ class Products extends BaseController
         $validation = $this->validate([
             'name' => 'required|min_length[3]|max_length[255]',
             'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
-            'brand' => 'permit_empty|max_length[100]',
+            'brand' => 'required|max_length[100]',
             'flavor' => 'permit_empty|max_length[100]',
-            'price' => 'required|numeric|greater_than_equal_to[0]',
+            'unit_price' => 'required|numeric|greater_than_equal_to[0]',
+            'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
             'is_active' => 'required|in_list[0,1]',
@@ -125,13 +127,16 @@ class Products extends BaseController
 
         $imageFile = $this->request->getFile('image');
         $imageName = $this->storeProductImage($imageFile);
+        $pricing = $this->resolveProductPricing();
 
         $productData = [
             'name' => $this->request->getPost('name'),
             'category' => $this->request->getPost('category'),
             'brand' => $this->request->getPost('brand'),
             'flavor' => $this->request->getPost('flavor'),
-            'price' => $this->request->getPost('price'),
+            'unit_price' => $pricing['unit_price'],
+            'selling_price' => $pricing['selling_price'],
+            'price' => $pricing['price'],
             'puffs' => $this->request->getPost('puffs') ?: null,
             'stock_qty' => $this->request->getPost('stock_qty'),
             'is_active' => $this->request->getPost('is_active') ?: 1,
@@ -158,7 +163,7 @@ class Products extends BaseController
             && (
                 ! $usesFlavorInventory
                 || $this->productModel->syncProductVariants((int) $productId, $flavors, [
-                    'price' => $productData['price'],
+                    'price' => $productData['selling_price'],
                     'puffs' => $productData['puffs'],
                     'is_active' => $productData['is_active'],
                 ])
@@ -205,6 +210,7 @@ class Products extends BaseController
             'title' => 'Edit Product',
             'product' => $product,
             'categories' => $this->productModel->getCategoryOptions(),
+            'brands' => $this->productModel->getBrandOptions(),
         ];
 
         return view('admin/products/edit', $data);
@@ -229,9 +235,10 @@ class Products extends BaseController
         $validationRules = [
             'name' => 'required|min_length[3]|max_length[255]',
             'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
-            'brand' => 'permit_empty|max_length[100]',
+            'brand' => 'required|max_length[100]',
             'flavor' => 'permit_empty|max_length[100]',
-            'price' => 'required|numeric|greater_than_equal_to[0]',
+            'unit_price' => 'required|numeric|greater_than_equal_to[0]',
+            'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
             'is_active' => 'required|in_list[0,1]'
@@ -255,12 +262,16 @@ class Products extends BaseController
             $imageName = $this->storeProductImage($imageFile);
         }
 
+        $pricing = $this->resolveProductPricing();
+
         $productData = [
             'name' => $this->request->getPost('name'),
             'category' => $this->request->getPost('category'),
             'brand' => $this->request->getPost('brand'),
             'flavor' => $this->request->getPost('flavor'),
-            'price' => $this->request->getPost('price'),
+            'unit_price' => $pricing['unit_price'],
+            'selling_price' => $pricing['selling_price'],
+            'price' => $pricing['price'],
             'puffs' => $this->request->getPost('puffs') ?: null,
             'stock_qty' => $this->request->getPost('stock_qty'),
             'is_active' => $this->request->getPost('is_active') ?: 1,
@@ -282,7 +293,7 @@ class Products extends BaseController
             if (
                 $this->productModel->update($id, $productData)
                 && $this->productModel->syncProductVariants((int) $id, $flavors, [
-                    'price' => $productData['price'],
+                    'price' => $productData['selling_price'],
                     'puffs' => $productData['puffs'],
                     'is_active' => $productData['is_active'],
                 ])
@@ -525,5 +536,17 @@ class Products extends BaseController
                 'stock' => (int) ($flavor['stock'] ?? $flavor['flavor_stock'] ?? 0),
             ];
         }, $flavors), static fn (array $flavor): bool => trim((string) ($flavor['name'] ?? '')) !== ''));
+    }
+
+    private function resolveProductPricing(): array
+    {
+        $unitPrice = (float) $this->request->getPost('unit_price');
+        $sellingPrice = (float) $this->request->getPost('selling_price');
+
+        return [
+            'unit_price' => $unitPrice,
+            'selling_price' => $sellingPrice,
+            'price' => $sellingPrice,
+        ];
     }
 }

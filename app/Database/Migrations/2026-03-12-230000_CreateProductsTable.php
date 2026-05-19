@@ -47,6 +47,19 @@ class CreateProductsTable extends Migration
                 'type' => 'DECIMAL',
                 'constraint' => '10,2',
                 'default' => 0.00,
+                'comment' => 'Legacy selling price; kept in sync with selling_price',
+            ],
+            'unit_price' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,2',
+                'default' => 0.00,
+                'comment' => 'Capital / cost price',
+            ],
+            'selling_price' => [
+                'type' => 'DECIMAL',
+                'constraint' => '10,2',
+                'default' => 0.00,
+                'comment' => 'Customer selling price',
             ],
             'stock_qty' => [
                 'type' => 'INT',

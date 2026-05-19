@@ -282,7 +282,10 @@ class Dashboard extends BaseController
         
         $totalProducts = $this->dashboardModel->getTotalProducts($userRole, $shopName);
         $recentRegistrations = $this->dashboardModel->getRecentRegistrations();
-        $revenueChart = $this->dashboardModel->getRevenueChartData(7);
+        $adminSummary = $this->dashboardModel->getAdminSummaryStats(10);
+        $dailySalesChart = $this->dashboardModel->getDailySalesChartData(14);
+        $monthlyProfitChart = $this->dashboardModel->getMonthlyProfitChartData(12);
+        $bestSellingChart = $this->dashboardModel->getBestSellingProductsChartData(8);
         $recentOrdersList = $this->dashboardModel->getRecentOrdersList(8);
         $lowStockProducts = $this->dashboardModel->getLowStockProducts(10, 8);
 
@@ -292,7 +295,6 @@ class Dashboard extends BaseController
             'user_role' => $userRole,
             'user_shop_name' => $this->session->get('user_shop_name'),
             'page_title' => 'Admin Dashboard',
-            // Real analytics data
             'total_products' => $totalProducts,
             'orders_today' => $analytics['orders'],
             'revenue_today' => $analytics['revenue'],
@@ -302,13 +304,15 @@ class Dashboard extends BaseController
             'recent_registrations' => $recentRegistrations,
             'user_stats' => $userStats,
             'system_metrics' => $systemMetrics,
-            // Performance metrics
             'system_performance' => $analytics['orders'] > 0 ? '100%' : '0%',
             'notifications' => $this->getNotifications($analytics['orders'], $analytics['revenue']),
             'growth_rate' => $this->dashboardModel->getGrowthRate($userRole, $shopName),
             'recent_orders' => $analytics['orders'],
             'monthly_revenue' => $monthlyAnalytics['revenue'],
-            'revenue_chart' => $revenueChart,
+            'admin_summary' => $adminSummary,
+            'daily_sales_chart' => $dailySalesChart,
+            'monthly_profit_chart' => $monthlyProfitChart,
+            'best_selling_chart' => $bestSellingChart,
             'recent_orders_list' => $recentOrdersList,
             'low_stock_products' => $lowStockProducts,
         ];
@@ -2054,6 +2058,8 @@ class Dashboard extends BaseController
                 'cart_key' => (string) $cartKey,
                 'variant_id' => $product['variant_id'] ?? null,
                 'flavor' => (string) ($product['flavor'] ?? ''),
+                'unit_price' => (float) ($product['unit_price'] ?? 0),
+                'selling_price' => (float) ($product['selling_price'] ?? $product['price'] ?? 0),
                 'price' => (float) $product['price'],
                 'image' => (string) ($product['image'] ?? ''),
                 'quantity' => (int) $qty,
@@ -2115,12 +2121,20 @@ class Dashboard extends BaseController
     private function mapCartItemsToOrderItems(array $cartItems): array
     {
         return array_map(static function (array $item): array {
+            $sellingPrice = (float) ($item['selling_price'] ?? $item['price'] ?? 0);
+            $costPrice = (float) ($item['unit_price'] ?? $item['cost_price'] ?? 0);
+            if ($costPrice <= 0 && $sellingPrice > 0) {
+                $costPrice = round(max(0.0, $sellingPrice - 50.0), 2);
+            }
+
             return [
                 'id' => (int) ($item['id'] ?? 0),
                 'variant_id' => isset($item['variant_id']) ? (int) $item['variant_id'] : null,
                 'qty' => (int) ($item['quantity'] ?? $item['qty'] ?? 0),
                 'name' => (string) ($item['display_name'] ?? $item['name'] ?? ('Product #' . (string) ($item['id'] ?? ''))),
-                'unit_price' => (float) ($item['price'] ?? $item['unit_price'] ?? 0),
+                'unit_price' => $costPrice,
+                'selling_price' => $sellingPrice,
+                'price' => $sellingPrice,
             ];
         }, $cartItems);
     }
@@ -2161,7 +2175,11 @@ class Dashboard extends BaseController
             'name' => (string) $product['name'],
             'display_name' => (string) $product['name'],
             'category' => (string) ($product['category'] ?? ''),
-            'price' => (float) ($product['price'] ?? 0),
+            'unit_price' => (float) ($product['unit_price'] ?? 0) > 0
+                ? (float) $product['unit_price']
+                : round(max(0.0, (float) ($product['selling_price'] ?? $product['price'] ?? 0) - 50.0), 2),
+            'selling_price' => (float) ($product['selling_price'] ?? $product['price'] ?? 0),
+            'price' => (float) ($product['selling_price'] ?? $product['price'] ?? 0),
             'image' => (string) ($product['image'] ?? $product['image_url'] ?? ''),
             'stock' => (int) ($product['stock_qty'] ?? 0),
             'variant_id' => null,
@@ -2188,7 +2206,8 @@ class Dashboard extends BaseController
             $resolved['display_name'] = $labelParts !== []
                 ? $resolved['name'] . ' - ' . implode(' / ', $labelParts)
                 : $resolved['name'];
-            $resolved['price'] = (float) ($variant['price'] ?? $resolved['price']);
+            $resolved['selling_price'] = (float) ($variant['price'] ?? $resolved['selling_price']);
+            $resolved['price'] = $resolved['selling_price'];
             $resolved['stock'] = (int) ($variant['stock_qty'] ?? 0);
         }
 

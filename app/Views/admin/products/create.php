@@ -397,8 +397,36 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="price">Price (PHP) *</label>
-                                    <input type="number" name="price" id="price" class="form-control" value="<?= esc(old('price') ?? '0.00') ?>" step="0.01" min="0" required>
+                                    <label for="brand">Brand Name *</label>
+                                    <input
+                                        type="text"
+                                        name="brand"
+                                        id="brand"
+                                        class="form-control"
+                                        list="brandSuggestions"
+                                        value="<?= esc(old('brand') ?? '') ?>"
+                                        placeholder="e.g. ASPIRE, BLACK, X-VAPE"
+                                        maxlength="100"
+                                        required
+                                    >
+                                    <datalist id="brandSuggestions">
+                                        <?php foreach ($brands ?? [] as $brandName): ?>
+                                            <option value="<?= esc($brandName) ?>"></option>
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                    <small class="help-text">Shown in Product Management and filters</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="unit_price">Cost Price (PHP) *</label>
+                                    <input type="number" name="unit_price" id="unit_price" class="form-control" value="<?= esc(old('unit_price') ?? '0.00') ?>" step="0.01" min="0" required>
+                                    <small class="help-text">Capital / cost price</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="selling_price">Selling Price (PHP) *</label>
+                                    <input type="number" name="selling_price" id="selling_price" class="form-control" value="<?= esc(old('selling_price') ?? '0.00') ?>" step="0.01" min="0" required>
+                                    <small class="help-text">Price shown to customers</small>
                                 </div>
 
                                 <div class="form-group">

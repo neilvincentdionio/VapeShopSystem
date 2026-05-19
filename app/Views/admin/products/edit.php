@@ -575,12 +575,47 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                             </div>
 
                             <div class="form-group">
-                                <label for="price">Price (₱) *</label>
-                                <input type="number" name="price" id="price" class="form-control" 
-                                       value="<?= old('price', $product['price']) ?>" 
+                                <label for="brand">Brand Name *</label>
+                                <input
+                                    type="text"
+                                    name="brand"
+                                    id="brand"
+                                    class="form-control"
+                                    list="brandSuggestions"
+                                    value="<?= esc(old('brand', $product['brand'] ?? '')) ?>"
+                                    placeholder="e.g. ASPIRE, BLACK, X-VAPE"
+                                    maxlength="100"
+                                    required
+                                >
+                                <datalist id="brandSuggestions">
+                                    <?php foreach ($brands ?? [] as $brandName): ?>
+                                        <option value="<?= esc($brandName) ?>"></option>
+                                    <?php endforeach; ?>
+                                </datalist>
+                                <?php if (isset($validation) && $validation->hasError('brand')): ?>
+                                    <div class="invalid-feedback"><?= $validation->getError('brand') ?></div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="unit_price">Cost Price (PHP) *</label>
+                                <input type="number" name="unit_price" id="unit_price" class="form-control"
+                                       value="<?= old('unit_price', $product['unit_price'] ?? $product['price'] ?? 0) ?>"
                                        step="0.01" min="0" required>
-                                <?php if (isset($validation) && $validation->hasError('price')): ?>
-                                    <div class="invalid-feedback"><?= $validation->getError('price') ?></div>
+                                <small class="help-text">Capital / cost price</small>
+                                <?php if (isset($validation) && $validation->hasError('unit_price')): ?>
+                                    <div class="invalid-feedback"><?= $validation->getError('unit_price') ?></div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="selling_price">Selling Price (PHP) *</label>
+                                <input type="number" name="selling_price" id="selling_price" class="form-control"
+                                       value="<?= old('selling_price', $product['selling_price'] ?? $product['price'] ?? 0) ?>"
+                                       step="0.01" min="0" required>
+                                <small class="help-text">Price shown to customers</small>
+                                <?php if (isset($validation) && $validation->hasError('selling_price')): ?>
+                                    <div class="invalid-feedback"><?= $validation->getError('selling_price') ?></div>
                                 <?php endif; ?>
                             </div>
 

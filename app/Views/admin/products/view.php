@@ -440,8 +440,12 @@ $productReviews = $productReviews ?? [];
                                 <div class="info-value"><?= esc(trim((string) ($product['brand'] ?? '')) !== '' ? $product['brand'] : 'No brand') ?></div>
                             </div>
                             <div class="info-item">
-                                <div class="info-label">Base Price</div>
-                                <div class="info-value">PHP <?= number_format((float) ($product['price'] ?? 0), 2) ?></div>
+                                <div class="info-label">Cost Price</div>
+                                <div class="info-value">PHP <?= number_format((float) ($product['unit_price'] ?? 0), 2) ?></div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Selling Price</div>
+                                <div class="info-value">PHP <?= number_format((float) ($product['selling_price'] ?? $product['price'] ?? 0), 2) ?></div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">Puffs</div>

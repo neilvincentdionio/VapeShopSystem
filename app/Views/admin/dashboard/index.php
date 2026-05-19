@@ -4,206 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; --accent: #27c56f; }
 
         body {
             font-family: var(--main-font);
-            background: #ffffff;
+            background: #f5f7fa;
             min-height: 100vh;
-            position: relative;
             color: #333333;
         }
 
-
-        .navbar {
-            position: sticky;
-            top: 0;
-            z-index: 20;
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            padding: 1rem 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        .navbar-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1.2rem;
-        }
-        .navbar-brand {
-            color: #333333;
-            font-size: 1.5rem;
-            font-weight: 700;
-            text-decoration: none;
-            white-space: nowrap;
-            flex: 0 0 auto;
-        }
-        .navbar-center {
-            flex: 1 1 auto;
-            display: flex;
-            justify-content: center;
-            min-width: 0;
-        }
-        .navbar-menu { display: flex; align-items: center; gap: .75rem; flex-wrap: nowrap; }
-        .navbar-menu a, .nav-dropdown-btn {
-            color: #333333;
-            text-decoration: none;
-            padding: .5rem 1rem;
-            border-radius: 5px;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: .95rem;
-            transition: all .3s;
-        }
-        .navbar-menu a:hover, .nav-link.active, .nav-dropdown-btn:hover { background-color: #f8f9fa; color: #27c56f; }
-        .nav-dropdown { position: relative; }
-        .nav-dropdown-content {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            margin-top: .5rem;
-            min-width: 220px;
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            overflow: hidden;
-            z-index: 50;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        .nav-dropdown:hover .nav-dropdown-content { display: block; }
-        .nav-dropdown-content a { display: block; }
-        .customer-actions {
-            display: flex;
-            align-items: center;
-            gap: .5rem;
-            margin-left: .35rem;
-        }
-        .customer-action-btn {
-            color: #333333;
-            text-decoration: none;
-            padding: .45rem .85rem;
-            border-radius: 999px;
-            border: 1px solid #27c56f;
-            background: rgba(39, 197, 111, 0.1);
-            font-size: .82rem;
-            font-weight: 600;
-            transition: transform .2s ease, background .2s ease, border-color .2s ease;
-        }
-        .customer-action-btn:hover {
-            transform: translateY(-1px);
-            background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
-            border-color: rgba(255, 255, 255, 0.55);
-        }
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: .8rem;
-            flex: 0 0 auto;
-        }
-        .user-info { display: flex; align-items: center; gap: .55rem; color: #333333; }
-        .user-name {
-            max-width: 170px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .user-avatar {
-            width: 36px; height: 36px; border-radius: 50%;
-            background: #27c56f;
-            color: #ffffff;
-            display: flex; align-items: center; justify-content: center; font-weight: 700;
-        }
-        .badge {
-            border: 1px solid #e0e0e0;
-            padding: .2rem .5rem;
-            border-radius: 999px;
-            font-size: .75rem;
-            background: #f8f9fa;
-            color: #666666;
-        }
-        .btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-            border-radius: 5px;
-            padding: .5rem .8rem;
-            text-decoration: none;
-        }
-        .btn-danger:hover { background-color: #c82333; }
-
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; position: relative; z-index: 2; }
-        .alert { padding: 1rem; border-radius: 5px; margin-bottom: 1rem; }
+        .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem 2rem 2.5rem; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
         .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-        .welcome-section {
+        .page-header {
             background: #ffffff;
             border: 1px solid #e0e0e0;
-            border-radius: 20px;
-            box-shadow: 0 4px 16px rgba(0,0,0,.08);
+            border-radius: 16px;
+            padding: 1.5rem 1.75rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        .welcome-section { padding: 2rem; margin-bottom: 2rem; }
-        .welcome-section h2 { font-size: 1.8rem; margin-bottom: 1rem; color: #333333; }
+        .page-header h1 { font-size: 1.65rem; font-weight: 700; margin-bottom: 0.35rem; }
+        .page-header p { color: #666666; font-size: 0.95rem; }
+        .page-meta {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        .page-meta strong { color: var(--accent); }
 
-        .stats-grid {
+        .dashboard-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-        .stat-item {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            padding: 1rem;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .stat-value { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; color: #27c56f; }
-
-        .dashboard-section {
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 20px;
-            box-shadow: 0 4px 16px rgba(0,0,0,.08);
-            padding: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
             margin-bottom: 1.5rem;
         }
+        .stat-card {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 1.35rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            text-decoration: none;
+            color: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            border-color: #c8e6d0;
+            box-shadow: 0 4px 14px rgba(39, 197, 111, 0.12);
+        }
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            background: rgba(39, 197, 111, 0.1);
+            color: var(--accent);
+            flex: 0 0 auto;
+        }
+        .stat-icon.revenue { background: rgba(39, 197, 111, 0.1); color: #27c56f; }
+        .stat-icon.profit { background: rgba(103, 58, 183, 0.12); color: #673ab7; }
+        .stat-icon.orders { background: rgba(33, 150, 243, 0.12); color: #2196f3; }
+        .stat-icon.sold { background: rgba(255, 152, 0, 0.12); color: #ff9800; }
+        .stat-icon.stock { background: rgba(244, 67, 54, 0.1); color: #f44336; }
+        .stat-content h3 { font-size: 1.55rem; font-weight: 700; margin-bottom: 0.2rem; }
+        .stat-content p { color: #666666; font-size: 0.88rem; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .charts-grid .chart-card.span-full { grid-column: 1 / -1; }
+
+        .chart-card, .dashboard-section {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 1.35rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
         .section-title {
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             font-weight: 700;
             color: #333333;
-            margin-bottom: 1rem;
-            padding-bottom: 0.65rem;
-            border-bottom: 2px solid #f0f0f0;
+            margin-bottom: 0.35rem;
         }
-        .chart-wrap { position: relative; height: 300px; }
-        .chart-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 0.75rem;
+        .section-subtitle {
+            font-size: 0.82rem;
+            color: #6b7280;
             margin-bottom: 1rem;
         }
-        .chart-total {
-            font-size: 0.9rem;
-            color: #666666;
-        }
-        .chart-total strong {
-            color: #27c56f;
-            font-size: 1.1rem;
-        }
+        .section-subtitle strong { color: var(--accent); }
+        .chart-wrap { position: relative; height: 280px; }
+        .chart-wrap.tall { height: 320px; }
+
         .dashboard-split {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
+            gap: 1.25rem;
         }
         .panel-list { display: flex; flex-direction: column; gap: 0.65rem; }
         .list-row {
@@ -222,22 +133,10 @@
             box-shadow: 0 2px 8px rgba(39, 197, 111, 0.08);
         }
         .list-row-main { min-width: 0; flex: 1; }
-        .list-row-title {
-            font-weight: 700;
-            color: #333333;
-            font-size: 0.92rem;
-            margin-bottom: 0.2rem;
-        }
-        .list-row-sub {
-            font-size: 0.8rem;
-            color: #6b7280;
-        }
+        .list-row-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.2rem; }
+        .list-row-sub { font-size: 0.8rem; color: #6b7280; }
         .list-row-end { text-align: right; white-space: nowrap; }
-        .list-row-amount {
-            font-weight: 700;
-            color: #27c56f;
-            font-size: 0.95rem;
-        }
+        .list-row-amount { font-weight: 700; color: var(--accent); font-size: 0.95rem; }
         .status-pill {
             display: inline-block;
             margin-top: 0.35rem;
@@ -251,41 +150,27 @@
         }
         .status-pill.warn { background: #fff3e0; color: #e65100; }
         .status-pill.muted { background: #f3f4f6; color: #6b7280; }
-        .stock-pill {
-            font-weight: 700;
-            font-size: 0.85rem;
-            color: #dc3545;
-        }
+        .stock-pill { font-weight: 700; font-size: 0.85rem; color: #dc3545; }
         .stock-pill.ok { color: #f59e0b; }
-        .empty-panel {
-            text-align: center;
-            color: #6b7280;
-            padding: 2rem 1rem;
-            font-size: 0.9rem;
-        }
+        .empty-panel { text-align: center; color: #6b7280; padding: 2rem 1rem; font-size: 0.9rem; }
         .panel-link {
             display: inline-block;
             margin-top: 0.85rem;
             font-size: 0.85rem;
             font-weight: 600;
-            color: #27c56f;
+            color: var(--accent);
             text-decoration: none;
         }
         .panel-link:hover { text-decoration: underline; }
 
-        @media (max-width: 768px) {
-            .navbar-content {
-                flex-direction: column;
-                align-items: stretch;
-                gap: .8rem;
-            }
-            .navbar-center { justify-content: flex-start; }
-            .navbar-menu { flex-wrap: wrap; }
-            .customer-actions { width: 100%; margin-left: 0; }
-            .nav-right { justify-content: space-between; }
-            .container { padding: 0 1rem; }
+        @media (max-width: 992px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .charts-grid .chart-card.span-full { grid-column: auto; }
             .dashboard-split { grid-template-columns: 1fr; }
-            .chart-wrap { height: 240px; }
+        }
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .chart-wrap, .chart-wrap.tall { height: 240px; }
         }
     </style>
 <?= $this->include('admin/partials/sidebar_styles') ?>
@@ -301,40 +186,101 @@
             <div class="alert alert-error"><?= htmlspecialchars(session()->getFlashdata('error')) ?></div>
         <?php endif; ?>
 
-        <div class="welcome-section">
-            <h2>Welcome back, <?= htmlspecialchars($user_name) ?>!</h2>
-            <?php if (!empty($user_shop_name)): ?>
-                <p style="margin-bottom:.4rem;">Shop: <?= htmlspecialchars($user_shop_name) ?></p>
-            <?php endif; ?>
-            <p>You are logged in as a <?= htmlspecialchars(ucfirst($user_role)) ?>.</p>
-            <div class="stats-grid">
-                <div class="stat-item"><div class="stat-value"><?= number_format($total_products) ?></div><div>Total Products</div></div>
-                <div class="stat-item"><div class="stat-value"><?= number_format($orders_today) ?></div><div>Orders Today</div></div>
-                <div class="stat-item"><div class="stat-value"><?= $revenue_today ?></div><div>Revenue Today</div></div>
-                <div class="stat-item"><div class="stat-value"><?= number_format((int) ($total_customers ?? 0)) ?></div><div>Customers</div></div>
-            </div>
-        </div>
-
         <?php
-        $chartData = $revenue_chart ?? ['labels' => [], 'amounts' => [], 'total' => 0, 'days' => 7];
+        $summary = $admin_summary ?? [];
+        $dailyChart = $daily_sales_chart ?? ['labels' => [], 'amounts' => [], 'total' => 0, 'days' => 14];
+        $profitChart = $monthly_profit_chart ?? ['labels' => [], 'amounts' => [], 'total' => 0, 'months' => 12];
+        $bestChart = $best_selling_chart ?? ['labels' => [], 'quantities' => [], 'total' => 0];
         $recentOrders = $recent_orders_list ?? [];
         $lowStock = $low_stock_products ?? [];
         ?>
 
-        <section class="dashboard-section">
-            <h3 class="section-title">Revenue Chart</h3>
-            <div class="chart-meta">
-                <span class="chart-total">Last <?= (int) ($chartData['days'] ?? 7) ?> days: <strong>₱<?= number_format((float) ($chartData['total'] ?? 0), 2) ?></strong></span>
-                <span class="chart-total" style="font-size:0.82rem;">Paid orders only</span>
+        <header class="page-header">
+            <h1>Dashboard Analytics</h1>
+            <p>Welcome back, <?= esc($user_name) ?> — overview of sales, profit, and inventory.</p>
+            <div class="page-meta">
+                Today: <strong><?= (int) ($orders_today ?? 0) ?></strong> orders ·
+                <strong><?= esc($revenue_today ?? '₱0.00') ?></strong> revenue ·
+                <strong><?= number_format((int) ($total_customers ?? 0)) ?></strong> customers
             </div>
-            <div class="chart-wrap">
-                <canvas id="revenueChart" aria-label="Revenue chart for the last seven days"></canvas>
+        </header>
+
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-icon revenue"><i class="fas fa-wallet"></i></div>
+                <div class="stat-content">
+                    <h3>&#8369;<?= number_format((float) ($summary['total_revenue'] ?? 0), 2) ?></h3>
+                    <p>Total Revenue</p>
+                </div>
             </div>
-        </section>
+            <div class="stat-card">
+                <div class="stat-icon profit"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-content">
+                    <h3>&#8369;<?= number_format((float) ($summary['total_profit'] ?? 0), 2) ?></h3>
+                    <p>Total Profit</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orders"><i class="fas fa-receipt"></i></div>
+                <div class="stat-content">
+                    <h3><?= number_format((int) ($summary['total_orders'] ?? 0)) ?></h3>
+                    <p>Total Orders</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon sold"><i class="fas fa-box-open"></i></div>
+                <div class="stat-content">
+                    <h3><?= number_format((int) ($summary['total_products_sold'] ?? 0)) ?></h3>
+                    <p>Total Products Sold</p>
+                </div>
+            </div>
+            <a href="<?= site_url('products') ?>" class="stat-card">
+                <div class="stat-icon stock"><i class="fas fa-triangle-exclamation"></i></div>
+                <div class="stat-content">
+                    <h3><?= number_format((int) ($summary['low_stock_count'] ?? 0)) ?></h3>
+                    <p>Low Stock Products</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="charts-grid">
+            <section class="chart-card span-full">
+                <h2 class="section-title">Daily Sales</h2>
+                <p class="section-subtitle">
+                    Last <?= (int) ($dailyChart['days'] ?? 14) ?> days (paid orders) —
+                    <strong>&#8369;<?= number_format((float) ($dailyChart['total'] ?? 0), 2) ?></strong>
+                </p>
+                <div class="chart-wrap tall">
+                    <canvas id="dailySalesChart" aria-label="Daily sales chart"></canvas>
+                </div>
+            </section>
+
+            <section class="chart-card">
+                <h2 class="section-title">Monthly Profit</h2>
+                <p class="section-subtitle">
+                    Last <?= (int) ($profitChart['months'] ?? 12) ?> months —
+                    <strong>&#8369;<?= number_format((float) ($profitChart['total'] ?? 0), 2) ?></strong>
+                </p>
+                <div class="chart-wrap">
+                    <canvas id="monthlyProfitChart" aria-label="Monthly profit chart"></canvas>
+                </div>
+            </section>
+
+            <section class="chart-card">
+                <h2 class="section-title">Best Selling Products</h2>
+                <p class="section-subtitle">
+                    Top <?= (int) ($bestChart['limit'] ?? 8) ?> by units sold —
+                    <strong><?= number_format((int) ($bestChart['total'] ?? 0)) ?></strong> units
+                </p>
+                <div class="chart-wrap">
+                    <canvas id="bestSellingChart" aria-label="Best selling products chart"></canvas>
+                </div>
+            </section>
+        </div>
 
         <div class="dashboard-split">
-            <section class="dashboard-section" style="margin-bottom:0;">
-                <h3 class="section-title">Recent Orders</h3>
+            <section class="dashboard-section">
+                <h2 class="section-title">Recent Orders</h2>
                 <?php if (empty($recentOrders)): ?>
                     <p class="empty-panel">No orders yet.</p>
                 <?php else: ?>
@@ -356,7 +302,7 @@
                                     <div class="list-row-sub"><?= esc($customer) ?><?= $createdAt !== '' ? ' · ' . esc($createdAt) : '' ?></div>
                                 </div>
                                 <div class="list-row-end">
-                                    <div class="list-row-amount">₱<?= number_format($amount, 2) ?></div>
+                                    <div class="list-row-amount">&#8369;<?= number_format($amount, 2) ?></div>
                                     <span class="status-pill <?= esc($pillClass) ?>"><?= esc($payStatus) ?></span>
                                 </div>
                             </a>
@@ -366,8 +312,8 @@
                 <?php endif; ?>
             </section>
 
-            <section class="dashboard-section" style="margin-bottom:0;">
-                <h3 class="section-title">Low Stock</h3>
+            <section class="dashboard-section">
+                <h2 class="section-title">Low Stock Products</h2>
                 <?php if (empty($lowStock)): ?>
                     <p class="empty-panel">All products are well stocked.</p>
                 <?php else: ?>
@@ -393,7 +339,6 @@
                 <?php endif; ?>
             </section>
         </div>
-
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -402,66 +347,112 @@
             document.querySelectorAll('.alert').forEach(function (el) { el.style.display = 'none'; });
         }, 5000);
 
+        function pesoTick(value) {
+            return '₱' + Number(value).toLocaleString();
+        }
+
+        function pesoTooltip(ctx) {
+            var v = ctx.parsed.y ?? ctx.parsed.x ?? 0;
+            return '₱' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
         (function () {
-            var canvas = document.getElementById('revenueChart');
-            if (!canvas || typeof Chart === 'undefined') {
+            if (typeof Chart === 'undefined') {
                 return;
             }
 
-            var labels = <?= json_encode(array_values($chartData['labels'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-            var amounts = <?= json_encode(array_values($chartData['amounts'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var dailyLabels = <?= json_encode(array_values($dailyChart['labels'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var dailyAmounts = <?= json_encode(array_values($dailyChart['amounts'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var profitLabels = <?= json_encode(array_values($profitChart['labels'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var profitAmounts = <?= json_encode(array_values($profitChart['amounts'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var bestLabels = <?= json_encode(array_values($bestChart['labels'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            var bestQty = <?= json_encode(array_values($bestChart['quantities'] ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
-            new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Revenue (₱)',
-                        data: amounts,
-                        backgroundColor: 'rgba(39, 197, 111, 0.75)',
-                        borderColor: '#27c56f',
-                        borderWidth: 1,
-                        borderRadius: 8,
-                        maxBarThickness: 48
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function (ctx) {
-                                    var v = ctx.parsed.y || 0;
-                                    return '₱' + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                }
-                            }
-                        }
+            var dailyCanvas = document.getElementById('dailySalesChart');
+            if (dailyCanvas) {
+                new Chart(dailyCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: dailyLabels,
+                        datasets: [{
+                            label: 'Sales (₱)',
+                            data: dailyAmounts,
+                            borderColor: '#27c56f',
+                            backgroundColor: 'rgba(39, 197, 111, 0.15)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#27c56f'
+                        }]
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function (value) {
-                                    return '₱' + Number(value).toLocaleString();
-                                }
-                            },
-                            grid: { color: 'rgba(0,0,0,0.06)' }
-                        },
-                        x: {
-                            grid: { display: false }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: pesoTooltip } } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            x: { grid: { display: false } }
                         }
                     }
-                }
-            });
+                });
+            }
+
+            var profitCanvas = document.getElementById('monthlyProfitChart');
+            if (profitCanvas) {
+                new Chart(profitCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: profitLabels,
+                        datasets: [{
+                            label: 'Profit (₱)',
+                            data: profitAmounts,
+                            backgroundColor: 'rgba(103, 58, 183, 0.75)',
+                            borderColor: '#673ab7',
+                            borderWidth: 1,
+                            borderRadius: 8,
+                            maxBarThickness: 40
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: pesoTooltip } } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
+
+            var bestCanvas = document.getElementById('bestSellingChart');
+            if (bestCanvas) {
+                new Chart(bestCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: bestLabels.length ? bestLabels : ['No sales yet'],
+                        datasets: [{
+                            label: 'Units sold',
+                            data: bestQty.length ? bestQty : [0],
+                            backgroundColor: 'rgba(255, 152, 0, 0.75)',
+                            borderColor: '#ff9800',
+                            borderWidth: 1,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
         })();
     </script>
 </body>
 </html>
-
-
-
-
-
-

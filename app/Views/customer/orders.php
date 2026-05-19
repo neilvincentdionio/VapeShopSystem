@@ -894,7 +894,7 @@ window.addEventListener('beforeunload', function() {
                                 <div class="order-item<?= $reviewClass ?>">
                                     <div class="item-info">
                                         <div class="item-name"><?= esc($item['name']) ?></div>
-                                        <div class="item-details">Qty: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format((float) $item['unit_price'], 2) ?></div>
+                                        <div class="item-details">Qty: <?= (int) $item['qty'] ?> &times; &#8369;<?= number_format(\App\Models\OrderModel::resolveItemSellingPrice($item), 2) ?></div>
                                         <?php if (!empty($productReview)): ?>
                                             <div class="review-status-note">
                                                 Your rating: <?= str_repeat('★', (int) ($productReview['rating'] ?? 0)) ?><?= str_repeat('☆', 5 - (int) ($productReview['rating'] ?? 0)) ?>
@@ -903,7 +903,7 @@ window.addEventListener('beforeunload', function() {
                                         <?php endif; ?>
                                     </div>
                                     <div class="item-price">
-                                        &#8369;<?= number_format((float) $item['unit_price'] * (int) $item['qty'], 2) ?>
+                                        &#8369;<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) $item['qty'], 2) ?>
                                     </div>
                                     <?php if (($activeTab ?? 'all') === 'to_review' && $needsReview): ?>
                                         <form method="post" action="<?= site_url('customer/product-review/submit') ?>" class="product-review-form">

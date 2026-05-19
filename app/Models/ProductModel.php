@@ -21,6 +21,8 @@ class ProductModel extends Model
         'brand',
         'flavor',
         'price',
+        'unit_price',
+        'selling_price',
         'puffs',
         'image_url',
         'stock_qty',
@@ -34,9 +36,11 @@ class ProductModel extends Model
     protected $validationRules = [
         'name' => 'required|min_length[3]|max_length[255]',
         'category' => 'required|max_length[100]',
-        'brand' => 'permit_empty|max_length[100]',
+        'brand' => 'required|max_length[100]',
         'flavor' => 'permit_empty|max_length[100]',
-        'price' => 'required|numeric|greater_than_equal_to[0]',
+        'unit_price' => 'required|numeric|greater_than_equal_to[0]',
+        'selling_price' => 'required|numeric|greater_than_equal_to[0]',
+        'price' => 'permit_empty|numeric|greater_than_equal_to[0]',
         'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
         'stock_qty' => 'required|integer|greater_than_equal_to[0]',
         'is_active' => 'required|in_list[0,1]',
@@ -48,10 +52,15 @@ class ProductModel extends Model
             'min_length' => 'Product name must be at least 3 characters long',
             'max_length' => 'Product name cannot exceed 255 characters',
         ],
-        'price' => [
-            'required' => 'Price is required',
-            'numeric' => 'Price must be a valid number',
-            'greater_than_equal_to' => 'Price cannot be negative',
+        'unit_price' => [
+            'required' => 'Cost price is required',
+            'numeric' => 'Cost price must be a valid number',
+            'greater_than_equal_to' => 'Cost price cannot be negative',
+        ],
+        'selling_price' => [
+            'required' => 'Selling price is required',
+            'numeric' => 'Selling price must be a valid number',
+            'greater_than_equal_to' => 'Selling price cannot be negative',
         ],
         'status' => [
             'required' => 'Status is required',
@@ -114,6 +123,24 @@ class ProductModel extends Model
     public function getCategoryOptions(): array
     {
         return self::CATEGORY_OPTIONS;
+    }
+
+    public function getBrandOptions(): array
+    {
+        $brands = [];
+        $rows = $this->select('brand')
+            ->distinct()
+            ->orderBy('brand', 'ASC')
+            ->findAll();
+
+        foreach ($rows as $row) {
+            $brand = trim((string) ($row['brand'] ?? ''));
+            if ($brand !== '') {
+                $brands[$brand] = $brand;
+            }
+        }
+
+        return array_values($brands);
     }
 
     public function getCategoryFilterValues(string $category): array
@@ -199,7 +226,7 @@ class ProductModel extends Model
     {
         $builder = $this->db->table('products p')
             ->select(
-                "p.id, p.name, p.category, p.brand, p.flavor, p.price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                 false
             )
             ->where('p.is_active', 1);
@@ -538,7 +565,7 @@ class ProductModel extends Model
         if ($this->hasVariantTable()) {
             return $builder
                 ->select(
-                    "p.id, pv.id AS variant_id, p.name, p.category, p.brand, COALESCE(pv.flavor, p.flavor) AS flavor, COALESCE(pv.price, p.price) AS price, COALESCE(pv.puffs, p.puffs) AS puffs, p.image_url, p.image_url AS image, '' AS description, COALESCE(pv.stock_qty, p.stock_qty) AS stock_qty, COALESCE(pv.stock_qty, p.stock_qty) AS stock, p.stock_qty AS product_stock_qty, p.is_active, COALESCE(pv.is_active, p.is_active) AS variant_is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                    "p.id, pv.id AS variant_id, p.name, p.category, p.brand, COALESCE(pv.flavor, p.flavor) AS flavor, p.unit_price, p.selling_price, COALESCE(pv.price, p.selling_price, p.price) AS price, COALESCE(pv.puffs, p.puffs) AS puffs, p.image_url, p.image_url AS image, '' AS description, COALESCE(pv.stock_qty, p.stock_qty) AS stock_qty, COALESCE(pv.stock_qty, p.stock_qty) AS stock, p.stock_qty AS product_stock_qty, p.is_active, COALESCE(pv.is_active, p.is_active) AS variant_is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                     false
                 )
                 ->join('product_variants pv', 'pv.product_id = p.id', 'left');
@@ -546,7 +573,7 @@ class ProductModel extends Model
 
         return $builder
             ->select(
-                "p.id, p.name, p.category, p.brand, p.flavor, p.price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                 false
             );
     }

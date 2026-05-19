@@ -52,7 +52,7 @@
                         <div><?= esc($item['name'] ?? 'Product') ?></div>
                         <div class="meta">Qty: <?= (int) ($item['qty'] ?? 0) ?></div>
                     </div>
-                    <div><strong>&#8369;<?= number_format(((float) ($item['unit_price'] ?? 0)) * ((int) ($item['qty'] ?? 0)), 2) ?></strong></div>
+                    <div><strong>&#8369;<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) ($item['qty'] ?? 0), 2) ?></strong></div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
