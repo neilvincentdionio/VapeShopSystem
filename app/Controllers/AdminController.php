@@ -37,22 +37,29 @@ class AdminController extends BaseController
         return $this->response->setJSON(['message' => 'AdminController is working!']);
     }
 
-    /**
-     * Check if current user is admin
-     */
-    private function isAdmin(): bool
+    private function isBackOfficeUser(): bool
     {
-        $userId = session()->get('user_id');
-        if (!$userId) {
-            return false;
-        }
+        $role = strtolower(trim((string) session()->get('user_role')));
+        return $role !== '' && !in_array($role, ['customer', 'rider'], true);
+    }
 
-        // Check user role from database
-        $db = \Config\Database::connect();
-        $query = $db->query("SELECT role FROM users WHERE id = ?", [$userId]);
-        $result = $query->getRow();
+    private function canViewLogs(): bool
+    {
+        return $this->isBackOfficeUser()
+            && (
+                $this->hasPermission('activity_logs.view')
+                || $this->hasPermission('activity_logs.manage')
+                || $this->hasPermission('manage_users')
+            );
+    }
 
-        return $result && $result->role === 'admin';
+    private function canManageLogs(): bool
+    {
+        return $this->isBackOfficeUser()
+            && (
+                $this->hasPermission('activity_logs.manage')
+                || $this->hasPermission('manage_users')
+            );
     }
 
     /**
@@ -61,7 +68,7 @@ class AdminController extends BaseController
     public function sessionLogs()
     {
         // Check if user is admin
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
@@ -86,7 +93,7 @@ class AdminController extends BaseController
     public function activityLogs()
     {
         // Check if user is admin
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
@@ -131,7 +138,7 @@ class AdminController extends BaseController
      */
     public function exportSecurityReport()
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
@@ -222,7 +229,7 @@ class AdminController extends BaseController
      */
     public function getSessionDetails($sessionId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -246,7 +253,7 @@ class AdminController extends BaseController
      */
     public function endSession($sessionId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canManageLogs()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -270,7 +277,7 @@ class AdminController extends BaseController
      */
     public function getLogDetails($logId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -333,7 +340,7 @@ class AdminController extends BaseController
      */
     public function getSessionDetailsById($sessionId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -364,7 +371,7 @@ class AdminController extends BaseController
      */
     public function endSessionById($sessionId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canManageLogs()) {
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Access denied',
@@ -423,7 +430,7 @@ class AdminController extends BaseController
      */
     public function cleanupSessions()
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canManageLogs()) {
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Access denied',
@@ -445,7 +452,7 @@ class AdminController extends BaseController
      */
     public function getLogDetailsById($logId)
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canViewLogs()) {
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Access denied',
@@ -485,7 +492,7 @@ class AdminController extends BaseController
      */
     public function cleanupLogs()
     {
-        if (!$this->isAdmin()) {
+        if (!$this->canManageLogs()) {
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Access denied',

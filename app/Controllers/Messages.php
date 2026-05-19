@@ -517,6 +517,16 @@ class Messages extends BaseController
 
         $role = strtolower((string) $this->session->get('user_role'));
         if (! in_array($role, $roles, true)) {
+            // Allow custom back-office roles for admin/staff areas if permitted.
+            if (in_array('admin', $roles, true) || in_array('staff', $roles, true)) {
+                $isBackOffice = $role !== '' && !in_array($role, ['customer', 'rider'], true);
+                $hasMessagingPermission = $this->hasPermission('manage_orders')
+                    || $this->hasPermission('manage_users')
+                    || $this->hasPermission('activity_logs.manage');
+                if ($isBackOffice && $hasMessagingPermission) {
+                    return true;
+                }
+            }
             return redirect()->to('/dashboard')->with('error', 'Access denied.');
         }
 

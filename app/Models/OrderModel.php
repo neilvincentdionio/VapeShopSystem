@@ -33,6 +33,9 @@ class OrderModel extends Model
                 $builder->where("COALESCE(s.status, 'to_pay') IN ('to_ship','ready_for_pickup','accepted_by_rider')", null, false);
             } elseif ($deliveryStatus === 'to_receive') {
                 $builder->where("COALESCE(s.status, 'to_pay') IN ('delivered_to_rider','to_receive','delivered')", null, false);
+            } elseif ($deliveryStatus === 'return_refund') {
+                $statuses = ['return_requested', 'return_approved', 'return_picked_up', 'return_refund'];
+                $builder->whereIn("COALESCE(s.status, 'to_pay')", $statuses);
             } else {
                 $builder->where("COALESCE(s.status, 'to_pay') = " . $this->db->escape($deliveryStatus), null, false);
             }
@@ -68,6 +71,8 @@ class OrderModel extends Model
                 $status = 'to_ship';
             } elseif (in_array($status, ['delivered_to_rider', 'delivered', 'to_receive'], true)) {
                 $status = 'to_receive';
+            } elseif (in_array($status, ['return_requested', 'return_approved', 'return_picked_up'], true)) {
+                $status = 'return_refund';
             }
             $count = (int) ($row['count'] ?? 0);
             if (array_key_exists($status, $counts)) {
@@ -83,7 +88,80 @@ class OrderModel extends Model
     {
         return $this->attachItems(
             $this->baseOrderQuery()
+                ->whereNotIn("COALESCE(s.status, 'to_pay')", $this->getReturnRefundStatusList())
                 ->orderBy('o.created_at', 'DESC')
+                ->get()
+                ->getResultArray()
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getReturnRefundStatusList(): array
+    {
+        return ['return_requested', 'return_approved', 'return_picked_up', 'return_refund'];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getReturnRefundOrders(?string $statusFilter = null): array
+    {
+        $statuses = $this->getReturnRefundStatusList();
+        $builder = $this->baseOrderQuery()
+            ->whereIn("COALESCE(s.status, 'to_pay')", $statuses)
+            ->orderBy('o.updated_at', 'DESC');
+
+        if ($statusFilter !== null && $statusFilter !== '' && $statusFilter !== 'all' && in_array($statusFilter, $statuses, true)) {
+            $builder->where("COALESCE(s.status, 'to_pay')", $statusFilter);
+        }
+
+        return $this->attachItems($builder->get()->getResultArray());
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function getReturnRefundStatusCounts(): array
+    {
+        $counts = [
+            'all' => 0,
+            'return_requested' => 0,
+            'return_approved' => 0,
+            'return_picked_up' => 0,
+            'return_refund' => 0,
+        ];
+
+        $rows = $this->db->table('order_shipments s')
+            ->select('s.status, COUNT(*) AS count', false)
+            ->whereIn('s.status', $this->getReturnRefundStatusList())
+            ->groupBy('s.status')
+            ->get()
+            ->getResultArray();
+
+        foreach ($rows as $row) {
+            $status = (string) ($row['status'] ?? '');
+            $count = (int) ($row['count'] ?? 0);
+            if (array_key_exists($status, $counts)) {
+                $counts[$status] = $count;
+            }
+            $counts['all'] += $count;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getRiderReturnPickups(int $riderId): array
+    {
+        return $this->attachItems(
+            $this->baseOrderQuery()
+                ->where('s.assigned_rider_id', $riderId)
+                ->whereIn("COALESCE(s.status, 'to_pay')", ['return_approved', 'return_picked_up'])
+                ->orderBy('o.updated_at', 'DESC')
                 ->get()
                 ->getResultArray()
         );
@@ -178,8 +256,8 @@ class OrderModel extends Model
         }
 
         $orderData = [];
-        if (in_array($status, ['completed', 'cancelled'], true)) {
-            $orderData['status'] = $status;
+        if (in_array($status, ['completed', 'cancelled', 'return_refund'], true)) {
+            $orderData['status'] = $status === 'return_refund' ? 'return_refund' : $status;
         }
 
         $paymentData = [];

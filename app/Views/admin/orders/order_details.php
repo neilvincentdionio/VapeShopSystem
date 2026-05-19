@@ -12,6 +12,8 @@
 <body>
 <?= $this->include('admin/partials/sidebar') ?>
 
+<?php helper('return_refund'); ?>
+
 <?php
 // Helper function to get delivery status labels
 if (!function_exists('getDeliveryStatusLabel')) {
@@ -26,11 +28,18 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'delivered' => 'Delivered (Awaiting Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund',
+            'return_refund' => 'Refund Completed',
+            'return_requested' => 'Return Requested',
+            'return_approved' => 'Return Approved',
+            'return_picked_up' => 'Return Picked Up',
             'failed_delivery' => 'Failed Delivery',
         ];
         
-        return $labels[$status] ?? ucfirst($status);
+        if (function_exists('is_return_refund_status') && is_return_refund_status((string) $status)) {
+            return return_refund_status_label((string) $status);
+        }
+
+        return $labels[$status] ?? ucfirst(str_replace('_', ' ', (string) $status));
     }
 }
 
@@ -50,13 +59,18 @@ if (!function_exists('extractGcashReference')) {
 }
 ?>
 
+<?php
+$deliveryStatus = (string) ($order['delivery_status'] ?? '');
+$isReturnFlow = function_exists('is_return_refund_status') && is_return_refund_status($deliveryStatus);
+?>
+
 <div class="container order-details-page">
     <div class="orders-header">
         <a href="<?= site_url('orders') ?>" class="back-link">
             <i class="fas fa-arrow-left"></i> Back to Orders
         </a>
-        <h1>Order Details</h1>
-        <p>Review order information and delivery progress.</p>
+        <h1><?= $isReturnFlow ? 'Return / Refund Details' : 'Order Details' ?></h1>
+        <p><?= $isReturnFlow ? 'Review return/refund information and status updates.' : 'Review order information and delivery progress.' ?></p>
     </div>
 
     <?php if (!empty($order)): ?>
@@ -92,30 +106,54 @@ if (!function_exists('extractGcashReference')) {
                 </div>
             <?php endif; ?>
 
-            <!-- Visual Delivery Status Tracker -->
+            <?php if (! empty($return_meta)): ?>
+                <?= view('partials/return_refund_details', ['returnMeta' => $return_meta, 'order' => $order]) ?>
+            <?php endif; ?>
+
+            <!-- Visual Status Tracker -->
             <div class="delivery-tracker">
-                <h3><i class="fas fa-map-marked-alt"></i> Delivery Progress</h3>
+                <h3>
+                    <i class="fas <?= $isReturnFlow ? 'fa-undo' : 'fa-map-marked-alt' ?>"></i>
+                    <?= $isReturnFlow ? 'Return / Refund Progress' : 'Delivery Progress' ?>
+                </h3>
                 <div class="tracker-progress">
                     <?php
-                    $status = (string) ($order['delivery_status'] ?? 'to_pay');
+                    $status = $deliveryStatus !== '' ? $deliveryStatus : 'to_pay';
                     $currentStage = 0;
-                    if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
-                        $currentStage = 1;
-                    } elseif ($status === 'delivered_to_rider') {
-                        $currentStage = 2;
-                    } elseif ($status === 'to_receive') {
-                        $currentStage = 3;
-                    } elseif (in_array($status, ['delivered', 'completed'], true)) {
-                        $currentStage = 4;
+                    if ($isReturnFlow) {
+                        if ($status === 'return_approved') {
+                            $currentStage = 1;
+                        } elseif ($status === 'return_picked_up') {
+                            $currentStage = 2;
+                        } elseif ($status === 'return_refund') {
+                            $currentStage = 3;
+                        }
+                    } else {
+                        if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
+                            $currentStage = 1;
+                        } elseif ($status === 'delivered_to_rider') {
+                            $currentStage = 2;
+                        } elseif ($status === 'to_receive') {
+                            $currentStage = 3;
+                        } elseif (in_array($status, ['delivered', 'completed'], true)) {
+                            $currentStage = 4;
+                        }
                     }
-                    
-                    $stages = [
-                        ['name' => 'Ordered', 'icon' => 'fa-clipboard', 'description' => 'Order placed'],
-                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Ready for pickup'],
-                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'With rider'],
-                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'On the way'],
-                        ['name' => 'Completed', 'icon' => 'fa-home', 'description' => 'Order closed'],
-                    ];
+
+                    $stages = $isReturnFlow
+                        ? [
+                            ['name' => 'Request Submitted', 'icon' => 'fa-file-signature', 'description' => 'Customer requested return'],
+                            ['name' => 'Approved by Admin', 'icon' => 'fa-user-check', 'description' => 'Pickup approved'],
+                            ['name' => 'Picked Up by Rider', 'icon' => 'fa-box-open', 'description' => 'Item returned to store'],
+                            ['name' => 'Refund Completed', 'icon' => 'fa-wallet', 'description' => 'Refund marked complete'],
+                        ]
+                        : [
+                            ['name' => 'Ordered', 'icon' => 'fa-clipboard', 'description' => 'Order placed'],
+                            ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Ready for pickup'],
+                            ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'With rider'],
+                            ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'On the way'],
+                            ['name' => 'Completed', 'icon' => 'fa-home', 'description' => 'Order closed'],
+                        ];
                     ?>
                     
                     <div class="tracker-container">
@@ -145,9 +183,9 @@ if (!function_exists('extractGcashReference')) {
 
             <?php if (!empty($order['shipping_address']) || !empty($order['contact_number'])): ?>
                 <div class="shipping-info">
-                    <h3><i class="fas fa-map-marker-alt"></i> Delivery Information</h3>
+                    <h3><i class="fas fa-map-marker-alt"></i> <?= $isReturnFlow ? 'Return Pickup Information' : 'Delivery Information' ?></h3>
                     <?php if (!empty($order['shipping_address'])): ?>
-                        <p><strong>Shipping Address:</strong> <?= esc($order['shipping_address']) ?></p>
+                        <p><strong><?= $isReturnFlow ? 'Pickup Address:' : 'Shipping Address:' ?></strong> <?= esc($order['shipping_address']) ?></p>
                     <?php endif; ?>
                     <?php if (!empty($order['contact_number'])): ?>
                         <p><strong>Contact Number:</strong> <?= esc($order['contact_number']) ?></p>
@@ -156,11 +194,11 @@ if (!function_exists('extractGcashReference')) {
             <?php endif; ?>
             <?php if (!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])): ?>
                 <div class="shipping-info">
-                    <h3><i class="fas fa-map"></i> Delivery Map</h3>
+                    <h3><i class="fas fa-map"></i> <?= $isReturnFlow ? 'Return Route Map' : 'Delivery Map' ?></h3>
                     <div id="admin_delivery_map"></div>
                     <div class="map-meta">
                         <span><strong>Store:</strong> <?= !empty($order['store_address']) ? esc($order['store_address']) : 'Not set' ?></span>
-                        <span><strong>Customer:</strong> <?= esc($order['delivery_latitude']) ?>, <?= esc($order['delivery_longitude']) ?></span>
+                        <span><strong><?= $isReturnFlow ? 'Pickup Point' : 'Customer' ?>:</strong> <?= esc($order['delivery_latitude']) ?>, <?= esc($order['delivery_longitude']) ?></span>
                         <span><strong>Rider:</strong> <?= !empty($order['rider_latitude']) && !empty($order['rider_longitude']) ? esc($order['rider_latitude'] . ', ' . $order['rider_longitude']) : 'No live position yet' ?></span>
                     </div>
                 </div>
@@ -176,8 +214,11 @@ if (!function_exists('extractGcashReference')) {
                         <div class="delivery-proof-details">
                             <p><strong>Submitted:</strong> <?= !empty($order['delivery_proof_submitted_at']) ? date('F j, Y g:i A', strtotime($order['delivery_proof_submitted_at'])) : 'Not recorded' ?></p>
                             <p><strong>Rider:</strong> <?= esc($order['assigned_rider_name'] ?? $order['rider_name'] ?? 'Assigned rider') ?></p>
-                            <?php if (!empty($order['delivery_notes'])): ?>
-                                <p><strong>Notes:</strong> <?= nl2br(esc($order['delivery_notes'])) ?></p>
+                            <?php
+                                $proofNotes = delivery_notes_for_display((string) ($order['delivery_notes'] ?? ''));
+                            ?>
+                            <?php if ($proofNotes !== ''): ?>
+                                <p><strong>Notes:</strong> <?= nl2br(esc($proofNotes)) ?></p>
                             <?php else: ?>
                                 <p><strong>Notes:</strong> No notes provided.</p>
                             <?php endif; ?>
@@ -225,7 +266,7 @@ if (!function_exists('extractGcashReference')) {
 
             <!-- ADMIN DELIVERY MANAGEMENT BUTTONS -->
             <div class="admin-delivery-actions">
-                <h3><i class="fas fa-cog"></i> Delivery Management</h3>
+                <h3><i class="fas fa-cog"></i> <?= $isReturnFlow ? 'Return / Refund Management' : 'Delivery Management' ?></h3>
                 
                 <?php if ($order['delivery_status'] === 'to_pay'): ?>
                     <?php if (($order['payment_status'] ?? 'unpaid') !== 'paid'): ?>
@@ -278,7 +319,20 @@ if (!function_exists('extractGcashReference')) {
                         Confirm Received (Admin)
                     </button>
                 <?php endif; ?>
+                <?php
+                $deliveryStatus = (string) ($order['delivery_status'] ?? '');
+                if (function_exists('is_return_refund_status') && is_return_refund_status($deliveryStatus)):
+                ?>
+                    <div class="completed-notice" style="background:#f8f9fa;color:#374151;border:1px solid #e5e7eb;">
+                        <i class="fas fa-undo"></i>
+                        Return/refund: <?= esc(return_refund_status_label($deliveryStatus)) ?>
+                    </div>
+                    <a class="btn-checkout" href="<?= site_url('admin/returns?status=' . rawurlencode($deliveryStatus) . '&order=' . (int) ($order['id'] ?? 0)) ?>" style="display:inline-flex;margin-top:.65rem;text-decoration:none;">
+                        <i class="fas fa-external-link-alt"></i> Manage in Return/Refund
+                    </a>
+                <?php endif; ?>
             </div>
+
         </div>
     <?php else: ?>
         <div class="empty-state">
@@ -839,6 +893,50 @@ function updateDeliveryStatus(orderId, newStatus) {
     .admin-delivery-actions {
         background: #f9fafb;
         border-bottom: 0;
+    }
+
+    .return-admin-panel {
+        margin-top: 1rem;
+        padding: 1rem;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        background: #fffbeb;
+    }
+
+    .return-admin-panel h4 {
+        margin: 0 0 .65rem;
+        color: #92400e;
+        font-size: .95rem;
+    }
+
+    .return-admin-panel p {
+        margin: 0 0 .45rem;
+        color: #78350f;
+        font-size: .88rem;
+    }
+
+    .return-admin-panel label {
+        display: block;
+        margin: .55rem 0 .25rem;
+        font-size: .82rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .return-admin-panel select,
+    .return-admin-panel textarea {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: .5rem .6rem;
+        font: inherit;
+    }
+
+    .return-admin-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        margin-top: .75rem;
     }
 
     .btn-checkout,

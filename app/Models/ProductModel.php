@@ -255,9 +255,6 @@ class ProductModel extends Model
         $variantsByProduct = [];
         foreach ($variants as $variant) {
             $variantFlavor = trim((string) ($variant['flavor'] ?? ''));
-            if ($variantFlavor === '') {
-                continue;
-            }
 
             $variantsByProduct[(int) $variant['product_id']][] = [
                 'id' => (int) $variant['id'],

@@ -5,7 +5,7 @@ $seg2 = service('uri')->getSegment(2);
 $isDashboard = $seg1 === 'dashboard' && !in_array($seg2, ['profile', 'settings'], true);
 $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
-$isOrders = $seg1 === 'orders' || ($seg1 === 'admin' && str_starts_with((string) $seg2, 'order'));
+$isOrders = $seg1 === 'orders' || ($seg1 === 'admin' && str_starts_with((string) $seg2, 'order') && $seg2 !== 'returns');
 $isUsers = $seg1 === 'user-management';
 $isRoles = $seg1 === 'admin' && $seg2 === 'roles';
 $isPermissions = $seg1 === 'admin' && $seg2 === 'permissions';

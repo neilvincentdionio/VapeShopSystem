@@ -60,7 +60,24 @@ class AuthFilter implements FilterInterface
         if ($arguments && !empty($arguments)) {
             $granted = false;
             foreach ((array) $arguments as $requiredRole) {
-                if ($access->hasRole((string) $requiredRole)) {
+                $requiredRole = strtolower(trim((string) $requiredRole));
+                if ($requiredRole === '') {
+                    continue;
+                }
+
+                if ($requiredRole === 'admin') {
+                    $currentUser = $access->getCurrentUser();
+                    $resolvedRole = strtolower(trim((string) ($currentUser['role'] ?? $session->get('user_role') ?? '')));
+
+                    // Allow custom back-office roles (e.g. assistant_admin).
+                    // Customer and rider roles must not pass admin-only routes.
+                    if ($resolvedRole !== '' && !in_array($resolvedRole, ['customer', 'rider'], true)) {
+                        $granted = true;
+                        break;
+                    }
+                }
+
+                if ($access->hasRole($requiredRole)) {
                     $granted = true;
                     break;
                 }

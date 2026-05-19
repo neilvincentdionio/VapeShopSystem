@@ -17,7 +17,10 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'delivered' => 'Delivered (Awaiting Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund',
+            'return_refund' => 'Refund Completed',
+            'return_requested' => 'Return Requested',
+            'return_approved' => 'Return Approved',
+            'return_picked_up' => 'Return Picked Up',
             'failed_delivery' => 'Failed Delivery',
             'ready_for_pickup' => 'Rider Assigned',
             'accepted_by_rider' => 'Accepted by Rider',
@@ -59,6 +62,8 @@ $activeDeliveries = count(array_filter(
     $ordersList,
     static fn ($order) => in_array(($order['delivery_status'] ?? 'to_pay'), ['to_ship', 'to_receive'], true)
 ));
+$returnStatusCounts = is_array($return_status_counts ?? null) ? $return_status_counts : [];
+$pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($returnStatusCounts['return_approved'] ?? 0) + ($returnStatusCounts['return_picked_up'] ?? 0));
 ?>
 
 <style>
@@ -407,6 +412,42 @@ $activeDeliveries = count(array_filter(
             border-color: #27c56f;
             color: #27c56f;
             transform: translateY(-1px);
+        }
+
+        .btn-return-refund {
+            background: rgba(39, 197, 111, 0.14);
+            border: 1px solid rgba(39, 197, 111, 0.42);
+            color: #1f7a45;
+            font-weight: 700;
+            box-shadow: 0 6px 14px rgba(39, 197, 111, 0.15);
+            position: relative;
+        }
+
+        .btn-return-refund:hover {
+            background: #27c56f;
+            border-color: #27c56f;
+            color: #ffffff;
+            box-shadow: 0 8px 16px rgba(39, 197, 111, 0.28);
+        }
+
+        .return-indicator-badge {
+            position: absolute;
+            top: -8px;
+            right: -9px;
+            min-width: 21px;
+            height: 21px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+            font-size: 0.72rem;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
         }
 
         .table-responsive {
@@ -1029,6 +1070,12 @@ $activeDeliveries = count(array_filter(
                         <h1>Orders Management</h1>
                         <p>Manage customer orders, payments, and delivery progress.</p>
                     </div>
+                    <a href="<?= site_url('admin/returns') ?>" class="btn btn-outline btn-return-refund">
+                        <i class="fas fa-undo"></i> Return/Refund Page
+                        <?php if ($pendingReturnCount > 0): ?>
+                            <span class="return-indicator-badge"><?= $pendingReturnCount > 99 ? '99+' : $pendingReturnCount ?></span>
+                        <?php endif; ?>
+                    </a>
                 </div>
             </div>
     
@@ -1210,8 +1257,9 @@ $activeDeliveries = count(array_filter(
                                 </span>
                             </td>
                             <td>
-                                <span class="shipping-text" title="<?= esc($order['shipment_notes'] ?? '') ?>">
-                                    <?= esc(!empty($order['shipment_notes']) ? $order['shipment_notes'] : 'No description') ?>
+                                <?php $addressDescription = shipment_notes_for_display($order['shipment_notes'] ?? ''); ?>
+                                <span class="shipping-text" title="<?= esc($addressDescription) ?>">
+                                    <?= esc($addressDescription !== '' ? $addressDescription : 'No description') ?>
                                 </span>
                             </td>
                             <td>
@@ -1229,9 +1277,9 @@ $activeDeliveries = count(array_filter(
                                 <a class="action-btn btn-details" href="<?= site_url('admin/order-details/' . (int) $order['id']) ?>">
                                     <i class="fas fa-circle-info"></i> Order Details
                                 </a>
-                                <?php if ($deliveryStatus === 'to_ship' || $deliveryStatus === 'ready_for_pickup' || $deliveryStatus === 'accepted_by_rider'): ?>
+                                <?php if (in_array($deliveryStatus, ['to_pay', 'to_ship', 'ready_for_pickup', 'accepted_by_rider'], true)): ?>
                                     <button class="action-btn btn-checkout" onclick="assignRider(<?= (int) $order['id'] ?>, <?= (int) ($order['assigned_rider_id'] ?? 0) ?>)">
-                                        <i class="fas fa-motorcycle"></i> <?= ($deliveryStatus === 'to_ship') ? 'Assign Rider' : 'Reassign Rider' ?>
+                                        <i class="fas fa-motorcycle"></i> <?= in_array($deliveryStatus, ['to_pay', 'to_ship'], true) ? 'Assign Rider' : 'Reassign Rider' ?>
                                     </button>
                                     <?php if (!empty($order['assigned_rider_name'])): ?>
                                         <div class="muted action-meta">Assigned: <?= esc($order['assigned_rider_name']) ?></div>
@@ -1250,6 +1298,10 @@ $activeDeliveries = count(array_filter(
                                             <i class="fas fa-user-check"></i> Confirm Received
                                         </button>
                                     <?php endif; ?>
+                                <?php elseif (function_exists('is_return_refund_status') && is_return_refund_status((string) $deliveryStatus)): ?>
+                                    <a class="action-btn btn-view" href="<?= site_url('admin/returns?status=' . rawurlencode((string) $deliveryStatus) . '&order=' . (int) $order['id']) ?>">
+                                        <i class="fas fa-undo"></i> Manage Return/Refund
+                                    </a>
                                 <?php elseif (in_array($deliveryStatus, ['cancelled', 'return_refund'], true)): ?>
                                     <span class="status-badge" style="background: #f1f3f5; color: #6c757d; border: none;">
                                         <i class="fas fa-info-circle"></i> No further action

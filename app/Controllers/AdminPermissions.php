@@ -290,7 +290,7 @@ class AdminPermissions extends BaseController
     {
         if (
             !$this->session->get('logged_in')
-            || !$this->hasRole('admin')
+            || in_array(strtolower(trim((string) $this->session->get('user_role'))), ['customer', 'rider'], true)
             || !$this->hasPermission('manage_users')
         ) {
             return redirect()->to('/dashboard')

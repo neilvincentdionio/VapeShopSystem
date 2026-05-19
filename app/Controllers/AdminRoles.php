@@ -424,7 +424,11 @@ class AdminRoles extends BaseController
 
     private function checkAdminAuth()
     {
-        if (!$this->session->get('logged_in') || !$this->hasRole('admin') || !$this->hasPermission('manage_users')) {
+        if (
+            !$this->session->get('logged_in')
+            || in_array(strtolower(trim((string) $this->session->get('user_role'))), ['customer', 'rider'], true)
+            || !$this->hasPermission('manage_users')
+        ) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. User management permission required.');
         }
         return true;

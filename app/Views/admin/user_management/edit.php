@@ -347,21 +347,21 @@
         }
 
         .alert-success {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: #d4edda;
-            border: 1px solid rgba(40, 167, 69, 0.3);
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
         }
 
         .alert-error {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
         }
 
         .validation-errors {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #f8d7da;
-            border: 1px solid rgba(220, 53, 69, 0.3);
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
             padding: 0.75rem;
             border-radius: 10px;
             margin-bottom: 1rem;
@@ -460,7 +460,7 @@
             <div class="user-info">
                 <p><strong>Current User:</strong> <?= htmlspecialchars($user['name']) ?></p>
                 <p><strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></p>
-                <p><strong>Role:</strong> <?= htmlspecialchars(ucfirst($user['role'])) ?></p>
+                <p><strong>Role:</strong> <?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($user['role'] ?? '')))) ?></p>
                 <p><strong>Status:</strong> <?= $user['is_active'] ? 'Active' : 'Inactive' ?></p>
                 <p><strong>Created:</strong> <?= date('M d, Y', strtotime($user['created_at'])) ?></p>
             </div>
@@ -488,10 +488,14 @@
                         id="email" 
                         name="email" 
                         value="<?= old('email', $user['email']) ?>" 
-                        required 
+                        readonly
                         autocomplete="email"
-                        placeholder="Enter email address"
+                        placeholder="Email address"
+                        style="background: #eef2f7; color:#6b7280; cursor:not-allowed;"
                     >
+                    <small style="display:block;margin-top:.3rem;color:#6b7280;">
+                        Email cannot be edited here. Update name, password, or role only.
+                    </small>
                 </div>
 
                 <div class="form-group">
@@ -520,7 +524,7 @@
                             type="text" 
                             id="role" 
                             name="role" 
-                            value="<?= htmlspecialchars(ucfirst($user['role'])) ?>" 
+                            value="<?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($user['role'] ?? '')))) ?>" 
                             readonly 
                             style="background: rgba(255, 255, 255, 0.05); cursor: not-allowed;"
                         >
@@ -529,9 +533,11 @@
                         </small>
                     <?php else: ?>
                         <select id="role" name="role" required>
-                            <option value="admin" <?= old('role', $user['role']) == 'admin' ? 'selected' : '' ?>>Admin</option>
-                            <option value="customer" <?= old('role', $user['role']) == 'customer' ? 'selected' : '' ?>>Customer</option>
-                            <option value="rider" <?= old('role', $user['role']) == 'rider' ? 'selected' : '' ?>>Rider</option>
+                            <?php foreach (($roleOptions ?? ['admin', 'customer', 'rider']) as $roleName): ?>
+                                <option value="<?= htmlspecialchars((string) $roleName) ?>" <?= old('role', $user['role']) == $roleName ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) $roleName))) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     <?php endif; ?>
                 </div>

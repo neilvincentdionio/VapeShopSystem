@@ -13,6 +13,7 @@ $hasUsers = in_array('user-management', $segments, true);
 $hasRoles = $hasAdmin && in_array('roles', $segments, true);
 $hasPermissions = $hasAdmin && in_array('permissions', $segments, true);
 $hasSettings = in_array('dashboard', $segments, true) && in_array('settings', $segments, true);
+$hasReturns = $hasAdmin && in_array('returns', $segments, true);
 
 $autoTitle = 'Admin Page';
 $autoSubtitle = '';
@@ -38,6 +39,9 @@ if ($hasSessionLogs) {
 } elseif ($hasSettings) {
     $autoTitle = 'Settings (Admin)';
     $autoSubtitle = 'Configure system information and administrative operation guidelines.';
+} elseif ($hasReturns) {
+    $autoTitle = 'Return / Refund';
+    $autoSubtitle = 'Review return requests, assign riders for pickup, and complete refunds.';
 }
 
 $title = $pageHeaderTitle ?? $autoTitle ?? ($page_title ?? 'Admin Page');

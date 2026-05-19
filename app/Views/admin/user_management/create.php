@@ -435,9 +435,11 @@
                             <label for="role">User Role</label>
                             <select id="role" name="role" required>
                                 <option value="">Select Role</option>
-                                <option value="admin" <?= old('role') == 'admin' ? 'selected' : '' ?>>Admin</option>
-                                <option value="customer" <?= old('role') == 'customer' ? 'selected' : '' ?>>Customer</option>
-                                <option value="rider" <?= old('role') == 'rider' ? 'selected' : '' ?>>Rider</option>
+                                <?php foreach (($roleOptions ?? ['admin', 'customer', 'rider']) as $roleName): ?>
+                                    <option value="<?= esc($roleName) ?>" <?= old('role') == $roleName ? 'selected' : '' ?>>
+                                        <?= esc(ucwords(str_replace('_', ' ', $roleName))) ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>

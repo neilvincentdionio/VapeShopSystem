@@ -35,9 +35,9 @@ class UserModel extends Model
 
     protected $validationRules = [
         'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
-        'email' => 'required|valid_email|is_unique[users.email,id,{id}]',
+        'email' => 'required|valid_email',
         'password' => 'permit_empty|min_length[8]',
-        'role' => 'permit_empty|in_list[admin,staff,customer,rider]',
+        'role' => 'permit_empty|max_length[100]',
         'role_id' => 'permit_empty|integer',
         'shop_name' => 'permit_empty|max_length[150]',
         'approval_status' => 'permit_empty|in_list[pending,approved,rejected]',
@@ -509,11 +509,13 @@ class UserModel extends Model
         if ($supportsRoleId && $roleId > 0 && $roleName === '') {
             $resolvedName = $this->getRoleNameById($roleId);
             $coreData['role'] = $resolvedName ?? 'customer';
+            $this->ensureRoleColumnSupportsValue((string) $coreData['role']);
             return $coreData;
         }
 
         if ($roleName !== '') {
-            $coreData['role'] = in_array($roleName, ['admin', 'staff', 'customer', 'rider'], true) ? $roleName : 'customer';
+            $this->ensureRoleColumnSupportsValue($roleName);
+            $coreData['role'] = $roleName;
             if ($supportsRoleId) {
                 $resolvedRoleId = $this->getRoleIdByName($coreData['role']);
                 if ($resolvedRoleId !== null) {
@@ -534,6 +536,56 @@ class UserModel extends Model
         }
 
         return $coreData;
+    }
+
+    private function ensureRoleColumnSupportsValue(string $roleName): void
+    {
+        $roleName = strtolower(trim($roleName));
+        if ($roleName === '' || !$this->db->tableExists($this->table) || !$this->db->fieldExists('role', $this->table)) {
+            return;
+        }
+
+        $columnType = $this->getRoleColumnType();
+        if ($columnType === null) {
+            return;
+        }
+
+        $typeLower = strtolower($columnType);
+        if (!str_starts_with($typeLower, 'enum(')) {
+            return;
+        }
+
+        $allowed = $this->extractEnumValues($columnType);
+        if (in_array($roleName, $allowed, true)) {
+            return;
+        }
+
+        $table = $this->db->protectIdentifiers($this->table, true);
+        $this->db->query("ALTER TABLE {$table} MODIFY role VARCHAR(100) NOT NULL DEFAULT 'customer'");
+    }
+
+    private function getRoleColumnType(): ?string
+    {
+        $table = $this->db->protectIdentifiers($this->table, true);
+        $row = $this->db->query("SHOW COLUMNS FROM {$table} LIKE 'role'")->getRowArray();
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $type = (string) ($row['Type'] ?? '');
+        return $type !== '' ? $type : null;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function extractEnumValues(string $columnType): array
+    {
+        if (!preg_match_all("/'([^']+)'/", $columnType, $matches)) {
+            return [];
+        }
+
+        return array_values(array_map(static fn (string $v): string => strtolower(trim($v)), $matches[1]));
     }
 
     /**

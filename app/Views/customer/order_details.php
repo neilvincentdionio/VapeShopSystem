@@ -17,11 +17,18 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'delivered' => 'Delivered (Confirm)',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'return_refund' => 'Return/Refund',
+            'return_refund' => 'Refund Completed',
+            'return_requested' => 'Return Requested',
+            'return_approved' => 'Return Approved',
+            'return_picked_up' => 'Return Picked Up',
             'failed_delivery' => 'Failed Delivery',
         ];
         
-        return $labels[$status] ?? ucfirst($status);
+        if (function_exists('is_return_refund_status') && is_return_refund_status((string) $status)) {
+            return return_refund_status_label((string) $status);
+        }
+
+        return $labels[$status] ?? ucfirst(str_replace('_', ' ', (string) $status));
     }
 }
 ?>
@@ -36,6 +43,7 @@ if (!function_exists('getDeliveryStatusLabel')) {
     </div>
 
     <?php if (!empty($order)): ?>
+        <?php $isReturnFlow = function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? '')); ?>
         <div class="order-detail-card">
             <div class="order-header">
                 <div class="order-info">
@@ -58,38 +66,32 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 </div>
             <?php endif; ?>
 
-            <!-- Visual Delivery Status Tracker -->
-            <div class="delivery-tracker">
-                <h3><i class="fas fa-map-marked-alt"></i> Delivery Status</h3>
-                <div class="tracker-progress">
+            <?php if ($isReturnFlow): ?>
+                <div class="delivery-tracker return-flow-tracker">
+                    <h3><i class="fas fa-undo"></i> Return / Refund Progress</h3>
                     <?php
-                    $status = (string) ($order['delivery_status'] ?? 'to_pay');
-                    $currentStage = 0;
-                    if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
-                        $currentStage = 1;
-                    } elseif ($status === 'delivered_to_rider') {
-                        $currentStage = 2;
-                    } elseif ($status === 'to_receive') {
-                        $currentStage = 3;
-                    } elseif (in_array($status, ['delivered', 'completed'], true)) {
-                        $currentStage = 4;
+                    $returnStatus = (string) ($order['delivery_status'] ?? '');
+                    $returnCurrentStage = 0;
+                    if ($returnStatus === 'return_approved') {
+                        $returnCurrentStage = 1;
+                    } elseif ($returnStatus === 'return_picked_up') {
+                        $returnCurrentStage = 2;
+                    } elseif ($returnStatus === 'return_refund') {
+                        $returnCurrentStage = 3;
                     }
-
-                    $stages = [
-                        ['name' => 'Order Placed', 'icon' => 'fa-clipboard', 'description' => 'Order received by the shop'],
-                        ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Rider is assigned for pickup'],
-                        ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'Parcel picked up from store'],
-                        ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'Rider is on the way to you'],
-                        ['name' => 'Delivered', 'icon' => 'fa-home', 'description' => 'Order delivered successfully']
+                    $returnStages = [
+                        ['name' => 'Request Submitted', 'icon' => 'fa-file-circle-check', 'description' => 'Your return/refund request was sent.'],
+                        ['name' => 'Approved by Admin', 'icon' => 'fa-user-shield', 'description' => 'Prepare the item and wait for rider pickup.'],
+                        ['name' => 'Picked Up by Rider', 'icon' => 'fa-box-open', 'description' => 'Item is now with rider and under verification.'],
+                        ['name' => 'Refund Completed', 'icon' => 'fa-money-check-dollar', 'description' => 'Refund has been processed by admin.'],
                     ];
                     ?>
-                    
                     <div class="tracker-container">
-                        <?php foreach($stages as $index => $stage): ?>
-                            <div class="tracker-step <?= $index <= $currentStage ? 'completed' : 'pending' ?>">
+                        <?php foreach ($returnStages as $index => $stage): ?>
+                            <div class="tracker-step <?= $index <= $returnCurrentStage ? 'completed' : 'pending' ?>">
                                 <div class="tracker-icon">
                                     <i class="fas <?= $stage['icon'] ?>"></i>
-                                    <?php if ($index < $currentStage): ?>
+                                    <?php if ($index < $returnCurrentStage): ?>
                                         <div class="check-mark">
                                             <i class="fas fa-check"></i>
                                         </div>
@@ -100,23 +102,80 @@ if (!function_exists('getDeliveryStatusLabel')) {
                                     <span class="stage-description"><?= $stage['description'] ?></span>
                                 </div>
                             </div>
-                            
-                            <?php if ($index < count($stages) - 1): ?>
-                                <div class="tracker-line <?= $index < $currentStage ? 'completed' : 'pending' ?>"></div>
+                            <?php if ($index < count($returnStages) - 1): ?>
+                                <div class="tracker-line <?= $index < $returnCurrentStage ? 'completed' : 'pending' ?>"></div>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
-                
-                <?php if (!empty($tracking_info) && $order['delivery_status'] === 'to_ship'): ?>
-                    <div class="tracking-details">
-                        <p class="estimated-delivery">
-                            <strong>Estimated Delivery:</strong> <?= esc($tracking_info['estimated_date']) ?>
-                        </p>
-                        <p class="tracking-message"><?= esc($tracking_info['message']) ?></p>
-                    </div>
+                <?php if (!empty($return_meta)): ?>
+                    <?= view('partials/return_refund_view', [
+                        'returnMeta' => $return_meta,
+                        'order' => $order,
+                        'compact' => false,
+                    ]) ?>
                 <?php endif; ?>
-            </div>
+            <?php else: ?>
+                <!-- Visual Delivery Status Tracker -->
+                <div class="delivery-tracker">
+                    <h3><i class="fas fa-map-marked-alt"></i> Delivery Status</h3>
+                    <div class="tracker-progress">
+                        <?php
+                        $status = (string) ($order['delivery_status'] ?? 'to_pay');
+                        $currentStage = 0;
+                        if (in_array($status, ['ready_for_pickup', 'accepted_by_rider'], true)) {
+                            $currentStage = 1;
+                        } elseif ($status === 'delivered_to_rider') {
+                            $currentStage = 2;
+                        } elseif ($status === 'to_receive') {
+                            $currentStage = 3;
+                        } elseif (in_array($status, ['delivered', 'completed'], true)) {
+                            $currentStage = 4;
+                        }
+
+                        $stages = [
+                            ['name' => 'Order Placed', 'icon' => 'fa-clipboard', 'description' => 'Order received by the shop'],
+                            ['name' => 'Rider Assigned', 'icon' => 'fa-user-check', 'description' => 'Rider is assigned for pickup'],
+                            ['name' => 'Picked Up', 'icon' => 'fa-motorcycle', 'description' => 'Parcel picked up from store'],
+                            ['name' => 'Out for Delivery', 'icon' => 'fa-truck', 'description' => 'Rider is on the way to you'],
+                            ['name' => 'Delivered', 'icon' => 'fa-home', 'description' => 'Order delivered successfully']
+                        ];
+                        ?>
+                        
+                        <div class="tracker-container">
+                            <?php foreach($stages as $index => $stage): ?>
+                                <div class="tracker-step <?= $index <= $currentStage ? 'completed' : 'pending' ?>">
+                                    <div class="tracker-icon">
+                                        <i class="fas <?= $stage['icon'] ?>"></i>
+                                        <?php if ($index < $currentStage): ?>
+                                            <div class="check-mark">
+                                                <i class="fas fa-check"></i>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="tracker-label">
+                                        <span class="stage-name"><?= $stage['name'] ?></span>
+                                        <span class="stage-description"><?= $stage['description'] ?></span>
+                                    </div>
+                                </div>
+                                
+                                <?php if ($index < count($stages) - 1): ?>
+                                    <div class="tracker-line <?= $index < $currentStage ? 'completed' : 'pending' ?>"></div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    
+                    <?php if (!empty($tracking_info) && $order['delivery_status'] === 'to_ship'): ?>
+                        <div class="tracking-details">
+                            <p class="estimated-delivery">
+                                <strong>Estimated Delivery:</strong> <?= esc($tracking_info['estimated_date']) ?>
+                            </p>
+                            <p class="tracking-message"><?= esc($tracking_info['message']) ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <?php if (!empty($order['shipping_address']) || !empty($order['contact_number'])): ?>
                 <div class="shipping-info">
@@ -129,21 +188,23 @@ if (!function_exists('getDeliveryStatusLabel')) {
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-            <div class="shipping-info">
-                <h3><i class="fas fa-location-dot"></i> Delivery Tracking</h3>
-                <div id="tracking_status_text">
-                    <?php if (($order['delivery_status'] ?? '') !== 'to_receive'): ?>
-                        Live rider tracking is available once the order is Out for Delivery.
-                    <?php endif; ?>
+            <?php if (! $isReturnFlow): ?>
+                <div class="shipping-info">
+                    <h3><i class="fas fa-location-dot"></i> Delivery Tracking</h3>
+                    <div id="tracking_status_text">
+                        <?php if (($order['delivery_status'] ?? '') !== 'to_receive'): ?>
+                            Live rider tracking is available once the order is Out for Delivery.
+                        <?php endif; ?>
+                    </div>
+                    <div id="tracking_map_wrap" style="position:relative; margin-top:.75rem;">
+                        <button type="button" id="tracking_map_fullscreen_btn" class="btn btn-secondary" style="position:absolute; right:10px; top:10px; z-index:500; padding:.35rem .6rem; font-size:.72rem;">
+                            Fullscreen
+                        </button>
+                        <div id="customer_tracking_map" style="height:300px;border:1px solid var(--border);border-radius:10px;"></div>
+                    </div>
+                    <div id="tracking_meta" style="font-size:.9rem;color:var(--text-muted); margin-top:.5rem;"></div>
                 </div>
-                <div id="tracking_map_wrap" style="position:relative; margin-top:.75rem;">
-                    <button type="button" id="tracking_map_fullscreen_btn" class="btn btn-secondary" style="position:absolute; right:10px; top:10px; z-index:500; padding:.35rem .6rem; font-size:.72rem;">
-                        Fullscreen
-                    </button>
-                    <div id="customer_tracking_map" style="height:300px;border:1px solid var(--border);border-radius:10px;"></div>
-                </div>
-                <div id="tracking_meta" style="font-size:.9rem;color:var(--text-muted); margin-top:.5rem;"></div>
-            </div>
+            <?php endif; ?>
 
             <div class="order-items">
                 <h3><i class="fas fa-shopping-bag"></i> Order Items</h3>
@@ -197,7 +258,52 @@ if (!function_exists('getDeliveryStatusLabel')) {
                 <?php if ($order['delivery_status'] === 'delivered'): ?>
                     <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Delivery</a>
                 <?php endif; ?>
+
+                <?php if (!empty($can_request_return)): ?>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('returnRequestPanel').style.display='block'">Request Return/Refund</button>
+                <?php endif; ?>
             </div>
+
+            <?php if (!empty($can_request_return)): ?>
+                <div id="returnRequestPanel" style="display:none; margin-top:1rem; padding:1rem; border:1px solid var(--border); border-radius:10px;">
+                    <h3>Return/Refund Request</h3>
+                    <p style="font-size:.88rem;color:var(--text-muted);">Available within <?= return_refund_request_window_days() ?> days after delivery.</p>
+                    <form method="post" action="<?= site_url('customer/orders/return-refund') ?>" enctype="multipart/form-data">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                        <input type="hidden" name="redirect_to" value="order-details">
+                        <input type="hidden" name="request_type" value="return_and_refund">
+                        <p style="font-size:.88rem;font-weight:600;margin:.5rem 0 .65rem;">Request type: Return &amp; Refund</p>
+                        <label for="reason" style="display:block;margin:.65rem 0 .25rem;font-weight:600;">Reason</label>
+                        <textarea name="reason" id="reason" rows="4" minlength="10" maxlength="1000" required style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;" placeholder="Describe the issue (minimum 10 characters)."></textarea>
+                        <label for="return_evidence" style="display:block;margin:.65rem 0 .25rem;font-weight:600;">Photo / Video evidence</label>
+                        <input type="file" name="return_evidence[]" id="return_evidence" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" multiple required style="width:100%;">
+                        <p style="font-size:.78rem;color:var(--text-muted);margin:.25rem 0 .5rem;">Upload 1–3 files showing the product issue (images max 5MB, videos max 25MB).</p>
+                        <div id="orderReturnPayoutFields" style="margin-top:.75rem;">
+                            <p style="font-size:.86rem;color:var(--text-muted);">Refund will be sent to your GCash or Maya account after pickup. The rider will only scan your return QR.</p>
+                            <label for="payout_method" style="display:block;margin:.55rem 0 .25rem;font-weight:600;">Refund method</label>
+                            <select name="payout_method" id="payout_method" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;">
+                                <?php foreach (return_payout_methods() as $value => $label): ?>
+                                    <option value="<?= esc($value) ?>"><?= esc($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label for="payout_account" style="display:block;margin:.55rem 0 .25rem;font-weight:600;">GCash / Maya number</label>
+                            <input type="text" name="payout_account" id="payout_account" maxlength="30" required style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;" placeholder="e.g. 09171234567">
+                            <label for="payout_account_name" style="display:block;margin:.55rem 0 .25rem;font-weight:600;">Account name</label>
+                            <input type="text" name="payout_account_name" id="payout_account_name" maxlength="120" required style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;" placeholder="Registered account name">
+                        </div>
+                        <button type="submit" class="btn" style="margin-top:.75rem;">Submit Request</button>
+                    </form>
+                </div>
+            <?php elseif (!empty($return_meta) && ! $isReturnFlow): ?>
+                <?= view('partials/return_refund_view', [
+                    'returnMeta' => $return_meta,
+                    'order' => $order,
+                    'compact' => false,
+                ]) ?>
+            <?php elseif (!empty($return_request_message) && ($order['delivery_status'] ?? '') === 'completed'): ?>
+                <p style="margin-top:.75rem;font-size:.86rem;color:var(--text-muted);"><?= esc((string) $return_request_message) ?></p>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="empty-state">
@@ -824,6 +930,11 @@ function refreshTracking() {
     }).catch(() => {});
 }
 document.addEventListener('DOMContentLoaded', () => {
+    const mapContainer = document.getElementById('customer_tracking_map');
+    if (!mapContainer) {
+        return;
+    }
+
     initTrackingMap();
     refreshTracking();
     setInterval(refreshTracking, 3000);

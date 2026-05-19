@@ -714,9 +714,9 @@
         max-width: 460px;
         background: #ffffff;
         border: 1px solid #e0e0e0;
-        border-radius: 16px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
-        padding: 1.25rem;
+        border-radius: 18px;
+        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.22);
+        padding: 1.1rem 1.1rem 1rem;
     }
 
     .flavor-modal-head {
@@ -730,31 +730,56 @@
     .flavor-modal-title {
         font-weight: 900;
         color: #333333;
-        font-size: 1.05rem;
+        font-size: 1.16rem;
+        letter-spacing: 0.01em;
     }
 
     .flavor-modal-close {
-        background: transparent;
+        background: #f8fafc;
         border: none;
-        color: #666666;
+        color: #64748b;
         cursor: pointer;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .flavor-modal-close:hover {
+        background: #e2e8f0;
+        color: #334155;
     }
 
     .flavor-choice-list {
-        margin: .85rem 0 1rem;
+        margin: .9rem 0 1rem;
+        display: grid;
+        gap: .7rem;
     }
 
     .flavor-dropdown {
         position: relative;
     }
 
+    .flavor-choice-label {
+        display: block;
+        color: #475569;
+        font-size: .8rem;
+        font-weight: 800;
+        margin: 0 0 .35rem .1rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
     .flavor-select-trigger {
         width: 100%;
         border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: .75rem .8rem;
-        font-size: 1rem;
+        border-radius: 12px;
+        padding: .82rem .85rem;
+        font-size: .98rem;
+        font-weight: 700;
         background: #ffffff;
         color: #333333;
         text-align: left;
@@ -768,7 +793,7 @@
     .flavor-select-trigger.open {
         outline: none;
         border-color: #00bcd4;
-        box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
+        box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.16);
     }
 
     .flavor-dropdown-menu {
@@ -819,10 +844,28 @@
     }
 
     .flavor-choice-stock {
-        color: #666666;
+        color: #475569;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
         font-size: .84rem;
         font-weight: 700;
-        margin-top: .55rem;
+        margin-top: .2rem;
+        padding: .55rem .65rem;
+    }
+
+    #flavorConfirmBtn {
+        border-radius: 12px;
+        padding: .68rem .9rem;
+        font-size: .96rem;
+        font-weight: 800;
+    }
+
+    #flavorConfirmBtn:disabled {
+        background: #cbd5e1;
+        border-color: #cbd5e1;
+        color: #f8fafc;
+        opacity: 1;
     }
 
     .reviews-modal {
@@ -1277,21 +1320,30 @@
         <div class="flavor-modal-head">
             <div>
                 <div class="flavor-modal-title" id="flavorModalTitle">Select Flavor</div>
-                <div class="cart-empty-text" id="flavorModalSubtitle" style="margin: .25rem 0 0;">Choose a flavor before adding to cart.</div>
+                <div class="cart-empty-text" id="flavorModalSubtitle" style="margin: .28rem 0 0; color:#64748b;">Choose options before adding this product to cart.</div>
             </div>
             <button type="button" class="flavor-modal-close" onclick="closeFlavorModal()">×</button>
         </div>
         <div class="flavor-choice-list">
-            <div class="flavor-dropdown">
+            <div class="flavor-dropdown" id="flavorChoiceWrap">
+                <label class="flavor-choice-label">Flavor</label>
                 <button type="button" id="flavorSelectTrigger" class="flavor-select-trigger" aria-haspopup="listbox" aria-expanded="false">
                     <span id="flavorSelectText">Select flavor</span>
                     <span class="flavor-select-caret" aria-hidden="true">▼</span>
                 </button>
                 <div id="flavorDropdownMenu" class="flavor-dropdown-menu"></div>
             </div>
+            <div class="flavor-dropdown puffs-dropdown" id="puffsChoiceWrap" style="margin-top:.6rem;display:none;">
+                <label class="flavor-choice-label">Puffs</label>
+                <button type="button" id="puffsSelectTrigger" class="flavor-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span id="puffsSelectText">Select puffs</span>
+                    <span class="flavor-select-caret" aria-hidden="true">▼</span>
+                </button>
+                <div id="puffsDropdownMenu" class="flavor-dropdown-menu"></div>
+            </div>
             <div class="flavor-choice-stock" id="flavorStockInfo"></div>
         </div>
-        <button type="button" id="flavorConfirmBtn" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()" disabled>Add Selected Flavor</button>
+        <button type="button" id="flavorConfirmBtn" class="btn btn-primary" style="width:100%;" onclick="confirmFlavorAddToCart()" disabled>Add to Cart</button>
     </div>
 </div>
 
@@ -1317,9 +1369,12 @@ let currentGcashQrPayload = '';
 let pendingFlavorProductId = null;
 let pendingFlavorVariantId = null;
 let pendingFlavorVariants = [];
+let pendingFlavorName = '';
+let pendingPuffsValue = '';
 let checkoutMap = null;
 let checkoutMarker = null;
 let checkoutGeocodeDebounce = null;
+let checkoutGeocodeLockUntil = 0;
 
 const deliveryAddressData = {
     'South Cotabato': {
@@ -1594,6 +1649,8 @@ function checkoutUseCurrentLocation() {
         return;
     }
     status.textContent = 'Getting location...';
+    // Keep exact GPS pin stable while autofilling address fields.
+    checkoutGeocodeLockUntil = Date.now() + 10000;
     navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
@@ -1610,9 +1667,15 @@ function checkoutUseCurrentLocation() {
             })
             .catch(() => {
                 status.textContent = 'Location captured. Address autofill unavailable.';
+            })
+            .finally(() => {
+                setTimeout(() => {
+                    checkoutGeocodeLockUntil = 0;
+                }, 400);
             });
     }, () => {
         status.textContent = 'Permission denied. Pin location manually.';
+        checkoutGeocodeLockUntil = 0;
     }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
@@ -1631,6 +1694,7 @@ function getManualCheckoutAddress() {
 function geocodeCheckoutAddressDebounced() {
     clearTimeout(checkoutGeocodeDebounce);
     checkoutGeocodeDebounce = setTimeout(() => {
+        if (Date.now() < checkoutGeocodeLockUntil) return;
         const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
         if (mode !== 'manual') return;
         const address = getManualCheckoutAddress();
@@ -1640,6 +1704,7 @@ function geocodeCheckoutAddressDebounced() {
 }
 
 async function geocodeCheckoutAddressToMap(addressText) {
+    if (Date.now() < checkoutGeocodeLockUntil) return;
     if (!addressText || addressText.trim().length < 5) return;
     const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(addressText)}`, {
         headers: { 'Accept': 'application/json' }
@@ -1905,7 +1970,7 @@ function toggleDeliveryAddressMode() {
     }
 }
 
-function productNeedsFlavor(product) {
+function productNeedsVariantSelection(product) {
     const category = (product?.category || '').toLowerCase();
     return ['pods', 'disposable', 'e-liquid'].includes(category)
         && Array.isArray(product?.variants)
@@ -1914,7 +1979,7 @@ function productNeedsFlavor(product) {
 
 function beginAddToCart(productId) {
     const product = productCatalog[String(productId)] || productCatalog[productId];
-    if (productNeedsFlavor(product)) {
+    if (productNeedsVariantSelection(product)) {
         openFlavorModal(product);
         return;
     }
@@ -1931,48 +1996,126 @@ function updateFlavorConfirmButton() {
     confirmBtn.disabled = !hasSelection || !pendingFlavorProductId;
 }
 
-function selectFlavorVariant(variant) {
-    if (!variant) {
+function getUniqueFlavorOptions(variants) {
+    const values = [];
+    const seen = new Set();
+    (variants || []).forEach((variant) => {
+        const flavor = String(variant?.flavor || '').trim();
+        if (!flavor || seen.has(flavor)) {
+            return;
+        }
+        seen.add(flavor);
+        values.push(flavor);
+    });
+    return values;
+}
+
+function getUniquePuffsOptions(variants) {
+    const values = [];
+    const seen = new Set();
+    (variants || []).forEach((variant) => {
+        const puffs = parseInt(variant?.puffs, 10) || 0;
+        if (puffs <= 0 || seen.has(puffs)) {
+            return;
+        }
+        seen.add(puffs);
+        values.push(puffs);
+    });
+    values.sort((a, b) => a - b);
+    return values;
+}
+
+function refreshVariantChoice() {
+    const stockInfo = document.getElementById('flavorStockInfo');
+    const needsFlavor = document.getElementById('flavorChoiceWrap')?.style.display !== 'none';
+    const needsPuffs = document.getElementById('puffsChoiceWrap')?.style.display !== 'none';
+    let variants = [...pendingFlavorVariants];
+
+    if (needsFlavor && pendingFlavorName) {
+        variants = variants.filter((variant) => String(variant.flavor || '').trim() === pendingFlavorName);
+    }
+    if (needsPuffs && pendingPuffsValue) {
+        variants = variants.filter((variant) => (parseInt(variant.puffs, 10) || 0) === parseInt(pendingPuffsValue, 10));
+    }
+
+    const readyForPick = (!needsFlavor || pendingFlavorName) && (!needsPuffs || pendingPuffsValue);
+    if (!readyForPick || variants.length === 0) {
+        pendingFlavorVariantId = null;
+        if (stockInfo) {
+            stockInfo.textContent = readyForPick
+                ? 'Selected combination is not available.'
+                : 'Select required options first.';
+        }
+        updateFlavorConfirmButton();
         return;
     }
 
-    pendingFlavorVariantId = String(variant.id);
-    const triggerText = document.getElementById('flavorSelectText');
-    const stockInfo = document.getElementById('flavorStockInfo');
-    const menu = document.getElementById('flavorDropdownMenu');
-
-    if (triggerText) {
-        triggerText.textContent = `${variant.flavor} (${variant.stock} left)`;
-    }
+    const selected = variants[0];
+    pendingFlavorVariantId = String(selected.id);
     if (stockInfo) {
-        stockInfo.textContent = `${variant.stock} left in stock`;
+        const puffsText = (parseInt(selected.puffs, 10) || 0) > 0
+            ? ` | ${Number(selected.puffs).toLocaleString()} puffs`
+            : '';
+        stockInfo.textContent = `${selected.stock} left in stock${puffsText}`;
+    }
+    updateFlavorConfirmButton();
+}
+
+function selectFlavorOption(flavorName) {
+    pendingFlavorName = String(flavorName || '').trim();
+    const triggerText = document.getElementById('flavorSelectText');
+    const menu = document.getElementById('flavorDropdownMenu');
+    if (triggerText) {
+        triggerText.textContent = pendingFlavorName || 'Select flavor';
     }
     if (menu) {
         menu.querySelectorAll('.flavor-option').forEach((el) => {
-            el.classList.toggle('active', el.dataset.variantId === String(variant.id));
+            el.classList.toggle('active', el.dataset.optionValue === pendingFlavorName);
         });
     }
-
     closeFlavorDropdown();
-    updateFlavorConfirmButton();
+    refreshVariantChoice();
+}
+
+function selectPuffsOption(puffsValue) {
+    pendingPuffsValue = String(parseInt(puffsValue, 10) || '');
+    const triggerText = document.getElementById('puffsSelectText');
+    const menu = document.getElementById('puffsDropdownMenu');
+    if (triggerText) {
+        triggerText.textContent = pendingPuffsValue ? `${Number(pendingPuffsValue).toLocaleString()} puffs` : 'Select puffs';
+    }
+    if (menu) {
+        menu.querySelectorAll('.flavor-option').forEach((el) => {
+            el.classList.toggle('active', el.dataset.optionValue === pendingPuffsValue);
+        });
+    }
+    closePuffsDropdown();
+    refreshVariantChoice();
 }
 
 function openFlavorModal(product) {
     pendingFlavorProductId = parseInt(product.id, 10);
     pendingFlavorVariantId = null;
     pendingFlavorVariants = [];
+    pendingFlavorName = '';
+    pendingPuffsValue = '';
     const modal = document.getElementById('flavorModal');
     const title = document.getElementById('flavorModalTitle');
     const subtitle = document.getElementById('flavorModalSubtitle');
     const triggerText = document.getElementById('flavorSelectText');
-    const triggerBtn = document.getElementById('flavorSelectTrigger');
     const menu = document.getElementById('flavorDropdownMenu');
+    const flavorWrap = document.getElementById('flavorChoiceWrap');
+    const puffsWrap = document.getElementById('puffsChoiceWrap');
+    const puffsText = document.getElementById('puffsSelectText');
+    const puffsMenu = document.getElementById('puffsDropdownMenu');
     const stockInfo = document.getElementById('flavorStockInfo');
 
     title.textContent = product.name || 'Select Flavor';
     subtitle.textContent = 'Choose a flavor before adding this product to cart.';
     menu.innerHTML = '';
+    puffsMenu.innerHTML = '';
     closeFlavorDropdown();
+    closePuffsDropdown();
 
     const availableVariants = [];
     product.variants.forEach((variant) => {
@@ -1991,22 +2134,79 @@ function openFlavorModal(product) {
     }
 
     pendingFlavorVariants = availableVariants;
-    triggerText.textContent = 'Select flavor';
-    stockInfo.textContent = 'Pick a flavor from the list';
+    const flavorOptions = getUniqueFlavorOptions(availableVariants);
+    const puffsOptions = getUniquePuffsOptions(availableVariants);
+    const showFlavorChoice = flavorOptions.length > 0;
+    const showPuffsChoice = puffsOptions.length > 0;
+    if (subtitle) {
+        if (showFlavorChoice && showPuffsChoice) {
+            subtitle.textContent = 'Choose flavor and puffs before adding this product to cart.';
+        } else if (showFlavorChoice) {
+            subtitle.textContent = 'Choose a flavor before adding this product to cart.';
+        } else if (showPuffsChoice) {
+            subtitle.textContent = 'Choose puffs before adding this product to cart.';
+        } else {
+            subtitle.textContent = 'Confirm this option before adding to cart.';
+        }
+    }
 
-    availableVariants.forEach((variant) => {
-        const optionBtn = document.createElement('button');
-        optionBtn.type = 'button';
-        optionBtn.className = 'flavor-option';
-        optionBtn.textContent = `${variant.flavor} (${variant.stock} left)`;
-        optionBtn.dataset.variantId = String(variant.id);
-        optionBtn.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            selectFlavorVariant(variant);
+    if (flavorWrap) {
+        flavorWrap.style.display = showFlavorChoice ? 'block' : 'none';
+    }
+    if (puffsWrap) {
+        puffsWrap.style.display = showPuffsChoice ? 'block' : 'none';
+    }
+
+    if (showFlavorChoice) {
+        triggerText.textContent = 'Select flavor';
+        flavorOptions.forEach((flavorName) => {
+            const optionBtn = document.createElement('button');
+            optionBtn.type = 'button';
+            optionBtn.className = 'flavor-option';
+            optionBtn.textContent = flavorName;
+            optionBtn.dataset.optionValue = flavorName;
+            optionBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectFlavorOption(flavorName);
+            });
+            menu.appendChild(optionBtn);
         });
-        menu.appendChild(optionBtn);
-    });
+    } else {
+        triggerText.textContent = 'No flavor options';
+    }
+
+    if (showPuffsChoice) {
+        puffsText.textContent = 'Select puffs';
+        puffsOptions.forEach((puffs) => {
+            const optionBtn = document.createElement('button');
+            optionBtn.type = 'button';
+            optionBtn.className = 'flavor-option';
+            optionBtn.textContent = `${Number(puffs).toLocaleString()} puffs`;
+            optionBtn.dataset.optionValue = String(puffs);
+            optionBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectPuffsOption(puffs);
+            });
+            puffsMenu.appendChild(optionBtn);
+        });
+    } else {
+        puffsText.textContent = 'No puffs options';
+    }
+
+    stockInfo.textContent = 'Select required options first.';
+
+    if (showFlavorChoice && flavorOptions.length === 1) {
+        selectFlavorOption(flavorOptions[0]);
+    }
+    if (showPuffsChoice && puffsOptions.length === 1) {
+        selectPuffsOption(puffsOptions[0]);
+    }
+    if (!showFlavorChoice && !showPuffsChoice && availableVariants.length === 1) {
+        pendingFlavorVariantId = String(availableVariants[0].id);
+        stockInfo.textContent = `${availableVariants[0].stock} left in stock`;
+    }
 
     updateFlavorConfirmButton();
     modal.classList.add('show');
@@ -2018,9 +2218,12 @@ function closeFlavorModal() {
     modal?.classList.remove('show');
     document.body.style.overflow = '';
     closeFlavorDropdown();
+    closePuffsDropdown();
     pendingFlavorProductId = null;
     pendingFlavorVariantId = null;
     pendingFlavorVariants = [];
+    pendingFlavorName = '';
+    pendingPuffsValue = '';
     updateFlavorConfirmButton();
 }
 
@@ -2045,6 +2248,35 @@ function toggleFlavorDropdown(event) {
 function closeFlavorDropdown() {
     const triggerBtn = document.getElementById('flavorSelectTrigger');
     const menu = document.getElementById('flavorDropdownMenu');
+    if (!triggerBtn || !menu) {
+        return;
+    }
+    menu.classList.remove('show');
+    triggerBtn.classList.remove('open');
+    triggerBtn.setAttribute('aria-expanded', 'false');
+}
+
+function togglePuffsDropdown(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const triggerBtn = document.getElementById('puffsSelectTrigger');
+    const menu = document.getElementById('puffsDropdownMenu');
+    if (!triggerBtn || !menu || triggerBtn.disabled) {
+        return;
+    }
+
+    const willOpen = !menu.classList.contains('show');
+    menu.classList.toggle('show', willOpen);
+    triggerBtn.classList.toggle('open', willOpen);
+    triggerBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+}
+
+function closePuffsDropdown() {
+    const triggerBtn = document.getElementById('puffsSelectTrigger');
+    const menu = document.getElementById('puffsDropdownMenu');
     if (!triggerBtn || !menu) {
         return;
     }
@@ -2439,12 +2671,20 @@ function handleDocumentClick(event) {
     if (flavorPicker && !flavorPicker.contains(event.target)) {
         closeFlavorDropdown();
     }
+    const puffsPicker = document.querySelector('.puffs-dropdown');
+    if (puffsPicker && !puffsPicker.contains(event.target)) {
+        closePuffsDropdown();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const flavorTrigger = document.getElementById('flavorSelectTrigger');
     if (flavorTrigger) {
         flavorTrigger.addEventListener('click', toggleFlavorDropdown);
+    }
+    const puffsTrigger = document.getElementById('puffsSelectTrigger');
+    if (puffsTrigger) {
+        puffsTrigger.addEventListener('click', togglePuffsDropdown);
     }
 });
 

@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\UserModel;
+use App\Models\RoleModel;
 use App\Libraries\ActivityLogger;
 use App\Libraries\NotificationService;
 
@@ -12,10 +13,12 @@ class UserManagement extends BaseController
     protected $session;
     protected $activityLogger;
     protected NotificationService $notificationService;
+    protected RoleModel $roleModel;
 
     public function __construct()
     {
         $this->userModel = new UserModel();
+        $this->roleModel = new RoleModel();
         $this->session = session();
         $this->activityLogger = new ActivityLogger();
         $this->notificationService = new NotificationService();
@@ -28,7 +31,7 @@ class UserManagement extends BaseController
     {
         if (
             !$this->session->get('logged_in')
-            || !$this->hasRole('admin')
+            || (in_array(strtolower(trim((string) $this->session->get('user_role'))), ['customer', 'rider'], true))
             || !$this->hasPermission('manage_users')
         ) {
             return redirect()->to('/dashboard')
@@ -103,7 +106,9 @@ class UserManagement extends BaseController
             return $authCheck;
         }
 
-        return view('admin/user_management/create');
+        return view('admin/user_management/create', [
+            'roleOptions' => $this->getAssignableRoleNames(),
+        ]);
     }
 
     /**
@@ -256,7 +261,7 @@ class UserManagement extends BaseController
             'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
             'email' => 'required|valid_email|is_unique[users.email]',
             'password' => 'required|min_length[8]',
-            'role' => 'required|in_list[admin,customer,rider]'
+            'role' => 'required'
         ];
 
         if (!$this->validate($rules)) {
@@ -270,10 +275,16 @@ class UserManagement extends BaseController
             'name' => htmlspecialchars($request->getPost('name'), ENT_QUOTES, 'UTF-8'),
             'email' => filter_var($request->getPost('email'), FILTER_SANITIZE_EMAIL),
             'password' => $request->getPost('password'),
-            'role' => $request->getPost('role'),
+            'role' => strtolower(trim((string) $request->getPost('role'))),
             'approval_status' => 'approved',
             'is_active' => 1
         ];
+
+        if (!in_array($data['role'], $this->getAssignableRoleNames(), true)) {
+            return redirect()->back()
+                           ->withInput()
+                           ->with('errors', ['role' => 'Please select a valid active role.']);
+        }
 
         // Create user with hashed password
         try {
@@ -323,7 +334,12 @@ class UserManagement extends BaseController
                                    ->withInput()
                                    ->with('errors', $modelErrors);
                 }
-
+                $dbError = \Config\Database::connect()->error();
+                if (!empty($dbError['message'])) {
+                    return redirect()->back()
+                                   ->withInput()
+                                   ->with('error', 'Failed to create user: ' . $dbError['message']);
+                }
                 return redirect()->back()
                                ->with('error', 'Failed to create user. Database error occurred.');
             }
@@ -367,7 +383,8 @@ class UserManagement extends BaseController
             'user' => $user,
             'user_name' => $this->session->get('user_name'),
             'user_role' => $this->session->get('user_role'),
-            'page_title' => 'Edit User'
+            'page_title' => 'Edit User',
+            'roleOptions' => $this->getAssignableRoleNames(),
         ];
 
         return view('admin/user_management/edit', $data);
@@ -406,12 +423,11 @@ class UserManagement extends BaseController
         // Validate input data
         $rules = [
             'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
-            'email' => 'required|valid_email|is_unique[users.email,id,' . $id . ']'
         ];
 
         // Only validate role if not editing self
         if ($currentUserId != $id) {
-            $rules['role'] = 'required|in_list[admin,customer,rider]';
+            $rules['role'] = 'required';
         }
 
         if (!$this->validate($rules)) {
@@ -424,12 +440,18 @@ class UserManagement extends BaseController
         // Sanitize input
         $data = [
             'name' => htmlspecialchars($request->getPost('name'), ENT_QUOTES, 'UTF-8'),
-            'email' => filter_var($request->getPost('email'), FILTER_SANITIZE_EMAIL)
+            'email' => (string) ($user['email'] ?? '')
         ];
 
         // Only allow role change if not editing self
         if ($currentUserId != $id) {
-            $data['role'] = $request->getPost('role');
+            $selectedRole = strtolower(trim((string) $request->getPost('role')));
+            if (!in_array($selectedRole, $this->getAssignableRoleNames(), true)) {
+                return redirect()->back()
+                               ->withInput()
+                               ->with('errors', ['role' => 'Please select a valid active role.']);
+            }
+            $data['role'] = $selectedRole;
         } else {
             // Keep existing role when editing self
             $data['role'] = $user['role'];
@@ -486,8 +508,20 @@ class UserManagement extends BaseController
                 return redirect()->to('/user-management')
                                ->with('success', 'User updated successfully.');
             } else {
+                $modelErrors = $this->userModel->errors();
+                if (!empty($modelErrors)) {
+                    return redirect()->back()
+                                   ->withInput()
+                                   ->with('errors', $modelErrors);
+                }
+                $dbError = \Config\Database::connect()->error();
+                if (!empty($dbError['message'])) {
+                    return redirect()->back()
+                                   ->withInput()
+                                   ->with('error', 'Failed to update user: ' . $dbError['message']);
+                }
                 return redirect()->back()
-                               ->with('error', 'Failed to update user. No changes made or database error.');
+                               ->with('error', 'Failed to update user. No changes were saved.');
             }
         } catch (\Exception $e) {
             \Config\Database::connect()->transRollback();
@@ -656,5 +690,28 @@ class UserManagement extends BaseController
         }
 
         return str_starts_with($absolutePath, $uploadRoot . DIRECTORY_SEPARATOR) ? $absolutePath : null;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getAssignableRoleNames(): array
+    {
+        $rows = $this->roleModel
+            ->select('name')
+            ->where('status', 'active')
+            ->orderBy('name', 'ASC')
+            ->findAll();
+
+        $roles = array_values(array_unique(array_filter(array_map(
+            static fn (array $row): string => strtolower(trim((string) ($row['name'] ?? ''))),
+            $rows
+        ))));
+
+        if ($roles === []) {
+            return ['admin', 'customer', 'rider'];
+        }
+
+        return $roles;
     }
 }

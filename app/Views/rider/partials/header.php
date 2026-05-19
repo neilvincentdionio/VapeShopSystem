@@ -197,6 +197,7 @@
             <div class="nav-links">
                 <a href="<?= site_url('rider/dashboard') ?>" class="<?= ($active_page ?? '') === 'dashboard' ? 'active' : '' ?>">Dashboard</a>
                 <a href="<?= site_url('rider/deliveries') ?>" class="<?= ($active_page ?? '') === 'deliveries' ? 'active' : '' ?>">My Deliveries</a>
+                <a href="<?= site_url('rider/returns') ?>" class="<?= ($active_page ?? '') === 'returns' ? 'active' : '' ?>">Return Pickups</a>
                 <a href="<?= site_url('rider/messages') ?>" class="<?= ($active_page ?? '') === 'messages' ? 'active' : '' ?>">Messages</a>
                 <a href="<?= site_url('dashboard/profile') ?>" class="<?= ($active_page ?? '') === 'profile' ? 'active' : '' ?>">Profile</a>
             </div>

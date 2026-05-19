@@ -34,6 +34,7 @@ class Dashboard extends BaseController
         $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
         $this->notificationService = new NotificationService();
+        helper('return_refund');
     }
 
     /**
@@ -109,6 +110,15 @@ class Dashboard extends BaseController
         }
 
         return true;
+    }
+
+    /**
+     * Allow access for back-office users (admin and custom admin-like roles).
+     */
+    private function hasAdminPanelAccess(): bool
+    {
+        $role = strtolower(trim((string) $this->session->get('user_role')));
+        return $role !== '' && !in_array($role, ['customer', 'rider'], true);
     }
 
     public function liveUpdateToken()
@@ -377,13 +387,49 @@ class Dashboard extends BaseController
     }
 
     /**
+     * Rider return pickup list (separate from regular deliveries).
+     */
+    public function riderReturnPickups()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        helper('return_refund');
+
+        return view('rider/returns', $this->getRiderPageData('Return Pickups', 'returns', [
+            'returns' => $this->getRiderReturnPickups(),
+        ]));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getRiderReturnPickups(): array
+    {
+        $riderId = (int) $this->session->get('user_id');
+        $orders = $this->orderModel->getRiderReturnPickups($riderId);
+
+        foreach ($orders as &$order) {
+            $order['customer'] = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+        }
+        unset($order);
+
+        return $orders;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private function getRiderDeliveries(): array
     {
         $riderId = (int) $this->session->get('user_id');
         $orders = $this->orderModel->getAdminOrders();
-        $deliveryStatuses = ['to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'];
+        $deliveryStatuses = [
+            'to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered',
+            'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider',
+        ];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses, $riderId): bool {
             $status = (string) ($order['delivery_status'] ?? 'to_pay');
@@ -396,6 +442,10 @@ class Dashboard extends BaseController
 
         foreach ($deliveries as &$delivery) {
             $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
+            $normalizedContact = $this->normalizeContactNumber((string) ($delivery['contact_number'] ?? ''));
+            $delivery['contact_number'] = $normalizedContact !== ''
+                ? $normalizedContact
+                : (string) (($delivery['customer']['phone'] ?? '') !== '' ? $delivery['customer']['phone'] : 'Not provided');
         }
         unset($delivery);
 
@@ -420,6 +470,10 @@ class Dashboard extends BaseController
 
         foreach ($deliveries as &$delivery) {
             $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
+            $normalizedContact = $this->normalizeContactNumber((string) ($delivery['contact_number'] ?? ''));
+            $delivery['contact_number'] = $normalizedContact !== ''
+                ? $normalizedContact
+                : (string) (($delivery['customer']['phone'] ?? '') !== '' ? $delivery['customer']['phone'] : 'Not provided');
         }
         unset($delivery);
 
@@ -511,6 +565,7 @@ class Dashboard extends BaseController
 
         $orders = $this->orderModel->getCustomerOrders($userId, $activeTab === 'to_review' ? 'completed' : ($activeTab === 'all' ? null : $activeTab));
         $orders = $this->attachProductReviewState($orders, $userId);
+        $orders = $this->attachReturnRefundState($orders);
         if ($activeTab === 'to_review') {
             $orders = array_values(array_filter($orders, static fn (array $order): bool => (int) ($order['reviewable_count'] ?? 0) > 0));
         }
@@ -575,6 +630,27 @@ class Dashboard extends BaseController
         }
 
         return false;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $orders
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachReturnRefundState(array $orders): array
+    {
+        foreach ($orders as &$order) {
+            $order['return_meta'] = parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            );
+            $order['shipment_notes_display'] = shipment_notes_for_display((string) ($order['shipment_notes'] ?? ''));
+            $eligibility = customer_can_request_return($order);
+            $order['can_request_return'] = $eligibility['allowed'];
+            $order['return_request_message'] = $eligibility['message'];
+        }
+        unset($order);
+
+        return $orders;
     }
 
     /**
@@ -801,6 +877,153 @@ class Dashboard extends BaseController
                 ]);
             }
 
+            if ($status === 'accept_return_pickup') {
+                if ($currentStatus !== 'return_approved') {
+                    return $this->response->setJSON(['success' => false, 'message' => 'This return pickup is not ready for acceptance.']);
+                }
+
+                $order = $this->orderModel->getOrder($orderId);
+                if (! $order) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+                }
+
+                $returnMeta = parse_return_meta(
+                    (string) ($order['shipment_notes'] ?? ''),
+                    (string) ($order['delivery_notes'] ?? '')
+                ) ?? [];
+
+                if (rider_accepted_return_pickup($returnMeta)) {
+                    return $this->response->setJSON(['success' => true, 'message' => 'Return pickup already accepted.']);
+                }
+
+                $returnMeta['rider_accepted_pickup_at'] = date('Y-m-d H:i:s');
+                $returnMeta['rider_accepted_pickup_by'] = $riderId;
+
+                $returnFields = merge_return_meta_shipment_fields(
+                    (string) ($order['shipment_notes'] ?? ''),
+                    (string) ($order['delivery_notes'] ?? ''),
+                    $returnMeta
+                );
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'return_approved', $returnFields);
+
+                if ($result) {
+                    $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                    $this->notificationService->notifyAdmins([
+                        'category' => 'delivery',
+                        'type' => 'return_pickup_accepted',
+                        'title' => 'Rider accepted return pickup',
+                        'message' => 'Rider accepted return pickup for order ' . $reference . '.',
+                        'link' => site_url('admin/returns?status=return_approved&order=' . $orderId),
+                        'related_type' => 'order',
+                        'related_id' => $orderId,
+                    ]);
+                }
+
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Return pickup accepted. You can now scan the customer QR code.' : 'Unable to accept return pickup',
+                ]);
+            }
+
+            if ($status === 'return_picked_up') {
+                if ($currentStatus !== 'return_approved') {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Return pickup is not approved yet.']);
+                }
+
+                $order = $this->orderModel->getOrder($orderId);
+                if (! $order) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+                }
+
+                $returnMeta = parse_return_meta(
+                    (string) ($order['shipment_notes'] ?? ''),
+                    (string) ($order['delivery_notes'] ?? '')
+                ) ?? [];
+
+                if (! rider_accepted_return_pickup($returnMeta)) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Accept this return pickup first before scanning the QR code.',
+                    ]);
+                }
+
+                $scanText = trim((string) $this->request->getPost('return_token'));
+                if ($scanText === '') {
+                    $scanText = trim((string) $this->request->getPost('return_qr_scan'));
+                }
+
+                $parsedScan = parse_return_qr_scan($scanText);
+                if ($parsedScan === null) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Invalid return QR code. Scan the customer return QR again.']);
+                }
+
+                if (isset($parsedScan['order_id']) && (int) $parsedScan['order_id'] !== $orderId) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'This QR code belongs to a different order.']);
+                }
+
+                $expectedToken = (string) ($returnMeta['return_token'] ?? '');
+                if ($expectedToken === '' || ! hash_equals($expectedToken, (string) $parsedScan['token'])) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Return QR code does not match this order.']);
+                }
+
+                $requestType = (string) ($returnMeta['type'] ?? 'return_and_refund');
+                if (return_refund_requires_payout($requestType) && trim((string) ($returnMeta['payout_account'] ?? '')) === '') {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Refund payout details are missing. The customer must provide GCash/e-wallet when submitting the return request.',
+                    ]);
+                }
+
+                $returnMeta['qr_scanned_at'] = date('Y-m-d H:i:s');
+                $returnMeta['qr_scanned_by'] = $riderId;
+                $returnMeta['status'] = 'return_picked_up';
+                $returnMeta = ensure_pending_refund_reference($returnMeta, $orderId);
+
+                $returnFields = merge_return_meta_shipment_fields(
+                    (string) ($order['shipment_notes'] ?? ''),
+                    (string) ($order['delivery_notes'] ?? ''),
+                    $returnMeta
+                );
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'return_picked_up', array_merge([
+                    'picked_up_at' => date('Y-m-d H:i:s'),
+                ], $returnFields));
+
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $this->notificationService->notifyAdmins([
+                            'category' => 'orders',
+                            'type' => 'return_picked_up',
+                            'title' => 'Return item picked up',
+                            'message' => 'Rider picked up returned items for order ' . $reference . '. Send refund via GCash/e-wallet.',
+                            'link' => site_url('admin/returns?status=return_picked_up&order=' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                        $customerId = (int) ($order['created_by'] ?? 0);
+                        if ($customerId > 0) {
+                            $this->notificationService->notifyUsers([$customerId], [
+                                'category' => 'orders',
+                                'type' => 'return_picked_up',
+                                'title' => 'Return picked up',
+                                'message' => 'Wait for the admin to send your refund via GCash or Maya. Order ' . $reference . '.',
+                                'link' => site_url('customer/order-details/' . $orderId),
+                                'related_type' => 'order',
+                                'related_id' => $orderId,
+                            ]);
+                        }
+                    }
+                }
+
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result ? 'Return pickup recorded successfully' : 'Unable to record return pickup',
+                ]);
+            }
+
             return $this->response->setJSON(['success' => false, 'message' => 'Invalid status transition']);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
@@ -814,7 +1037,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -837,8 +1060,11 @@ class Dashboard extends BaseController
         }
 
         $currentStatus = (string) ($shipment['status'] ?? 'to_pay');
-        if (in_array($currentStatus, ['completed', 'cancelled'], true)) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Completed/cancelled orders cannot be reassigned']);
+        if (in_array($currentStatus, ['completed', 'cancelled', 'return_refund'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Completed/cancelled/refunded orders cannot be reassigned']);
+        }
+        if (is_return_refund_status($currentStatus)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Use Return/Refund actions for this order']);
         }
         if (in_array($currentStatus, ['to_receive', 'delivered_to_rider'], true)) {
             return $this->response->setJSON(['success' => false, 'message' => 'Rider cannot be reassigned after pickup/start delivery']);
@@ -889,7 +1115,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin only.');
         }
 
@@ -938,7 +1164,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -1089,7 +1315,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -1124,7 +1350,7 @@ class Dashboard extends BaseController
                 'success' => true,
                 'proof' => [
                     'image' => $proof['delivery_proof_image'],
-                    'notes' => $proof['delivery_notes'],
+                    'notes' => delivery_notes_for_display((string) ($proof['delivery_notes'] ?? '')),
                     'submitted_at' => $proof['delivery_proof_submitted_at']
                 ]
             ]);
@@ -1160,6 +1386,33 @@ class Dashboard extends BaseController
         // Serve the file
         return $this->response
             ->setHeader('Content-Type', $mimeType)
+            ->setHeader('Content-Length', (string) $fileInfo->getSize())
+            ->setHeader('Cache-Control', 'private, max-age=3600')
+            ->setBody(file_get_contents($filePath));
+    }
+
+    /**
+     * Serve return/refund evidence (photo or video).
+     */
+    public function serveReturnEvidence(?string $filename = null)
+    {
+        if ($filename === null || $filename === '') {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'File not found']);
+        }
+
+        if (! preg_match('/^return_evidence_\d+_\d+_[a-f0-9]+\.(jpg|jpeg|png|gif|webp|mp4|webm|mov|m4v)$/i', $filename)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Invalid filename']);
+        }
+
+        $filePath = WRITEPATH . 'uploads/return_evidence/' . $filename;
+        if (! is_file($filePath)) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'File not found']);
+        }
+
+        $fileInfo = new \CodeIgniter\Files\File($filePath);
+
+        return $this->response
+            ->setHeader('Content-Type', $fileInfo->getMimeType())
             ->setHeader('Content-Length', (string) $fileInfo->getSize())
             ->setHeader('Cache-Control', 'private, max-age=3600')
             ->setBody(file_get_contents($filePath));
@@ -1208,7 +1461,7 @@ class Dashboard extends BaseController
         }
 
         $variants = $this->productModel->getProductVariants($productId);
-        $hasFlavorChoices = $this->usesFlavorSelection((string) ($product['category'] ?? '')) && $this->hasNamedVariants($variants);
+        $hasFlavorChoices = $this->usesFlavorSelection((string) ($product['category'] ?? '')) && $this->hasSelectableVariants($variants);
         $selectedVariant = null;
         $availableStock = (int) ($product['stock_qty'] ?? 0);
 
@@ -1922,10 +2175,18 @@ class Dashboard extends BaseController
             }
 
             $flavor = trim((string) ($variant['flavor'] ?? ''));
+            $puffs = (int) ($variant['puffs'] ?? 0);
             $resolved['variant_id'] = (int) $variant['id'];
             $resolved['flavor'] = $flavor;
-            $resolved['display_name'] = $flavor !== ''
-                ? $resolved['name'] . ' - ' . $flavor
+            $labelParts = [];
+            if ($flavor !== '') {
+                $labelParts[] = $flavor;
+            }
+            if ($puffs > 0) {
+                $labelParts[] = number_format($puffs) . ' puffs';
+            }
+            $resolved['display_name'] = $labelParts !== []
+                ? $resolved['name'] . ' - ' . implode(' / ', $labelParts)
                 : $resolved['name'];
             $resolved['price'] = (float) ($variant['price'] ?? $resolved['price']);
             $resolved['stock'] = (int) ($variant['stock_qty'] ?? 0);
@@ -1948,6 +2209,22 @@ class Dashboard extends BaseController
         }
 
         return false;
+    }
+
+    private function hasPuffVariants(array $variants): bool
+    {
+        foreach ($variants as $variant) {
+            if ((int) ($variant['puffs'] ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasSelectableVariants(array $variants): bool
+    {
+        return $this->hasNamedVariants($variants) || $this->hasPuffVariants($variants);
     }
 
     /**
@@ -1986,9 +2263,19 @@ class Dashboard extends BaseController
             'id' => (int) $customer['id'],
             'name' => (string) ($customer['name'] ?? ''),
             'email' => (string) ($customer['email'] ?? ''),
-            'phone' => (string) ($customer['phone_number'] ?? $customer['phone'] ?? ''),
+            'phone' => $this->normalizeContactNumber((string) ($customer['phone_number'] ?? '')),
             'address' => $address !== '' ? $address : (string) ($customer['address'] ?? ''),
         ];
+    }
+
+    private function normalizeContactNumber(string $contactNumber): string
+    {
+        $contactNumber = trim(preg_replace('/\s+/', ' ', $contactNumber) ?? '');
+        if ($contactNumber === '') {
+            return '';
+        }
+
+        return preg_match('/^[0-9+\-\s\(\)]{7,20}$/', $contactNumber) === 1 ? $contactNumber : '';
     }
 
     /**
@@ -2008,7 +2295,7 @@ class Dashboard extends BaseController
                 $shipmentData['shipping_address'] = $address;
             }
 
-            $phoneNumber = trim((string) ($customer['phone_number'] ?? $customer['phone'] ?? ''));
+            $phoneNumber = $this->normalizeContactNumber((string) ($customer['phone_number'] ?? ''));
             if ($phoneNumber !== '') {
                 $shipmentData['contact_number'] = $phoneNumber;
             }
@@ -2098,20 +2385,44 @@ class Dashboard extends BaseController
         return $earthRadius * $c;
     }
 
+    /**
+     * Canonical store pickup location used across delivery/return maps.
+     *
+     * @return array{lat: float, lng: float, address: string}
+     */
+    private function getCanonicalStoreLocation(): array
+    {
+        return [
+            'lat' => 6.1352000,
+            'lng' => 125.2179000,
+            'address' => 'Bula, General Santos City, South Cotabato, Philippines',
+        ];
+    }
+
+    /**
+     * Force store map coordinates/address to canonical pickup location.
+     *
+     * @param array<string, mixed> $order
+     * @return array<string, mixed>
+     */
+    private function applyCanonicalStoreLocationToOrder(array $order): array
+    {
+        $store = $this->getCanonicalStoreLocation();
+        $order['store_latitude'] = $store['lat'];
+        $order['store_longitude'] = $store['lng'];
+        $order['store_address'] = $store['address'];
+
+        return $order;
+    }
+
     private function getStoreShipmentData(): array
     {
-        $defaultLat = 6.1352000;
-        $defaultLng = 125.2179000;
-        $defaultAddress = 'Bula, General Santos City, South Cotabato, Philippines';
-
-        $lat = $this->parseCoordinate(getenv('STORE_LATITUDE') ?: null) ?? $defaultLat;
-        $lng = $this->parseCoordinate(getenv('STORE_LONGITUDE') ?: null) ?? $defaultLng;
-        $address = trim((string) (getenv('STORE_ADDRESS') ?: ''));
+        $store = $this->getCanonicalStoreLocation();
 
         return [
-            'store_latitude' => $lat,
-            'store_longitude' => $lng,
-            'store_address' => $address !== '' ? $address : $defaultAddress,
+            'store_latitude' => $store['lat'],
+            'store_longitude' => $store['lng'],
+            'store_address' => $store['address'],
         ];
     }
 
@@ -2160,6 +2471,7 @@ class Dashboard extends BaseController
         if (! $order) {
             return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
         }
+        $order = $this->applyCanonicalStoreLocationToOrder($order);
 
         $role = (string) $this->session->get('user_role');
         $userId = (int) $this->session->get('user_id');
@@ -2296,7 +2608,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
@@ -2324,7 +2636,9 @@ class Dashboard extends BaseController
                 'tracking_number' => $order['tracking_number'],
                 'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?? 'Not provided'),
                 'shipment_notes' => $order['shipment_notes'] ?? '',
-                'contact_number' => $order['contact_number'] ?: ($customerInfo['phone'] ?? 'Not provided'),
+                'contact_number' => $this->normalizeContactNumber((string) ($order['contact_number'] ?? '')) !== ''
+                    ? $this->normalizeContactNumber((string) ($order['contact_number'] ?? ''))
+                    : (($customerInfo['phone'] ?? '') !== '' ? (string) $customerInfo['phone'] : 'Not provided'),
                 'items' => $order['items'] ?? [],
                 'customer' => $customerInfo,
                 'assigned_rider_id' => $assignedRiderId,
@@ -2347,9 +2661,103 @@ class Dashboard extends BaseController
             'page_title' => 'Orders Management',
             'orders' => $orderDetails,
             'riders' => $riders,
+            'return_status_counts' => $this->orderModel->getReturnRefundStatusCounts(),
         ];
 
         return view('admin/orders/index', $data);
+    }
+
+    /**
+     * Admin return/refund management page.
+     */
+    public function adminReturnRefunds()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $sessionCheck = $this->checkSessionTimeout();
+        if ($sessionCheck !== true) {
+            return $sessionCheck;
+        }
+
+        if (!$this->hasAdminPanelAccess()) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
+        }
+
+        helper('return_refund');
+
+        $statusFilter = (string) ($this->request->getGet('status') ?? 'all');
+        $highlightOrderId = (int) ($this->request->getGet('order') ?? 0);
+
+        $orders = $this->orderModel->getReturnRefundOrders(
+            $statusFilter === 'all' ? null : $statusFilter
+        );
+
+        $returnOrders = [];
+        foreach ($orders as $order) {
+            $customerInfo = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+            $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
+            $assignedRider = $assignedRiderId > 0 ? $this->userModel->find($assignedRiderId) : null;
+            $deliveryStatus = (string) ($order['delivery_status'] ?? '');
+            $orderId = (int) ($order['id'] ?? 0);
+            $returnMeta = parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            );
+
+            if ($deliveryStatus === 'return_picked_up' && is_array($returnMeta)) {
+                $previousPendingRef = trim((string) ($returnMeta['pending_refund_reference'] ?? ''));
+                $returnMeta = ensure_pending_refund_reference($returnMeta, $orderId);
+                if ($previousPendingRef === '' && $orderId > 0) {
+                    $returnFields = merge_return_meta_shipment_fields(
+                        (string) ($order['shipment_notes'] ?? ''),
+                        (string) ($order['delivery_notes'] ?? ''),
+                        $returnMeta
+                    );
+                    $this->orderModel->updateOrder($orderId, [], [], $returnFields);
+                }
+            }
+
+            $returnOrders[] = [
+                'id' => $order['id'],
+                'reference_number' => $order['reference_number'],
+                'date' => $order['date'],
+                'total_amount' => $order['total_amount'],
+                'payment_method' => $order['payment_method'] ?? '',
+                'payment_status' => $order['payment_status'] ?? '',
+                'delivery_status' => $deliveryStatus,
+                'shipping_address' => $order['shipping_address'] ?: ($customerInfo['address'] ?? 'Not provided'),
+                'contact_number' => $this->normalizeContactNumber((string) ($order['contact_number'] ?? '')) !== ''
+                    ? $this->normalizeContactNumber((string) ($order['contact_number'] ?? ''))
+                    : (($customerInfo['phone'] ?? '') !== '' ? (string) $customerInfo['phone'] : 'Not provided'),
+                'items' => $order['items'] ?? [],
+                'customer' => $customerInfo,
+                'assigned_rider_id' => $assignedRiderId,
+                'assigned_rider_name' => $assignedRider['name'] ?? null,
+                'return_meta' => $returnMeta,
+            ];
+        }
+
+        $riders = array_values(array_filter(
+            $this->userModel->findAll(),
+            static fn (array $user): bool => (string) ($user['role'] ?? '') === 'rider'
+        ));
+
+        return view('admin/returns/index', [
+            'user_name' => $this->session->get('user_name'),
+            'user_email' => $this->session->get('user_email'),
+            'user_role' => $this->session->get('user_role'),
+            'page_title' => 'Return / Refund',
+            'pageHeaderTitle' => 'Return / Refund',
+            'pageHeaderSubtitle' => 'Review customer return requests, assign riders for pickup, and complete refunds.',
+            'return_orders' => $returnOrders,
+            'status_counts' => $this->orderModel->getReturnRefundStatusCounts(),
+            'current_status' => $statusFilter,
+            'highlight_order_id' => $highlightOrderId,
+            'riders' => $riders,
+        ]);
     }
 
     /**
@@ -2367,7 +2775,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
@@ -2413,7 +2821,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
@@ -2568,7 +2976,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setStatusCode(403)->setJSON([
                 'success' => false,
                 'message' => 'Access denied. Admin privileges required.'
@@ -2748,7 +3156,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setStatusCode(403)->setJSON([
                 'success' => false,
                 'message' => 'Access denied. Admin privileges required.'
@@ -2769,7 +3177,7 @@ class Dashboard extends BaseController
         if (! empty($order['created_by'])) {
             $customer = $this->userModel->find($order['created_by']);
             if ($customer !== null) {
-                $customerPhone = $customer['phone_number'] ?? $customer['phone'] ?? '';
+                $customerPhone = $this->normalizeContactNumber((string) ($customer['phone_number'] ?? ''));
                 $customerAddress = $this->buildCustomerAddressString($customer);
             }
         }
@@ -2793,7 +3201,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setStatusCode(403)->setJSON([
                 'success' => false,
                 'message' => 'Access denied. Admin privileges required.'
@@ -2914,7 +3322,7 @@ class Dashboard extends BaseController
             return $sessionCheck;
         }
 
-        if ($this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied. Admin privileges required.');
         }
 
@@ -2924,9 +3332,18 @@ class Dashboard extends BaseController
             return redirect()->to('/orders')->with('error', 'Order not found.');
         }
 
+        $this->repairReturnMetaStorage($order);
+        $order = $this->orderModel->getOrder((int) $orderId) ?? $order;
+        $order = $this->applyCanonicalStoreLocationToOrder($order);
+
         $normalizedPayment = $this->normalizeOrderPayment($order);
         $order['payment_method'] = $normalizedPayment['method'];
         $order['payment_status'] = $normalizedPayment['status'];
+
+        $riders = array_values(array_filter(
+            $this->userModel->findAll(),
+            static fn (array $user): bool => (string) ($user['role'] ?? '') === 'rider'
+        ));
 
         $data = [
             'user_name' => $this->session->get('user_name'),
@@ -2936,6 +3353,11 @@ class Dashboard extends BaseController
             'page_title' => 'Order Details - Admin',
             'order' => $order,
             'items' => $order['items'] ?? [],
+            'riders' => $riders,
+            'return_meta' => parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            ),
         ];
 
         return view('admin/orders/order_details', $data);
@@ -2952,6 +3374,7 @@ class Dashboard extends BaseController
         if (! $order) {
             return redirect()->to('/rider/deliveries')->with('error', 'Order not found.');
         }
+        $order = $this->applyCanonicalStoreLocationToOrder($order);
 
         $riderId = (int) $this->session->get('user_id');
         $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
@@ -2960,9 +3383,17 @@ class Dashboard extends BaseController
         }
         $order['customer'] = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
 
-        return view('rider/order_details', $this->getRiderPageData('Order Details', 'deliveries', [
+        $deliveryStatus = (string) ($order['delivery_status'] ?? '');
+        $isReturnPickup = function_exists('is_return_refund_status') && is_return_refund_status($deliveryStatus);
+
+        return view('rider/order_details', $this->getRiderPageData('Order Details', $isReturnPickup ? 'returns' : 'deliveries', [
             'order' => $order,
             'items' => $order['items'] ?? [],
+            'return_meta' => parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            ),
+            'is_return_pickup' => $isReturnPickup,
         ]));
     }
 
@@ -2982,6 +3413,7 @@ class Dashboard extends BaseController
         if (! $order) {
             return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
         }
+        $order = $this->applyCanonicalStoreLocationToOrder($order);
 
         $role = (string) $this->session->get('user_role');
         $userId = (int) $this->session->get('user_id');
@@ -3009,7 +3441,9 @@ class Dashboard extends BaseController
                 'date' => (string) ($order['date'] ?? ''),
                 'total_amount' => (float) ($order['total_amount'] ?? 0),
                 'shipping_address' => (string) ($order['shipping_address'] ?? ($customerInfo['address'] ?? 'Not provided')),
-                'contact_number' => (string) ($order['contact_number'] ?? ($customerInfo['phone'] ?? 'Not provided')),
+                'contact_number' => $this->normalizeContactNumber((string) ($order['contact_number'] ?? '')) !== ''
+                    ? $this->normalizeContactNumber((string) ($order['contact_number'] ?? ''))
+                    : (($customerInfo['phone'] ?? '') !== '' ? (string) $customerInfo['phone'] : 'Not provided'),
                 'shipment_notes' => (string) ($order['shipment_notes'] ?? ''),
                 'delivery_latitude' => isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null,
                 'delivery_longitude' => isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null,
@@ -3030,6 +3464,81 @@ class Dashboard extends BaseController
                 }, (array) ($order['items'] ?? []))),
             ],
         ]);
+    }
+
+    /**
+     * Download return pickup QR as PNG (customer and admin only).
+     */
+    public function downloadReturnQrPng($orderId)
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        $id = (int) $orderId;
+        if ($id <= 0) {
+            return $this->response->setStatusCode(404)->setBody('Order not found');
+        }
+
+        $order = $this->orderModel->getOrder($id);
+        if (! $order) {
+            return $this->response->setStatusCode(404)->setBody('Order not found');
+        }
+
+        $role = (string) $this->session->get('user_role');
+        $userId = (int) $this->session->get('user_id');
+
+        if ($role === 'rider') {
+            return $this->response->setStatusCode(403)->setBody('QR download is available to the customer only');
+        }
+
+        if ($role === 'customer') {
+            if ((int) ($order['created_by'] ?? 0) !== $userId) {
+                return $this->response->setStatusCode(403)->setBody('Access denied');
+            }
+        } elseif ($role !== 'admin') {
+            return $this->response->setStatusCode(403)->setBody('Access denied');
+        }
+
+        $returnMeta = parse_return_meta(
+            (string) ($order['shipment_notes'] ?? ''),
+            (string) ($order['delivery_notes'] ?? '')
+        );
+        if ($returnMeta === null) {
+            return $this->response->setStatusCode(404)->setBody('No return request for this order');
+        }
+
+        $orderReference = (string) ($order['reference_number'] ?? ('#' . $id));
+        $qrPayload = return_refund_resolve_qr_payload($returnMeta, $id, $orderReference);
+        if ($qrPayload === '') {
+            return $this->response->setStatusCode(404)->setBody('QR code not available');
+        }
+
+        $imageUrl = return_qr_image_url($qrPayload, 512);
+        $png = @file_get_contents($imageUrl);
+        if ($png === false || $png === '') {
+            try {
+                $client = \Config\Services::curlrequest(['timeout' => 15]);
+                $remote = $client->get($imageUrl);
+                $png = (string) $remote->getBody();
+            } catch (\Throwable $e) {
+                log_message('error', 'Return QR download failed: ' . $e->getMessage());
+                return $this->response->setStatusCode(502)->setBody('Unable to generate QR image');
+            }
+        }
+
+        if ($png === '') {
+            return $this->response->setStatusCode(502)->setBody('Unable to generate QR image');
+        }
+
+        $filename = return_qr_download_filename($id, $orderReference);
+
+        return $this->response
+            ->setHeader('Content-Type', 'image/png')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Content-Length', (string) strlen($png))
+            ->setBody($png);
     }
 
     /**
@@ -3638,7 +4147,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -3671,7 +4180,7 @@ class Dashboard extends BaseController
             return $authCheck;
         }
 
-        if ((string) $this->session->get('user_role') !== 'admin') {
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -3725,6 +4234,7 @@ class Dashboard extends BaseController
 
     private function viewOrderDetailsPrivate($order)
     {
+        $order = $this->applyCanonicalStoreLocationToOrder((array) $order);
         $orderItems = $order['items'] ?? [];
 
         $trackingInfo = [];
@@ -3742,11 +4252,478 @@ class Dashboard extends BaseController
             ];
         }
 
+        $returnEligibility = customer_can_request_return($order);
+
         return view('customer/order_details', $this->getCustomerPageData('Order Details', 'orders', [
             'order' => $order,
             'items' => $orderItems,
             'tracking_info' => $trackingInfo,
+            'return_meta' => parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            ),
+            'can_request_return' => $returnEligibility['allowed'],
+            'return_request_message' => $returnEligibility['message'],
         ]));
+    }
+
+    /**
+     * Customer submits a return/refund request for a completed order.
+     */
+    public function submitCustomerReturnRefundRequest()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $orderId = (int) $this->request->getPost('order_id');
+        $requestType = (string) $this->request->getPost('request_type');
+        $reason = trim((string) $this->request->getPost('reason'));
+
+        if ($orderId <= 0) {
+            return redirect()->to('/customer/orders')->with('error', 'Invalid return/refund request.');
+        }
+
+        $requestType = 'return_and_refund';
+
+        $redirectBack = $this->request->getPost('redirect_to') === 'order-details'
+            ? '/customer/order-details/' . $orderId
+            : '/customer/orders?tab=return_refund';
+
+        if ($reason === '' || strlen($reason) < 10) {
+            return redirect()->to($redirectBack)->with('error', 'Please provide a reason (at least 10 characters).');
+        }
+
+        $payoutMethod = (string) $this->request->getPost('payout_method');
+        $payoutAccount = trim((string) $this->request->getPost('payout_account'));
+        $payoutAccountName = trim((string) $this->request->getPost('payout_account_name'));
+
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order || (int) ($order['created_by'] ?? 0) !== (int) $this->session->get('user_id')) {
+            return redirect()->to('/customer/orders')->with('error', 'Order not found.');
+        }
+
+        $eligibility = customer_can_request_return($order);
+        if (! $eligibility['allowed']) {
+            return redirect()->to($redirectBack)->with('error', $eligibility['message']);
+        }
+
+        if (return_refund_requires_payout($requestType)) {
+            $payoutCheck = validate_return_payout_details($payoutMethod, $payoutAccount, $payoutAccountName);
+            if (! $payoutCheck['valid']) {
+                return redirect()->to($redirectBack)->with('error', $payoutCheck['message']);
+            }
+        }
+
+        try {
+            $evidenceFiles = $this->processReturnEvidenceUploads($orderId);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->to($redirectBack)->with('error', $e->getMessage());
+        }
+
+        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+        $returnToken = generate_return_qr_token($orderId);
+
+        $meta = [
+            'type' => $requestType,
+            'reason' => $reason,
+            'requested_at' => date('Y-m-d H:i:s'),
+            'customer_id' => (int) $this->session->get('user_id'),
+            'status' => 'return_requested',
+            'return_token' => $returnToken,
+            'qr_payload' => build_return_qr_payload($orderId, $returnToken, $reference),
+            'evidence_files' => $evidenceFiles,
+        ];
+
+        if (return_refund_requires_payout($requestType)) {
+            $meta['payout_method'] = $payoutMethod;
+            $meta['payout_account'] = normalize_payout_account($payoutMethod, $payoutAccount);
+            $meta['payout_account_name'] = $payoutAccountName;
+            $meta['payout_collected_by'] = 'customer';
+        }
+
+        $returnFields = merge_return_meta_shipment_fields(
+            (string) ($order['shipment_notes'] ?? ''),
+            (string) ($order['delivery_notes'] ?? ''),
+            $meta
+        );
+        $updated = $this->orderModel->updateDeliveryStatus($orderId, 'return_requested', $returnFields);
+
+        if (! $updated) {
+            return redirect()->to($redirectBack)->with('error', 'Unable to submit return/refund request.');
+        }
+
+        try {
+            $this->notificationService->notifyAdmins([
+                'category' => 'orders',
+                'type' => 'return_requested',
+                'title' => 'Return/Refund requested',
+                'message' => 'Customer requested ' . return_refund_type_label($requestType) . ' for order ' . $reference . '.',
+                'link' => site_url('admin/returns?status=return_requested&order=' . $orderId),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Return/refund admin notification failed for order {id}: {message}', [
+                'id' => $orderId,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()->to($redirectBack)->with('success', 'Return/refund request submitted. Show your return QR code to the rider during pickup.');
+    }
+
+    /**
+     * Admin approves, rejects, or completes return/refund processing.
+     */
+    public function adminReturnRefundAction()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if (!$this->hasAdminPanelAccess()) {
+            return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $payload = $this->request->getJSON(true) ?? $this->request->getPost();
+        $orderId = (int) ($payload['order_id'] ?? 0);
+        $action = (string) ($payload['action'] ?? '');
+
+        if ($orderId <= 0 || $action === '') {
+            return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Invalid request']);
+        }
+
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false, 'message' => 'Order not found']);
+        }
+
+        $currentStatus = (string) ($order['delivery_status'] ?? '');
+        $returnMeta = parse_return_meta(
+            (string) ($order['shipment_notes'] ?? ''),
+            (string) ($order['delivery_notes'] ?? '')
+        ) ?? [];
+        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+
+        if ($action === 'approve') {
+            if ($currentStatus !== 'return_requested') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Only pending return requests can be approved']);
+            }
+
+            $riderId = (int) ($payload['rider_id'] ?? 0);
+            if ($riderId <= 0) {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Select a rider for return pickup']);
+            }
+
+            $rider = $this->userModel->find($riderId);
+            if (! $rider || (string) ($rider['role'] ?? '') !== 'rider') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Invalid rider selected']);
+            }
+
+            $returnMeta['status'] = 'return_approved';
+            $returnMeta['approved_at'] = date('Y-m-d H:i:s');
+            $returnMeta['approved_by'] = (int) $this->session->get('user_id');
+            $returnMeta['assigned_rider_id'] = $riderId;
+            $adminNote = trim((string) ($payload['admin_note'] ?? ''));
+            if ($adminNote !== '') {
+                $returnMeta['admin_note'] = $adminNote;
+            }
+
+            $returnFields = merge_return_meta_shipment_fields(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? ''),
+                $returnMeta
+            );
+            $updated = $this->orderModel->updateDeliveryStatus($orderId, 'return_approved', array_merge([
+                'assigned_rider_id' => $riderId,
+                'assigned_at' => date('Y-m-d H:i:s'),
+            ], $returnFields));
+
+            if ($updated) {
+                $this->notificationService->notifyUsers([$riderId], [
+                    'category' => 'delivery',
+                    'type' => 'return_pickup_assigned',
+                    'title' => 'Return pickup assigned',
+                    'message' => 'Pick up returned items for order ' . $reference . '.',
+                    'link' => site_url('rider/returns?order_id=' . $orderId),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+                $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                    'category' => 'orders',
+                    'type' => 'return_approved',
+                    'title' => 'Return/refund approved',
+                    'message' => 'Your return/refund request for order ' . $reference . ' was approved. Rider will pick up the item.',
+                    'link' => site_url('customer/orders?tab=return_refund'),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'success' => (bool) $updated,
+                'message' => $updated ? 'Return/refund request approved and rider assigned' : 'Unable to approve request',
+            ]);
+        }
+
+        if ($action === 'reject') {
+            if ($currentStatus !== 'return_requested') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Only pending return requests can be rejected']);
+            }
+
+            $rejectReason = trim((string) ($payload['reject_reason'] ?? ''));
+            if ($rejectReason === '') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Rejection reason is required']);
+            }
+
+            $returnMeta['status'] = 'rejected';
+            $returnMeta['rejected_at'] = date('Y-m-d H:i:s');
+            $returnMeta['rejected_by'] = (int) $this->session->get('user_id');
+            $returnMeta['reject_reason'] = $rejectReason;
+
+            $returnFields = merge_return_meta_shipment_fields(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? ''),
+                $returnMeta
+            );
+            $updated = $this->orderModel->updateDeliveryStatus($orderId, 'completed', $returnFields);
+
+            if ($updated) {
+                $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                    'category' => 'orders',
+                    'type' => 'return_rejected',
+                    'title' => 'Return/refund rejected',
+                    'message' => 'Your return/refund request for order ' . $reference . ' was rejected: ' . $rejectReason,
+                    'link' => site_url('customer/order-details/' . $orderId),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'success' => (bool) $updated,
+                'message' => $updated ? 'Return/refund request rejected' : 'Unable to reject request',
+            ]);
+        }
+
+        if ($action === 'complete_refund') {
+            if ($currentStatus !== 'return_picked_up') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Refund can be completed only after rider pickup']);
+            }
+
+            if (return_refund_requires_payout((string) ($returnMeta['type'] ?? 'return_and_refund'))) {
+                if (trim((string) ($returnMeta['payout_account'] ?? '')) === '') {
+                    return $this->response->setStatusCode(422)->setJSON([
+                        'success' => false,
+                        'message' => 'Customer GCash/e-wallet details are missing. Ask the rider to collect them during pickup.',
+                    ]);
+                }
+            }
+
+            $refundPayoutReference = trim((string) ($payload['refund_payout_reference'] ?? ''));
+            if ($refundPayoutReference === '') {
+                $refundPayoutReference = trim((string) ($returnMeta['pending_refund_reference'] ?? ''));
+            }
+            if ($refundPayoutReference !== '') {
+                $normalizedRef = format_refund_payout_reference_display($refundPayoutReference);
+                if ($normalizedRef !== '') {
+                    $refundPayoutReference = $normalizedRef;
+                }
+            }
+            if (return_refund_requires_payout((string) ($returnMeta['type'] ?? 'return_and_refund')) && $refundPayoutReference === '') {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'Enter or paste the GCash/Maya reference, or use Send via GCash to auto-fill.',
+                ]);
+            }
+
+            $db = \Config\Database::connect();
+            $db->transStart();
+
+            try {
+                if (! $this->productModel->restoreStockForItems(
+                    (array) ($order['items'] ?? []),
+                    'return_refund',
+                    $orderId,
+                    (int) $this->session->get('user_id')
+                )) {
+                    throw new \RuntimeException('Failed to restore stock for returned items.');
+                }
+
+                $returnMeta['status'] = 'return_refund';
+                $returnMeta['refunded_at'] = date('Y-m-d H:i:s');
+                $returnMeta['refunded_by'] = (int) $this->session->get('user_id');
+                if ($refundPayoutReference !== '') {
+                    $returnMeta['refund_payout_reference'] = $refundPayoutReference;
+                    $returnMeta['refund_sent_at'] = date('Y-m-d H:i:s');
+                }
+
+                $orderNotes = trim((string) ($order['notes'] ?? ''));
+                $refundLine = 'REFUND_PROCESSED:' . date('Y-m-d H:i:s')
+                    . '|amount=' . round((float) ($order['total_amount'] ?? 0), 2)
+                    . ($refundPayoutReference !== '' ? '|payout_ref=' . $refundPayoutReference : '');
+                $orderNotes = $orderNotes !== '' ? ($orderNotes . "\n" . $refundLine) : $refundLine;
+
+                $returnFields = merge_return_meta_shipment_fields(
+                    (string) ($order['shipment_notes'] ?? ''),
+                    (string) ($order['delivery_notes'] ?? ''),
+                    $returnMeta
+                );
+                $updated = $this->orderModel->updateOrder(
+                    $orderId,
+                    ['status' => 'return_refund', 'notes' => $orderNotes],
+                    [],
+                    array_merge([
+                        'status' => 'return_refund',
+                        'completed_at' => date('Y-m-d H:i:s'),
+                    ], $returnFields)
+                );
+
+                if (! $updated) {
+                    throw new \RuntimeException('Unable to finalize refund status.');
+                }
+
+                $db->transComplete();
+                if ($db->transStatus() === false) {
+                    throw new \RuntimeException('Refund transaction failed.');
+                }
+            } catch (\Throwable $e) {
+                $db->transRollback();
+
+                return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => $e->getMessage()]);
+            }
+
+            $this->syncOrderToRecord($orderId);
+            $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                'category' => 'orders',
+                'type' => 'return_refund_completed',
+                'title' => 'Refund completed',
+                'message' => 'Refund for order ' . $reference . ' has been processed.',
+                'link' => site_url('customer/orders?tab=return_refund'),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+
+            return $this->response->setJSON(['success' => true, 'message' => 'Refund completed and stock restored']);
+        }
+
+        return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Invalid action']);
+    }
+
+    /**
+     * @return list<array<string, string>>
+     */
+    private function processReturnEvidenceUploads(int $orderId): array
+    {
+        $uploadPath = WRITEPATH . 'uploads/return_evidence/';
+        if (! is_dir($uploadPath)) {
+            mkdir($uploadPath, 0755, true);
+        }
+
+        $candidates = [];
+        $multiple = $this->request->getFileMultiple('return_evidence');
+        if (is_array($multiple)) {
+            foreach ($multiple as $file) {
+                if ($file instanceof \CodeIgniter\HTTP\Files\UploadedFile
+                    && $file->isValid()
+                    && ! $file->hasMoved()) {
+                    $candidates[] = $file;
+                }
+            }
+        }
+
+        $single = $this->request->getFile('return_evidence');
+        if ($single instanceof \CodeIgniter\HTTP\Files\UploadedFile
+            && $single->isValid()
+            && ! $single->hasMoved()) {
+            $candidates[] = $single;
+        }
+
+        if ($candidates === []) {
+            throw new \InvalidArgumentException('Please upload at least one photo or video showing the product issue.');
+        }
+
+        $imageMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        $videoMimes = ['video/mp4', 'video/webm', 'video/quicktime'];
+        $allowedMimes = array_merge($imageMimes, $videoMimes);
+        $maxImageBytes = 5 * 1024 * 1024;
+        $maxVideoBytes = 25 * 1024 * 1024;
+        $saved = [];
+
+        foreach (array_slice($candidates, 0, 3) as $file) {
+            $mime = (string) $file->getMimeType();
+            if (! in_array($mime, $allowedMimes, true)) {
+                throw new \InvalidArgumentException('Only JPG, PNG, GIF, WEBP images and MP4, WEBM, MOV videos are allowed.');
+            }
+
+            $isVideo = in_array($mime, $videoMimes, true);
+            $maxBytes = $isVideo ? $maxVideoBytes : $maxImageBytes;
+            if ($file->getSize() > $maxBytes) {
+                throw new \InvalidArgumentException(
+                    $isVideo ? 'Each video must be 25MB or smaller.' : 'Each image must be 5MB or smaller.'
+                );
+            }
+
+            $extension = strtolower((string) $file->getExtension());
+            if ($extension === '') {
+                $extension = $isVideo ? 'mp4' : 'jpg';
+            }
+
+            $filename = 'return_evidence_' . $orderId . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
+            if (! $file->move($uploadPath, $filename)) {
+                continue;
+            }
+
+            $saved[] = [
+                'filename' => $filename,
+                'type' => $isVideo ? 'video' : 'image',
+                'original_name' => (string) $file->getClientName(),
+                'uploaded_at' => date('Y-m-d H:i:s'),
+            ];
+        }
+
+        if ($saved === []) {
+            throw new \InvalidArgumentException('Unable to save uploaded evidence. Please try again.');
+        }
+
+        return $saved;
+    }
+
+    /**
+     * Move return metadata out of address description (shipment notes) for legacy rows.
+     *
+     * @param array<string, mixed> $order
+     */
+    private function repairReturnMetaStorage(array $order): void
+    {
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return;
+        }
+
+        $shipmentNotes = (string) ($order['shipment_notes'] ?? '');
+        if (! str_contains($shipmentNotes, 'RETURN_META:')) {
+            return;
+        }
+
+        $meta = parse_return_meta($shipmentNotes, (string) ($order['delivery_notes'] ?? ''));
+        if ($meta === null) {
+            return;
+        }
+
+        $this->orderModel->updateOrder(
+            $orderId,
+            [],
+            [],
+            merge_return_meta_shipment_fields(
+                $shipmentNotes,
+                (string) ($order['delivery_notes'] ?? ''),
+                $meta
+            )
+        );
     }
 
     /**

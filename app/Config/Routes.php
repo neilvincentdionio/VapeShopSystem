@@ -80,6 +80,7 @@ $routes->get('/messages/(:num)/poll', 'Messages::poll/$1', ['filter' => 'auth'])
 // Rider dashboard routes (Rider only)
 $routes->get('/rider/dashboard', 'Dashboard::riderDashboard', ['filter' => 'auth:rider']);
 $routes->get('/rider/deliveries', 'Dashboard::riderDeliveries', ['filter' => 'auth:rider']);
+$routes->get('/rider/returns', 'Dashboard::riderReturnPickups', ['filter' => 'auth:rider']);
 $routes->get('/rider/messages', 'Messages::riderInbox', ['filter' => 'auth:rider']);
 $routes->get('/rider/messages/(:num)', 'Messages::riderConversation/$1', ['filter' => 'auth:rider']);
 $routes->post('/rider/messages/(:num)/reply', 'Messages::riderReply/$1', ['filter' => 'auth:rider']);
@@ -94,6 +95,7 @@ $routes->get('/dashboard/orderTracking/(:num)', 'Dashboard::orderTracking/$1', [
 $routes->post('/dashboard/assignRiderToOrder', 'Dashboard::assignRiderToOrder', ['filter' => 'auth:admin']);
 $routes->post('/dashboard/getDeliveryProof', 'Dashboard::getDeliveryProof', ['filter' => 'auth:admin']);
 $routes->get('/uploads/delivery_proofs/(:any)', 'Dashboard::serveDeliveryProof/$1');
+$routes->get('/uploads/return_evidence/(:any)', 'Dashboard::serveReturnEvidence/$1', ['filter' => 'auth']);
 
 // User Management routes (protected by AuthFilter)
 $routes->get('/user-management', 'UserManagement::index', ['filter' => ['auth:admin', 'permission:manage_users']]);
@@ -126,7 +128,7 @@ $routes->post('/admin/permissions/update/(:num)', 'AdminPermissions::update/$1',
 $routes->post('/admin/permissions/delete/(:num)', 'AdminPermissions::destroy/$1', ['filter' => ['auth:admin', 'permission:manage_users']]);
 
 // Records module routes (Task 3)
-$routes->group('records', ['filter' => 'auth'], static function ($routes) {
+$routes->group('records', ['filter' => ['auth:admin', 'permission:manage_records']], static function ($routes) {
     $routes->get('/', 'Records::index');
     $routes->get('create', 'Records::create');
     $routes->get('(:num)', 'Records::show/$1');
@@ -171,6 +173,7 @@ $routes->post('/customer/age-verification', 'Dashboard::customerAgeVerificationS
 
 // Customer order actions (Shopee-like delivery process)
 $routes->get('/customer/orders/(:num)/(:alpha)', 'Dashboard::customerOrderAction/$1/$2', ['filter' => 'auth']);
+$routes->post('/customer/orders/return-refund', 'Dashboard::submitCustomerReturnRefundRequest', ['filter' => 'auth']);
 
 // Customer order details page
 $routes->get('/customer/order-details/(:num)', 'Dashboard::viewOrderDetails/$1', ['filter' => 'auth']);
@@ -178,6 +181,9 @@ $routes->get('/customer/order-details/(:num)', 'Dashboard::viewOrderDetails/$1',
 
 // Admin delivery status update (AJAX)
 $routes->post('/orders/update-delivery-status', 'Dashboard::updateDeliveryStatus', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/orders/return-refund-action', 'Dashboard::adminReturnRefundAction', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->get('/orders/return-qr-download/(:num)', 'Dashboard::downloadReturnQrPng/$1', ['filter' => 'auth']);
+$routes->get('/admin/returns', 'Dashboard::adminReturnRefunds', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Admin delivery information endpoints
 $routes->get('/orders/get-delivery-info/(:num)', 'Dashboard::getDeliveryInfo/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
@@ -210,24 +216,24 @@ $routes->get('/test-products', function() {
 });
 
 // Session and Activity Logs routes (Admin only)
-$routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' => 'auth:admin']);
+$routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
 
-$routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => 'auth:admin']);
-$routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => 'auth:admin']);
-$routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => 'auth:admin']);
-$routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => 'auth']);
-$routes->get('/admin/messages/(:num)', 'Messages::adminConversation/$1', ['filter' => 'auth']);
-$routes->post('/admin/messages/(:num)/reply', 'Messages::adminReply/$1', ['filter' => 'auth']);
-$routes->post('/admin/messages/(:num)/status', 'Messages::updateStatus/$1', ['filter' => 'auth']);
-$routes->post('/admin/messages/(:num)/assign-rider', 'Messages::assignRider/$1', ['filter' => 'auth']);
+$routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+$routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+$routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+$routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->get('/admin/messages/(:num)', 'Messages::adminConversation/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/admin/messages/(:num)/reply', 'Messages::adminReply/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/admin/messages/(:num)/status', 'Messages::updateStatus/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
+$routes->post('/admin/messages/(:num)/assign-rider', 'Messages::assignRider/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 
 // Additional routes for index views compatibility
-$routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/session-logs/end/(:num)', 'AdminController::endSessionById/$1', ['filter' => ['auth:admin', 'csrf']]);
-$routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions', ['filter' => ['auth:admin', 'csrf']]);
+$routes->get('/admin/session-logs/details/(:num)', 'AdminController::getSessionDetailsById/$1', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+$routes->post('/admin/session-logs/end/(:num)', 'AdminController::endSessionById/$1', ['filter' => ['auth:admin', 'permission:activity_logs.manage', 'csrf']]);
+$routes->post('/admin/session-logs/cleanup', 'AdminController::cleanupSessions', ['filter' => ['auth:admin', 'permission:activity_logs.manage', 'csrf']]);
 
-$routes->get('/admin/activity-logs/details/(:num)', 'AdminController::getLogDetailsById/$1', ['filter' => 'auth:admin']);
-$routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => ['auth:admin', 'csrf']]);
+$routes->get('/admin/activity-logs/details/(:num)', 'AdminController::getLogDetailsById/$1', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+$routes->post('/admin/activity-logs/cleanup', 'AdminController::cleanupLogs', ['filter' => ['auth:admin', 'permission:activity_logs.manage', 'csrf']]);
 
 // Legacy API authentication routes (kept for backward compatibility)
 $routes->post('/api/internal/auth/login', 'ApiAuth::login');

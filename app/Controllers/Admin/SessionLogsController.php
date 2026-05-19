@@ -10,6 +10,7 @@ use App\Libraries\ActivityLogger;
 
 class SessionLogsController extends BaseController
 {
+    protected $db;
     protected $userSessionModel;
     protected $activityLogModel;
     protected $userModel;
@@ -17,6 +18,7 @@ class SessionLogsController extends BaseController
 
     public function __construct()
     {
+        $this->db = \Config\Database::connect();
         $this->userSessionModel = new UserSessionModel();
         $this->activityLogModel = new ActivityLogModel();
         $this->userModel = new UserModel();
@@ -28,8 +30,8 @@ class SessionLogsController extends BaseController
      */
     public function index()
     {
-        // Check if user is admin
-        if ((string) session()->get('user_role') !== 'admin') {
+        // Check if user is a back-office user
+        if (!$this->hasAdminPanelAccess()) {
             return redirect()->to('/dashboard')->with('error', 'Access denied');
         }
 
@@ -69,8 +71,8 @@ class SessionLogsController extends BaseController
      */
     public function getDetails($sessionId)
     {
-        // Check if user is admin
-        if ((string) session()->get('user_role') !== 'admin') {
+        // Check if user is a back-office user
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -95,8 +97,8 @@ class SessionLogsController extends BaseController
      */
     public function endSession($sessionId)
     {
-        // Check if user is admin
-        if ((string) session()->get('user_role') !== 'admin') {
+        // Check if user is a back-office user
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
@@ -140,13 +142,19 @@ class SessionLogsController extends BaseController
      */
     public function cleanup()
     {
-        // Check if user is admin
-        if ((string) session()->get('user_role') !== 'admin') {
+        // Check if user is a back-office user
+        if (!$this->hasAdminPanelAccess()) {
             return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
         }
 
         $count = $this->userSessionModel->cleanupOldSessions(30);
         
         return $this->response->setJSON(['success' => true, 'count' => $count]);
+    }
+
+    private function hasAdminPanelAccess(): bool
+    {
+        $role = strtolower(trim((string) session()->get('user_role')));
+        return $role !== '' && !in_array($role, ['customer', 'rider'], true);
     }
 }

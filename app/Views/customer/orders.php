@@ -17,10 +17,17 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'to_review' => 'To Review',
             'cancelled' => 'Cancelled',
             'return_refund' => 'Return/Refund',
+            'return_requested' => 'Return Requested',
+            'return_approved' => 'Return Approved',
+            'return_picked_up' => 'Return Picked Up',
             'failed_delivery' => 'Failed Delivery',
         ];
         
-        return $labels[$status] ?? ucfirst($status);
+        if (function_exists('is_return_refund_status') && is_return_refund_status((string) $status)) {
+            return return_refund_status_label((string) $status);
+        }
+
+        return $labels[$status] ?? ucfirst(str_replace('_', ' ', (string) $status));
     }
 }
 
@@ -251,11 +258,75 @@ if (!function_exists('extractGcashReference')) {
         border: 1px solid rgba(220, 53, 69, 0.3);
     }
     
-    .status-return_refund {
-        background: var(--surface-soft);
-        color: var(--text-muted);
+    .status-return_refund,
+    .status-return-requested,
+    .status-return-approved,
+    .status-return-picked-up {
+        background: rgba(245, 158, 11, 0.12);
+        color: #92400e;
+        border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+    .return-info-box {
+        margin: 0 0 1rem;
+        padding: .75rem .9rem;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        background: #fffbeb;
+        font-size: .88rem;
+        color: #78350f;
+    }
+    .return-modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 1200;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        pointer-events: none;
+    }
+    .return-modal-backdrop.is-open {
+        display: flex;
+        pointer-events: auto;
+    }
+    .return-modal {
+        width: min(520px, 100%);
+        background: #fff;
+        border-radius: 14px;
+        padding: 1.1rem;
         border: 1px solid var(--border);
     }
+    .return-modal h3 { margin-bottom: .35rem; font-size: 1.05rem; }
+    .return-modal p { color: var(--text-muted); font-size: .88rem; margin-bottom: .8rem; }
+    .return-modal label { display: block; font-size: .82rem; font-weight: 600; margin: .55rem 0 .25rem; }
+    .return-modal select,
+    .return-modal textarea,
+    .return-modal input[type="text"],
+    .return-modal input[type="file"] {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: .55rem .65rem;
+        font: inherit;
+    }
+    .return-payout-fields { margin-top: .35rem; }
+    .return-qr-box {
+        margin-top: .75rem;
+        padding: .85rem;
+        border: 1px dashed #86efac;
+        border-radius: 12px;
+        background: #f0fdf4;
+        text-align: center;
+    }
+    .return-qr-box img {
+        width: 180px;
+        height: 180px;
+        border-radius: 10px;
+        border: 1px solid #d1fae5;
+        background: #fff;
+    }
+    .return-modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .9rem; }
     
     .order-items {
         margin-bottom: 1.2rem;
@@ -435,6 +506,14 @@ if (!function_exists('extractGcashReference')) {
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
+        position: relative;
+        z-index: 2;
+    }
+
+    .action-buttons .btn,
+    .action-buttons button {
+        position: relative;
+        z-index: 2;
     }
     
     .btn {
@@ -773,6 +852,9 @@ window.addEventListener('beforeunload', function() {
             </a>
             <a href="<?= site_url('customer/orders?tab=return_refund') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'return_refund' ? 'active' : '' ?>">
                 Return/Refund
+                <?php if (isset($statusCounts['return_refund']) && $statusCounts['return_refund'] > 0): ?>
+                    <span class="tab-badge"><?= $statusCounts['return_refund'] ?></span>
+                <?php endif; ?>
             </a>
             <a href="<?= site_url('customer/orders?tab=failed_delivery') ?>" class="shopee-tab <?= ($activeTab ?? 'all') === 'failed_delivery' ? 'active' : '' ?>">
                 Failed Delivery
@@ -786,6 +868,7 @@ window.addEventListener('beforeunload', function() {
     <?php if (isset($orders) && !empty($orders)): ?>
         <div class="orders-grid">
             <?php foreach ($orders as $order): ?>
+                <?php $isReturnOrder = function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? '')); ?>
                 <div class="order-card">
                     <div class="order-card-header">
                         <div class="order-reference">
@@ -864,19 +947,30 @@ window.addEventListener('beforeunload', function() {
                         <span>&#8369;<?= number_format((float) $order['total_amount'], 2) ?></span>
                     </div>
 
-                    <div class="tracking-info">
-                        <div>
-                            <strong>Payment:</strong>
-                            <?= esc(strtoupper((string) ($order['payment_method'] ?? 'cash'))) ?> |
-                            <?= esc(ucfirst((string) ($order['payment_status'] ?? 'unpaid'))) ?>
+                    <?php if (! $isReturnOrder): ?>
+                        <div class="tracking-info">
+                            <div>
+                                <strong>Payment:</strong>
+                                <?= esc(strtoupper((string) ($order['payment_method'] ?? 'cash'))) ?> |
+                                <?= esc(ucfirst((string) ($order['payment_status'] ?? 'unpaid'))) ?>
+                            </div>
+                            <?php $gcashRef = (($order['payment_method'] ?? '') === 'gcash') ? extractGcashReference($order['notes'] ?? '') : null; ?>
+                            <?php if ($gcashRef): ?>
+                                <div><strong>GCash Ref:</strong> <?= esc($gcashRef) ?></div>
+                            <?php endif; ?>
                         </div>
-                        <?php $gcashRef = (($order['payment_method'] ?? '') === 'gcash') ? extractGcashReference($order['notes'] ?? '') : null; ?>
-                        <?php if ($gcashRef): ?>
-                            <div><strong>GCash Ref:</strong> <?= esc($gcashRef) ?></div>
-                        <?php endif; ?>
-                    </div>
+                    <?php endif; ?>
                     
-                    <?php if (!empty($order['tracking_number']) || !empty($order['shipping_address'])): ?>
+                    <?php if (!empty($order['return_meta'])): ?>
+                        <?= view('partials/return_refund_view', [
+                            'returnMeta' => $order['return_meta'],
+                            'order' => $order,
+                            'compact' => true,
+                            'showEvidence' => false,
+                        ]) ?>
+                    <?php endif; ?>
+
+                    <?php if (! $isReturnOrder && (!empty($order['tracking_number']) || !empty($order['shipping_address']))): ?>
                         <div class="tracking-info">
                             <?php if (!empty($order['tracking_number'])): ?>
                                 <div><strong>Tracking Number:</strong> <?= esc($order['tracking_number']) ?></div>
@@ -902,17 +996,17 @@ window.addEventListener('beforeunload', function() {
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                         <?php endif; ?>
                         
-                        <?php if (in_array($order['delivery_status'], ['to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'], true)): ?>
+                        <?php if (! $isReturnOrder && in_array($order['delivery_status'], ['to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'], true)): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn">Track Order</a>
                             <?php if ($order['delivery_status'] === 'to_ship'): ?>
                                 <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
                             <?php endif; ?>
                         <?php endif; ?>
                         
-                        <?php if ($order['delivery_status'] === 'to_receive'): ?>
+                        <?php if (! $isReturnOrder && $order['delivery_status'] === 'to_receive'): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
-                        <?php if ($order['delivery_status'] === 'delivered'): ?>
+                        <?php if (! $isReturnOrder && $order['delivery_status'] === 'delivered'): ?>
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/confirm') ?>" class="btn">Confirm Delivery</a>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
@@ -921,6 +1015,15 @@ window.addEventListener('beforeunload', function() {
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/reorder') ?>" class="btn">Buy Again</a>
                         <?php endif; ?>
                         <?php if ($order['delivery_status'] === 'completed'): ?>
+                            <?php if (!empty($order['can_request_return'])): ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary js-open-return-modal"
+                                    data-order-id="<?= (int) $order['id'] ?>"
+                                    data-order-ref="<?= esc((string) ($order['reference_number'] ?? ''), 'attr') ?>">
+                                    Request Return/Refund
+                                </button>
+                            <?php endif; ?>
                             <?php if ((int) ($order['reviewable_count'] ?? 0) > 0): ?>
                                 <a href="<?= site_url('customer/orders?tab=to_review') ?>" class="btn btn-secondary">
                                     Review Products
@@ -930,7 +1033,7 @@ window.addEventListener('beforeunload', function() {
                             <?php endif; ?>
                         <?php endif; ?>
                         
-                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship', 'to_receive', 'delivered'])): ?>
+                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship', 'to_receive', 'delivered'], true)): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                     </div>
@@ -989,5 +1092,84 @@ window.addEventListener('beforeunload', function() {
         </div>
     <?php endif; ?>
 </div>
+
+<div class="return-modal-backdrop" id="returnModalBackdrop" aria-hidden="true">
+    <div class="return-modal" role="dialog" aria-modal="true" aria-labelledby="returnModalTitle">
+        <h3 id="returnModalTitle">Request Return/Refund</h3>
+        <p id="returnModalOrderRef">Order</p>
+        <form method="post" action="<?= site_url('customer/orders/return-refund') ?>" enctype="multipart/form-data">
+            <?= csrf_field() ?>
+            <input type="hidden" name="order_id" id="returnModalOrderId" value="">
+            <input type="hidden" name="request_type" value="return_and_refund">
+            <p style="font-size:.88rem;font-weight:600;margin-bottom:.5rem;">Request type: Return &amp; Refund</p>
+            <label for="returnModalReason">Reason</label>
+            <textarea name="reason" id="returnModalReason" rows="4" minlength="10" maxlength="1000" required placeholder="Describe the issue with your order (minimum 10 characters)."></textarea>
+            <label for="returnModalEvidence" style="margin-top:.65rem;">Photo / Video evidence</label>
+            <input type="file" name="return_evidence[]" id="returnModalEvidence" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" multiple required>
+            <p style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;">Upload 1–3 files (images max 5MB, videos max 25MB). Show the product defect or issue.</p>
+            <div id="returnModalPayoutFields" class="return-payout-fields">
+                <p style="font-size:.85rem;color:var(--text-muted);margin-top:.65rem;">Refund will be sent to this GCash or Maya account after pickup — not during rider scan.</p>
+                <label for="returnModalPayoutMethod">Refund method</label>
+                <select name="payout_method" id="returnModalPayoutMethod">
+                    <?php foreach (return_payout_methods() as $value => $label): ?>
+                        <option value="<?= esc($value) ?>"><?= esc($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <label for="returnModalPayoutAccount">GCash / Maya number</label>
+                <input type="text" name="payout_account" id="returnModalPayoutAccount" maxlength="30" required placeholder="e.g. 09171234567">
+                <label for="returnModalPayoutName">Account name</label>
+                <input type="text" name="payout_account_name" id="returnModalPayoutName" maxlength="120" required placeholder="Name registered to the account">
+            </div>
+            <div class="return-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeReturnModal()">Cancel</button>
+                <button type="submit" class="btn">Submit Request</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openReturnModal(orderId, reference) {
+    const backdrop = document.getElementById('returnModalBackdrop');
+    const orderIdInput = document.getElementById('returnModalOrderId');
+    const orderRefLabel = document.getElementById('returnModalOrderRef');
+    if (!backdrop || !orderIdInput || !orderRefLabel) {
+        return;
+    }
+
+    orderIdInput.value = String(orderId);
+    orderRefLabel.textContent = 'Order: ' + reference;
+    backdrop.classList.add('is-open');
+    backdrop.setAttribute('aria-hidden', 'false');
+}
+
+function closeReturnModal() {
+    const backdrop = document.getElementById('returnModalBackdrop');
+    if (!backdrop) {
+        return;
+    }
+    backdrop.classList.remove('is-open');
+    backdrop.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-open-return-modal').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openReturnModal(
+                button.getAttribute('data-order-id'),
+                button.getAttribute('data-order-ref') || ''
+            );
+        });
+    });
+
+    document.getElementById('returnModalBackdrop')?.addEventListener('click', function (event) {
+        if (event.target === this) {
+            closeReturnModal();
+        }
+    });
+});
+</script>
 
 <?= $this->include('customer/partials/footer') ?>

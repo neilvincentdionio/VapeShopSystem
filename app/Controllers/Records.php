@@ -8,7 +8,6 @@ class Records extends BaseController
 {
     protected $recordModel;
     protected $session;
-    private const ALLOWED_ROLES = ['admin'];
     private const RECORD_TYPES = ['purchase', 'inventory', 'expense', 'sales'];
     private const RECORD_STATUSES = ['pending', 'completed', 'cancelled'];
     private const PAYMENT_METHODS = ['cash', 'card', 'gcash', 'bank_transfer'];
@@ -27,7 +26,11 @@ class Records extends BaseController
             return redirect()->to('/login');
         }
 
-        if (! in_array((string) $this->session->get('user_role'), self::ALLOWED_ROLES, true)) {
+        $role = strtolower(trim((string) $this->session->get('user_role')));
+        if ($role === '' || in_array($role, ['customer', 'rider'], true)) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied.');
+        }
+        if (! $this->hasPermission('manage_records') && ! $this->hasPermission('manage_users')) {
             return redirect()->to('/dashboard')->with('error', 'Access denied.');
         }
 
@@ -216,7 +219,14 @@ class Records extends BaseController
             ]);
         }
 
-        if (! in_array((string) $this->session->get('user_role'), self::ALLOWED_ROLES, true)) {
+        $role = strtolower(trim((string) $this->session->get('user_role')));
+        if ($role === '' || in_array($role, ['customer', 'rider'], true)) {
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Access denied.',
+            ]);
+        }
+        if (! $this->hasPermission('manage_records') && ! $this->hasPermission('manage_users')) {
             return $this->response->setStatusCode(403)->setJSON([
                 'success' => false,
                 'message' => 'Access denied.',

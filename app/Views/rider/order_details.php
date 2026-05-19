@@ -1,4 +1,5 @@
 <?= $this->include('rider/partials/header') ?>
+<?php helper('return_refund'); ?>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -16,12 +17,16 @@
 </style>
 
 <section class="order-details-wrap">
-    <a class="back-link" href="<?= site_url('rider/deliveries') ?>"><i class="fas fa-arrow-left"></i> Back to Deliveries</a>
+    <a class="back-link" href="<?= site_url(! empty($is_return_pickup) ? 'rider/returns' : 'rider/deliveries') ?>"><i class="fas fa-arrow-left"></i> Back to <?= ! empty($is_return_pickup) ? 'Return Pickups' : 'Deliveries' ?></a>
 
     <article class="details-card">
         <h2><?= esc($order['reference_number'] ?? ('Order #' . ($order['id'] ?? ''))) ?></h2>
-        <div class="meta">Status: <?= esc(ucwords(str_replace('_', ' ', (string) ($order['delivery_status'] ?? 'to_pay')))) ?></div>
+        <div class="meta">Status: <?= esc(function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? '')) ? return_refund_status_label((string) $order['delivery_status']) : ucwords(str_replace('_', ' ', (string) ($order['delivery_status'] ?? 'to_pay')))) ?></div>
     </article>
+
+    <?php if (! empty($return_meta)): ?>
+        <?= view('partials/return_refund_details', ['returnMeta' => $return_meta, 'order' => $order, 'audience' => 'rider']) ?>
+    <?php endif; ?>
 
     <article class="details-card grid">
         <div>

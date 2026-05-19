@@ -354,7 +354,7 @@
                         </td>
                         <td class="muted"><?= esc($delivery['shipping_address'] ?? 'No delivery address provided') ?></td>
                         <td class="muted"><?= esc($delivery['contact_number'] ?? ($delivery['customer']['phone'] ?? 'Not provided')) ?></td>
-                        <td class="muted"><?= esc($delivery['shipment_notes'] ?? 'None') ?></td>
+                        <td class="muted"><?= esc(shipment_notes_for_display($delivery['shipment_notes'] ?? '') ?: 'None') ?></td>
                         <td><span class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></span></td>
                         <td>
                             <div class="action-stack">
