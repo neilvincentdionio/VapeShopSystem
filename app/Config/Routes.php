@@ -136,6 +136,11 @@ $routes->group('records', ['filter' => ['auth:admin', 'permission:manage_records
     $routes->get('edit/(:num)', 'Records::edit/$1');
     $routes->post('update/(:num)', 'Records::update/$1');
     $routes->post('delete/(:num)', 'Records::delete/$1');
+    // Export and print routes
+    $routes->get('export-csv', 'Records::exportCSV');
+    $routes->get('export-excel', 'Records::exportExcel');
+    $routes->get('generate-pdf', 'Records::generatePDF');
+    $routes->get('print', 'Records::printView');
 });
 
 // Products module routes (Admin only)
@@ -221,6 +226,11 @@ $routes->get('/admin/session-logs', 'AdminController::sessionLogs', ['filter' =>
 $routes->get('/admin/activity-logs', 'AdminController::activityLogs', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
 $routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
 $routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
+
+// Sales reports (Admin)
+$routes->get('/admin/reports', 'SalesReports::index', ['filter' => 'auth:admin']);
+$routes->get('/admin/reports/export/pdf', 'SalesReports::exportPdf', ['filter' => 'auth:admin']);
+$routes->get('/admin/reports/export/excel', 'SalesReports::exportExcel', ['filter' => 'auth:admin']);
 $routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 $routes->get('/admin/messages/(:num)', 'Messages::adminConversation/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 $routes->post('/admin/messages/(:num)/reply', 'Messages::adminReply/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);

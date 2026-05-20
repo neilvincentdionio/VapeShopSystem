@@ -349,6 +349,472 @@ class Records extends BaseController
         return redirect()->to('/records')->with('success', 'Record deleted successfully.');
     }
 
+    public function exportCSV()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
+
+        // Get the same filters as the index method
+        $search = trim((string) $this->request->getGet('q'));
+        $recordType = strtolower(trim((string) $this->request->getGet('record_type')));
+        $status = trim((string) $this->request->getGet('status'));
+        $fromDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('from_date')));
+        $toDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('to_date')));
+
+        $search = strip_tags($search);
+        $recordType = strip_tags($recordType);
+        $status = strtolower(strip_tags($status));
+
+        if (! in_array($recordType, self::RECORD_TYPES, true)) {
+            $recordType = '';
+        }
+        if (! in_array($status, self::RECORD_STATUSES, true)) {
+            $status = '';
+        }
+        if ($fromDate !== '' && $toDate !== '' && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $query = $this->recordModel;
+
+        if ($search !== '') {
+            $query = $query->groupStart()
+                ->like('reference_number', $search)
+                ->orLike('title', $search)
+                ->orLike('description', $search)
+                ->orLike('payment_method', $search)
+                ->groupEnd();
+        }
+
+        if ($recordType !== '') {
+            $query = $query->where('record_type', $recordType);
+        }
+
+        if ($status !== '') {
+            $query = $query->where('status', $status);
+        }
+
+        if ($fromDate !== '') {
+            $query = $query->where('record_date >=', $fromDate);
+        }
+        if ($toDate !== '') {
+            $query = $query->where('record_date <=', $toDate);
+        }
+
+        $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+
+        // Generate CSV
+        $filename = 'records_' . date('Y-m-d_H-i-s') . '.csv';
+        
+        $csvContent = "ID,Record Type,Date,Reference Number,Title,Description,Quantity,Unit Price,Total Amount,Payment Method,Payment Status,Status,Notes,Created At\n";
+        
+        foreach ($records as $record) {
+            $totalAmount = $record['quantity'] * $record['unit_price'];
+            $csvContent .= sprintf(
+                "%s,%s,%s,%s,%s,%s,%s,%.2f,%.2f,%s,%s,%s,%s,%s\n",
+                $record['id'],
+                ucfirst($record['record_type']),
+                $record['record_date'],
+                $record['reference_number'],
+                $this->escapeCSV($record['title']),
+                $this->escapeCSV($record['description'] ?? ''),
+                $record['quantity'],
+                $record['unit_price'],
+                $totalAmount,
+                ucfirst($record['payment_method'] ?? ''),
+                ucfirst($record['payment_status']),
+                ucfirst($record['status']),
+                $this->escapeCSV($record['notes'] ?? ''),
+                $record['created_at']
+            );
+        }
+
+        // Clear any previous output
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Set headers and output
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Content-Length: ' . strlen($csvContent));
+        
+        echo $csvContent;
+        exit;
+    }
+
+    public function exportExcel()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
+
+        // Get the same filters as the index method
+        $search = trim((string) $this->request->getGet('q'));
+        $recordType = strtolower(trim((string) $this->request->getGet('record_type')));
+        $status = trim((string) $this->request->getGet('status'));
+        $fromDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('from_date')));
+        $toDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('to_date')));
+
+        $search = strip_tags($search);
+        $recordType = strip_tags($recordType);
+        $status = strtolower(strip_tags($status));
+
+        if (! in_array($recordType, self::RECORD_TYPES, true)) {
+            $recordType = '';
+        }
+        if (! in_array($status, self::RECORD_STATUSES, true)) {
+            $status = '';
+        }
+        if ($fromDate !== '' && $toDate !== '' && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $query = $this->recordModel;
+
+        if ($search !== '') {
+            $query = $query->groupStart()
+                ->like('reference_number', $search)
+                ->orLike('title', $search)
+                ->orLike('description', $search)
+                ->orLike('payment_method', $search)
+                ->groupEnd();
+        }
+
+        if ($recordType !== '') {
+            $query = $query->where('record_type', $recordType);
+        }
+
+        if ($status !== '') {
+            $query = $query->where('status', $status);
+        }
+
+        if ($fromDate !== '') {
+            $query = $query->where('record_date >=', $fromDate);
+        }
+        if ($toDate !== '') {
+            $query = $query->where('record_date <=', $toDate);
+        }
+
+        $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+
+        // Generate Excel-compatible CSV (tab-separated)
+        $filename = 'records_' . date('Y-m-d_H-i-s') . '.xls';
+        
+        $excelContent = "ID\tRecord Type\tDate\tReference Number\tTitle\tDescription\tQuantity\tUnit Price\tTotal Amount\tPayment Method\tPayment Status\tStatus\tNotes\tCreated At\n";
+        
+        foreach ($records as $record) {
+            $totalAmount = $record['quantity'] * $record['unit_price'];
+            $excelContent .= sprintf(
+                "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.2f\t%.2f\t%s\t%s\t%s\t%s\t%s\n",
+                $record['id'],
+                ucfirst($record['record_type']),
+                $record['record_date'],
+                $record['reference_number'],
+                $record['title'],
+                $record['description'] ?? '',
+                $record['quantity'],
+                $record['unit_price'],
+                $totalAmount,
+                ucfirst($record['payment_method'] ?? ''),
+                ucfirst($record['payment_status']),
+                ucfirst($record['status']),
+                $record['notes'] ?? '',
+                $record['created_at']
+            );
+        }
+
+        // Clear any previous output
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Set headers and output
+        header('Content-Type: application/vnd.ms-excel');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Content-Length: ' . strlen($excelContent));
+        
+        echo $excelContent;
+        exit;
+    }
+
+    private function escapeCSV($value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        if (strpos($value, ',') !== false || strpos($value, '"') !== false || strpos($value, "\n") !== false) {
+            $value = str_replace('"', '""', $value);
+            return '"' . $value . '"';
+        }
+        return $value;
+    }
+
+    public function printView()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
+
+        // Get the same filters as the index method
+        $search = trim((string) $this->request->getGet('q'));
+        $recordType = strtolower(trim((string) $this->request->getGet('record_type')));
+        $status = trim((string) $this->request->getGet('status'));
+        $fromDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('from_date')));
+        $toDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('to_date')));
+
+        $search = strip_tags($search);
+        $recordType = strip_tags($recordType);
+        $status = strtolower(strip_tags($status));
+
+        if (! in_array($recordType, self::RECORD_TYPES, true)) {
+            $recordType = '';
+        }
+        if (! in_array($status, self::RECORD_STATUSES, true)) {
+            $status = '';
+        }
+        if ($fromDate !== '' && $toDate !== '' && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $query = $this->recordModel;
+
+        if ($search !== '') {
+            $query = $query->groupStart()
+                ->like('reference_number', $search)
+                ->orLike('title', $search)
+                ->orLike('description', $search)
+                ->orLike('payment_method', $search)
+                ->groupEnd();
+        }
+
+        if ($recordType !== '') {
+            $query = $query->where('record_type', $recordType);
+        }
+
+        if ($status !== '') {
+            $query = $query->where('status', $status);
+        }
+
+        if ($fromDate !== '') {
+            $query = $query->where('record_date >=', $fromDate);
+        }
+        if ($toDate !== '') {
+            $query = $query->where('record_date <=', $toDate);
+        }
+
+        $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+
+        return view('admin/records/print', [
+            'records' => $records,
+            'search' => $search,
+            'record_type' => $recordType,
+            'status' => $status,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'generated_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    public function generatePDF()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
+
+        // Get the same filters as the index method
+        $search = trim((string) $this->request->getGet('q'));
+        $recordType = strtolower(trim((string) $this->request->getGet('record_type')));
+        $status = trim((string) $this->request->getGet('status'));
+        $fromDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('from_date')));
+        $toDate = $this->normalizeFilterDate(trim((string) $this->request->getGet('to_date')));
+
+        $search = strip_tags($search);
+        $recordType = strip_tags($recordType);
+        $status = strtolower(strip_tags($status));
+
+        if (! in_array($recordType, self::RECORD_TYPES, true)) {
+            $recordType = '';
+        }
+        if (! in_array($status, self::RECORD_STATUSES, true)) {
+            $status = '';
+        }
+        if ($fromDate !== '' && $toDate !== '' && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $query = $this->recordModel;
+
+        if ($search !== '') {
+            $query = $query->groupStart()
+                ->like('reference_number', $search)
+                ->orLike('title', $search)
+                ->orLike('description', $search)
+                ->orLike('payment_method', $search)
+                ->groupEnd();
+        }
+
+        if ($recordType !== '') {
+            $query = $query->where('record_type', $recordType);
+        }
+
+        if ($status !== '') {
+            $query = $query->where('status', $status);
+        }
+
+        if ($fromDate !== '') {
+            $query = $query->where('record_date >=', $fromDate);
+        }
+        if ($toDate !== '') {
+            $query = $query->where('record_date <=', $toDate);
+        }
+
+        $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+
+        // Generate HTML for PDF
+        $html = $this->generatePDFHTML($records, $search, $recordType, $status, $fromDate, $toDate);
+
+        // Generate simple PDF using HTML (browser-based approach)
+        // For a more robust solution, you would use a library like TCPDF or DomPDF
+        $filename = 'records_' . date('Y-m-d_H-i-s') . '.html';
+        
+        // Clear any previous output
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Set headers for HTML file that can be printed to PDF
+        header('Content-Type: text/html');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Content-Length: ' . strlen($html));
+        
+        echo $html;
+        exit;
+    }
+
+    private function generatePDFHTML($records, $search, $recordType, $status, $fromDate, $toDate): string
+    {
+        $filterInfo = [];
+        if ($search !== '') $filterInfo[] = 'Search: ' . $search;
+        if ($recordType !== '') $filterInfo[] = 'Type: ' . ucfirst($recordType);
+        if ($status !== '') $filterInfo[] = 'Status: ' . ucfirst($status);
+        if ($fromDate !== '') $filterInfo[] = 'From: ' . $fromDate;
+        if ($toDate !== '') $filterInfo[] = 'To: ' . $toDate;
+
+        $html = '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Records Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; color: #333; }
+        .report-info { text-align: center; margin-bottom: 20px; color: #666; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+        @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Records Report</h1>
+    <div class="report-info">
+        <p>Generated: ' . date('Y-m-d H:i:s') . '</p>';
+        
+        if (!empty($filterInfo)) {
+            $html .= '<p>Filters: ' . implode(' | ', $filterInfo) . '</p>';
+        }
+        
+        $html .= '<p>Total Records: ' . count($records) . '</p>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Reference</th>
+                <th>Title</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>';
+        
+        foreach ($records as $record) {
+            $totalAmount = $record['quantity'] * $record['unit_price'];
+            $html .= '<tr>
+                <td>' . $record['id'] . '</td>
+                <td>' . ucfirst($record['record_type']) . '</td>
+                <td>' . $record['record_date'] . '</td>
+                <td>' . htmlspecialchars($record['reference_number']) . '</td>
+                <td>' . htmlspecialchars($record['title']) . '</td>
+                <td>' . $record['quantity'] . '</td>
+                <td>₱' . number_format($record['unit_price'], 2) . '</td>
+                <td>₱' . number_format($totalAmount, 2) . '</td>
+                <td>' . ucfirst($record['payment_method'] ?? '') . '</td>
+                <td>' . ucfirst($record['status']) . '</td>
+            </tr>';
+        }
+        
+        $grandTotal = array_sum(array_map(function($r) { return $r['quantity'] * $r['unit_price']; }, $records));
+        
+        $html .= '</tbody>
+        <tfoot>
+            <tr>
+                <td colspan="7" style="text-align: right; font-weight: bold;">Grand Total:</td>
+                <td colspan="3" style="font-weight: bold;">₱' . number_format($grandTotal, 2) . '</td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <div class="footer">
+        <p>Quick Puff Vape Shop System - Records Report</p>
+        <p class="no-print">Use Ctrl+P to save as PDF</p>
+    </div>
+</body>
+</html>';
+
+        return $html;
+    }
+
     private function sanitizePayload(): array
     {
         $recordDate = $this->normalizeRecordDate(trim(strip_tags((string) $this->request->getPost('date'))));

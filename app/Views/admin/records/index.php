@@ -281,6 +281,15 @@
             </form>
         </div>
 
+        <div class="panel">
+            <div class="row" style="justify-content: flex-end; gap: 0.5rem;">
+                <strong style="margin-right: auto;">Export Options:</strong>
+                <button type="button" class="btn btn-info" onclick="exportRecords('excel')">Export Excel</button>
+                <button type="button" class="btn btn-info" onclick="exportRecords('pdf')">Export PDF</button>
+                <button type="button" class="btn btn-info" onclick="printRecords()">Print View</button>
+            </div>
+        </div>
+
         <div class="panel" style="overflow-x:auto;">
             <table>
                 <thead>
@@ -364,6 +373,45 @@
             const closeButtons = [document.getElementById('record-modal-close-top'), document.getElementById('record-modal-close')];
             const viewButtons = document.querySelectorAll('.js-view-record');
             const recordBaseUrl = '<?= site_url('records') ?>';
+
+            // Export functions
+            function exportRecords(format) {
+                // Get current filter parameters
+                const params = new URLSearchParams(window.location.search);
+                params.set('format', format);
+                
+                let url;
+                switch(format) {
+                    case 'csv':
+                        url = '<?= site_url('records/export-csv') ?>';
+                        break;
+                    case 'excel':
+                        url = '<?= site_url('records/export-excel') ?>';
+                        break;
+                    case 'pdf':
+                        url = '<?= site_url('records/generate-pdf') ?>';
+                        break;
+                    default:
+                        return;
+                }
+                
+                // Add filter parameters to export URL
+                url += '?' + params.toString();
+                
+                // Open in new window to download
+                window.open(url, '_blank');
+            }
+
+            function printRecords() {
+                // Get current filter parameters
+                const params = new URLSearchParams(window.location.search);
+                const url = '<?= site_url('records/print') ?>?' + params.toString();
+                window.open(url, '_blank');
+            }
+
+            // Make functions globally accessible
+            window.exportRecords = exportRecords;
+            window.printRecords = printRecords;
 
             const detailFields = [
                 ['id', 'ID'],
