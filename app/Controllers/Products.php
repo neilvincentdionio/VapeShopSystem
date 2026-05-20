@@ -21,7 +21,7 @@ class Products extends BaseController
         $this->productModel = new ProductModel();
         $this->reviewModel = new ReviewModel();
         $this->notificationService = new NotificationService();
-        helper(['text', 'form']);
+        helper(['text', 'form', 'product', 'stock']);
     }
 
     /**
@@ -34,6 +34,10 @@ class Products extends BaseController
             return $guard;
         }
 
+        $this->productModel->ensureProductsTableSchema();
+        $this->productModel->repairStoredCategoryLabels();
+        $this->productModel->clearVariantExpirationDates();
+        $this->productModel->deduplicateCatalogProducts();
         $products = $this->productModel->getAllProducts();
         $productIds = array_values(array_unique(array_map(static fn (array $product): int => (int) ($product['id'] ?? 0), $products)));
         $data = [
@@ -116,6 +120,15 @@ class Products extends BaseController
             'unit_price' => 'required|numeric|greater_than_equal_to[0]',
             'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'nicotine_level' => 'permit_empty|max_length[20]',
+            'expires_at' => 'permit_empty|valid_date[Y-m-d]',
+            'battery_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'eliquid_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'device_type' => 'permit_empty|max_length[50]',
+            'wattage_range' => 'permit_empty|max_length[50]',
+            'charging_port' => 'permit_empty|max_length[30]',
+            'compatibility' => 'permit_empty|max_length[255]',
+            'description' => 'permit_empty|max_length[5000]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
             'is_active' => 'required|in_list[0,1]',
             'image' => 'permit_empty|max_size[image,4096]|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png,image/webp,image/gif]'
@@ -128,20 +141,26 @@ class Products extends BaseController
         $imageFile = $this->request->getFile('image');
         $imageName = $this->storeProductImage($imageFile);
         $pricing = $this->resolveProductPricing();
+        $category = normalize_product_category((string) $this->request->getPost('category'));
 
         $productData = [
             'name' => $this->request->getPost('name'),
-            'category' => $this->request->getPost('category'),
+            'category' => $category,
             'brand' => $this->request->getPost('brand'),
             'flavor' => $this->request->getPost('flavor'),
             'unit_price' => $pricing['unit_price'],
             'selling_price' => $pricing['selling_price'],
             'price' => $pricing['price'],
             'puffs' => $this->request->getPost('puffs') ?: null,
+            'nicotine_level' => $this->resolveNicotineLevel($category),
+            'expires_at' => $this->resolveProductExpiration($category),
+            'battery_capacity' => $this->resolveBatteryCapacityField($category),
+            'eliquid_capacity' => $this->resolveDisposableIntField($category, 'eliquid_capacity'),
             'stock_qty' => $this->request->getPost('stock_qty'),
             'is_active' => $this->request->getPost('is_active') ?: 1,
-            'image_url' => $imageName
-        ];
+            'image_url' => $imageName,
+            'description' => $this->resolveProductDescription(),
+        ] + $this->resolveDeviceSpecFields($category);
 
         // Handle flavors for products that use flavor inventory
         $flavors = $this->normalizeFlavorInput($this->request->getPost('flavors') ?? []);
@@ -240,6 +259,15 @@ class Products extends BaseController
             'unit_price' => 'required|numeric|greater_than_equal_to[0]',
             'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'nicotine_level' => 'permit_empty|max_length[20]',
+            'expires_at' => 'permit_empty|valid_date[Y-m-d]',
+            'battery_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'eliquid_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+            'device_type' => 'permit_empty|max_length[50]',
+            'wattage_range' => 'permit_empty|max_length[50]',
+            'charging_port' => 'permit_empty|max_length[30]',
+            'compatibility' => 'permit_empty|max_length[255]',
+            'description' => 'permit_empty|max_length[5000]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
             'is_active' => 'required|in_list[0,1]'
         ];
@@ -263,24 +291,30 @@ class Products extends BaseController
         }
 
         $pricing = $this->resolveProductPricing();
+        $category = normalize_product_category((string) $this->request->getPost('category'));
 
         $productData = [
             'name' => $this->request->getPost('name'),
-            'category' => $this->request->getPost('category'),
+            'category' => $category,
             'brand' => $this->request->getPost('brand'),
             'flavor' => $this->request->getPost('flavor'),
             'unit_price' => $pricing['unit_price'],
             'selling_price' => $pricing['selling_price'],
             'price' => $pricing['price'],
             'puffs' => $this->request->getPost('puffs') ?: null,
+            'nicotine_level' => $this->resolveNicotineLevel($category),
+            'expires_at' => $this->resolveProductExpiration($category),
+            'battery_capacity' => $this->resolveBatteryCapacityField($category),
+            'eliquid_capacity' => $this->resolveDisposableIntField($category, 'eliquid_capacity'),
             'stock_qty' => $this->request->getPost('stock_qty'),
             'is_active' => $this->request->getPost('is_active') ?: 1,
-            'image_url' => $imageName
-        ];
+            'image_url' => $imageName,
+            'description' => $this->resolveProductDescription(),
+        ] + $this->resolveDeviceSpecFields($category);
 
         // Handle flavors for products that use flavor inventory
         $flavors = $this->normalizeFlavorInput($this->request->getPost('flavors') ?? []);
-        $usesFlavorInventory = $this->usesFlavorInventory((string) $this->request->getPost('category'));
+        $usesFlavorInventory = $this->usesFlavorInventory($category);
         
         if ($usesFlavorInventory) {
             // Calculate total stock from flavors
@@ -547,6 +581,106 @@ class Products extends BaseController
             'unit_price' => $unitPrice,
             'selling_price' => $sellingPrice,
             'price' => $sellingPrice,
+        ];
+    }
+
+    private function resolveNicotineLevel(string $category): ?string
+    {
+        if (! product_uses_compliance_fields($category)) {
+            return null;
+        }
+
+        $level = trim((string) $this->request->getPost('nicotine_level'));
+
+        return $level !== '' ? $level : null;
+    }
+
+    private function resolveProductExpiration(string $category): ?string
+    {
+        if (! product_uses_compliance_fields($category)) {
+            return null;
+        }
+
+        return normalize_product_expiration_date($this->request->getPost('expires_at'));
+    }
+
+    private function resolveProductDescription(): ?string
+    {
+        $description = trim(strip_tags((string) $this->request->getPost('description')));
+
+        return $description !== '' ? $description : null;
+    }
+
+    private function resolveDisposableIntField(string $category, string $field): ?int
+    {
+        if (! is_disposable_category($category)) {
+            return null;
+        }
+
+        $value = $this->request->getPost($field);
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return max(0, (int) $value);
+    }
+
+    private function resolveBatteryCapacityField(string $category): ?int
+    {
+        if (is_disposable_category($category)) {
+            return $this->resolveDisposableIntField($category, 'battery_capacity');
+        }
+
+        if (! is_device_category($category)) {
+            return null;
+        }
+
+        $deviceType = normalize_device_type($this->request->getPost('device_type'));
+        $visibility = device_type_field_visibility((string) $deviceType);
+        if (! $visibility['battery_capacity']) {
+            return null;
+        }
+
+        $value = $this->request->getPost('battery_capacity');
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return max(0, (int) $value);
+    }
+
+    /**
+     * @return array{device_type: ?string, wattage_range: ?string, charging_port: ?string, compatibility: ?string}
+     */
+    private function resolveDeviceSpecFields(string $category): array
+    {
+        $empty = [
+            'device_type' => null,
+            'wattage_range' => null,
+            'charging_port' => null,
+            'compatibility' => null,
+        ];
+
+        if (! is_device_category($category)) {
+            return $empty;
+        }
+
+        $deviceType = normalize_device_type($this->request->getPost('device_type'));
+        if ($deviceType === null) {
+            return $empty;
+        }
+
+        $visibility = device_type_field_visibility($deviceType);
+
+        $wattageRange = trim((string) $this->request->getPost('wattage_range'));
+        $chargingPort = trim((string) $this->request->getPost('charging_port'));
+        $compatibility = trim((string) $this->request->getPost('compatibility'));
+
+        return [
+            'device_type' => $deviceType,
+            'wattage_range' => $visibility['wattage_range'] && $wattageRange !== '' ? $wattageRange : null,
+            'charging_port' => $visibility['charging_port'] && $chargingPort !== '' ? $chargingPort : null,
+            'compatibility' => $visibility['compatibility'] && $compatibility !== '' ? $compatibility : null,
         ];
     }
 }

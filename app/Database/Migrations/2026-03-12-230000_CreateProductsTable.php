@@ -37,11 +37,62 @@ class CreateProductsTable extends Migration
             'puffs' => [
                 'type' => 'INT',
                 'null' => true,
+                'comment' => 'Puff count (pods/disposable) or bottle volume in ml (e-liquid)',
+            ],
+            'nicotine_level' => [
+                'type' => 'VARCHAR',
+                'constraint' => 20,
+                'null' => true,
+                'comment' => 'Nicotine strength for pods, disposable, and e-liquid',
+            ],
+            'expires_at' => [
+                'type' => 'DATE',
+                'null' => true,
+                'comment' => 'Product expiration date',
+            ],
+            'battery_capacity' => [
+                'type' => 'INT',
+                'null' => true,
+                'comment' => 'Battery capacity in mAh (disposable)',
+            ],
+            'eliquid_capacity' => [
+                'type' => 'INT',
+                'null' => true,
+                'comment' => 'Pre-filled e-liquid capacity in ml (disposable)',
+            ],
+            'device_type' => [
+                'type' => 'VARCHAR',
+                'constraint' => 50,
+                'null' => true,
+                'comment' => 'Device sub-type: battery, pod_mod, aio, pod_device, mod',
+            ],
+            'wattage_range' => [
+                'type' => 'VARCHAR',
+                'constraint' => 50,
+                'null' => true,
+                'comment' => 'Power range for devices (e.g. 5-15W)',
+            ],
+            'charging_port' => [
+                'type' => 'VARCHAR',
+                'constraint' => 30,
+                'null' => true,
+                'comment' => 'Charging port type for devices',
+            ],
+            'compatibility' => [
+                'type' => 'VARCHAR',
+                'constraint' => 255,
+                'null' => true,
+                'comment' => 'Compatible pods or accessories',
             ],
             'image_url' => [
                 'type' => 'VARCHAR',
                 'constraint' => 2048,
                 'null' => true,
+            ],
+            'description' => [
+                'type' => 'TEXT',
+                'null' => true,
+                'comment' => 'Product description shown to customers',
             ],
             'price' => [
                 'type' => 'DECIMAL',

@@ -24,7 +24,16 @@ class ProductModel extends Model
         'unit_price',
         'selling_price',
         'puffs',
+        'nicotine_level',
+        'expires_at',
+        'battery_capacity',
+        'eliquid_capacity',
+        'device_type',
+        'wattage_range',
+        'charging_port',
+        'compatibility',
         'image_url',
+        'description',
         'stock_qty',
         'is_active',
     ];
@@ -32,6 +41,8 @@ class ProductModel extends Model
     protected $useTimestamps = true;
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
+    protected $beforeInsert = ['normalizeCategoryField'];
+    protected $beforeUpdate = ['normalizeCategoryField'];
 
     protected $validationRules = [
         'name' => 'required|min_length[3]|max_length[255]',
@@ -42,6 +53,15 @@ class ProductModel extends Model
         'selling_price' => 'required|numeric|greater_than_equal_to[0]',
         'price' => 'permit_empty|numeric|greater_than_equal_to[0]',
         'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
+        'nicotine_level' => 'permit_empty|max_length[20]',
+        'expires_at' => 'permit_empty|valid_date[Y-m-d]',
+        'battery_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+        'eliquid_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
+        'device_type' => 'permit_empty|max_length[50]',
+        'wattage_range' => 'permit_empty|max_length[50]',
+        'charging_port' => 'permit_empty|max_length[30]',
+        'compatibility' => 'permit_empty|max_length[255]',
+        'description' => 'permit_empty|max_length[5000]',
         'stock_qty' => 'required|integer|greater_than_equal_to[0]',
         'is_active' => 'required|in_list[0,1]',
     ];
@@ -150,19 +170,312 @@ class ProductModel extends Model
             return self::CATEGORY_OPTIONS;
         }
 
-        $normalized = strtolower(str_replace([' ', '_'], '-', $category));
-        $aliases = [
-            'devices' => ['Device', 'Devices'],
-            'device' => ['Device', 'Devices'],
-            'pods' => ['Pods', 'Pod'],
-            'pod' => ['Pods', 'Pod'],
-            'e-liquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
-            'eliquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid'],
-            'disposable' => ['Disposable', 'Disposables'],
-            'disposables' => ['Disposable', 'Disposables'],
+        helper('product');
+        $canonical = normalize_product_category($category);
+
+        return array_values(array_unique(array_merge(
+            [$canonical],
+            $this->legacyCategoryAliases($canonical)
+        )));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function legacyCategoryAliases(string $canonical): array
+    {
+        return match ($canonical) {
+            'Device' => ['Device', 'Devices'],
+            'Pods' => ['Pods', 'Pod'],
+            'E-Liquid' => ['E-Liquid', 'E-liquid', 'E Liquid', 'E liquid', 'ELiquid', 'Eliquid', 'e-liquid'],
+            'Disposable' => ['Disposable', 'Disposables'],
+            default => [$canonical],
+        };
+    }
+
+    /**
+     * Keep legacy databases aligned with CreateProductsTable (single source of schema).
+     */
+    public function ensureProductsTableSchema(): void
+    {
+        if (! $this->db->tableExists('products')) {
+            return;
+        }
+
+        $forge = \Config\Database::forge();
+        $columns = [
+            'nicotine_level' => [
+                'type' => 'VARCHAR',
+                'constraint' => 20,
+                'null' => true,
+                'after' => 'puffs',
+            ],
+            'expires_at' => [
+                'type' => 'DATE',
+                'null' => true,
+                'after' => 'nicotine_level',
+            ],
+            'battery_capacity' => [
+                'type' => 'INT',
+                'null' => true,
+                'after' => 'expires_at',
+            ],
+            'eliquid_capacity' => [
+                'type' => 'INT',
+                'null' => true,
+                'after' => 'battery_capacity',
+            ],
+            'device_type' => [
+                'type' => 'VARCHAR',
+                'constraint' => 50,
+                'null' => true,
+                'after' => 'eliquid_capacity',
+            ],
+            'wattage_range' => [
+                'type' => 'VARCHAR',
+                'constraint' => 50,
+                'null' => true,
+                'after' => 'device_type',
+            ],
+            'charging_port' => [
+                'type' => 'VARCHAR',
+                'constraint' => 30,
+                'null' => true,
+                'after' => 'wattage_range',
+            ],
+            'compatibility' => [
+                'type' => 'VARCHAR',
+                'constraint' => 255,
+                'null' => true,
+                'after' => 'charging_port',
+            ],
+            'description' => [
+                'type' => 'TEXT',
+                'null' => true,
+                'after' => 'image_url',
+            ],
         ];
 
-        return $aliases[$normalized] ?? [$category];
+        foreach ($columns as $column => $definition) {
+            if ($this->db->fieldExists($column, 'products')) {
+                continue;
+            }
+
+            $forge->addColumn('products', [$column => $definition]);
+        }
+    }
+
+    /** @deprecated Use ensureProductsTableSchema() */
+    public function ensureDescriptionColumn(): void
+    {
+        $this->ensureProductsTableSchema();
+    }
+
+    /** @deprecated Use ensureProductsTableSchema() */
+    public function ensureDeviceSpecColumns(): void
+    {
+        $this->ensureProductsTableSchema();
+    }
+
+    /** @deprecated Use ensureProductsTableSchema() */
+    public function ensureDisposableSpecColumns(): void
+    {
+        $this->ensureProductsTableSchema();
+    }
+
+    public function clearVariantExpirationDates(): void
+    {
+        if (! $this->db->tableExists('product_variants') || ! $this->db->fieldExists('expires_at', 'product_variants')) {
+            return;
+        }
+
+        $this->db->table('product_variants')
+            ->where('expires_at IS NOT NULL', null, false)
+            ->update([
+                'expires_at' => null,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+    }
+
+    public function repairStoredCategoryLabels(): void
+    {
+        if (! $this->db->tableExists('products')) {
+            return;
+        }
+
+        helper('product');
+
+        $rows = $this->db->table('products')
+            ->select('id, category')
+            ->get()
+            ->getResultArray();
+
+        $now = date('Y-m-d H:i:s');
+        foreach ($rows as $row) {
+            $stored = trim((string) ($row['category'] ?? ''));
+            $canonical = normalize_product_category($stored);
+            if ($stored === $canonical) {
+                continue;
+            }
+
+            $this->db->table('products')
+                ->where('id', (int) ($row['id'] ?? 0))
+                ->update([
+                    'category' => $canonical,
+                    'updated_at' => $now,
+                ]);
+        }
+    }
+
+    /**
+     * Remove duplicate catalog rows created by repeated seeding (same name + brand + category).
+     */
+    public function deduplicateCatalogProducts(): void
+    {
+        if (! $this->db->tableExists('products')) {
+            return;
+        }
+
+        helper(['product', 'stock']);
+
+        $products = $this->db->table('products')
+            ->orderBy('id', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        if ($products === []) {
+            return;
+        }
+
+        $groups = [];
+        foreach ($products as $product) {
+            $key = strtolower(normalize_product_category($product['category'] ?? ''))
+                . '|' . strtolower(trim((string) ($product['brand'] ?? '')))
+                . '|' . strtolower(trim((string) ($product['name'] ?? '')));
+            $groups[$key][] = $product;
+        }
+
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($groups as $groupProducts) {
+            if (count($groupProducts) < 2) {
+                continue;
+            }
+
+            $canonical = $this->pickCanonicalCatalogProduct($groupProducts);
+            $canonicalId = (int) ($canonical['id'] ?? 0);
+            if ($canonicalId <= 0) {
+                continue;
+            }
+
+            foreach ($groupProducts as $product) {
+                $duplicateId = (int) ($product['id'] ?? 0);
+                if ($duplicateId <= 0 || $duplicateId === $canonicalId) {
+                    continue;
+                }
+
+                if ($this->db->tableExists('order_items')) {
+                    $this->db->table('order_items')
+                        ->where('product_id', $duplicateId)
+                        ->update(['product_id' => $canonicalId]);
+                }
+
+                if ($this->hasVariantTable()) {
+                    $this->db->table('product_variants')
+                        ->where('product_id', $duplicateId)
+                        ->delete();
+                }
+
+                $this->db->table('products')
+                    ->where('id', $duplicateId)
+                    ->delete();
+            }
+
+            if ($this->hasVariantTable()) {
+                $totalStock = (int) $this->db->table('product_variants')
+                    ->selectSum('stock_qty', 'total_stock')
+                    ->where('product_id', $canonicalId)
+                    ->get()
+                    ->getRow('total_stock');
+
+                $this->db->table('products')
+                    ->where('id', $canonicalId)
+                    ->update([
+                        'stock_qty' => $totalStock,
+                        'puffs' => $this->resolveCanonicalProductPuffs($canonical, $canonicalId),
+                        'updated_at' => $now,
+                    ]);
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $groupProducts
+     * @return array<string, mixed>
+     */
+    private function pickCanonicalCatalogProduct(array $groupProducts): array
+    {
+        foreach ($groupProducts as $product) {
+            if (is_eliquid_category((string) ($product['category'] ?? '')) && (int) ($product['puffs'] ?? 0) === 10) {
+                return $product;
+            }
+        }
+
+        usort($groupProducts, static fn (array $a, array $b): int => (int) ($b['id'] ?? 0) <=> (int) ($a['id'] ?? 0));
+
+        return $groupProducts[0];
+    }
+
+    private function resolveCanonicalProductPuffs(array $product, int $productId): ?int
+    {
+        if (! is_eliquid_category((string) ($product['category'] ?? ''))) {
+            return $this->nullableInt($product['puffs'] ?? null);
+        }
+
+        if ($this->hasVariantTable()) {
+            $variantPuffs = $this->db->table('product_variants')
+                ->select('puffs')
+                ->where('product_id', $productId)
+                ->where('puffs >', 0)
+                ->get()
+                ->getResultArray();
+
+            $values = array_values(array_filter(array_map(
+                static fn (array $row): int => (int) ($row['puffs'] ?? 0),
+                $variantPuffs
+            ), static fn (int $value): bool => $value > 0));
+
+            $resolved = resolve_product_line_spec_values($values, (string) ($product['category'] ?? ''));
+
+            if ($resolved !== []) {
+                return $resolved[0];
+            }
+        }
+
+        $stored = (int) ($product['puffs'] ?? 0);
+
+        return $stored > 0 ? $stored : 10;
+    }
+
+    private function nullableInt($value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    protected function normalizeCategoryField(array $data): array
+    {
+        if (! isset($data['data']['category'])) {
+            return $data;
+        }
+
+        helper('product');
+        $data['data']['category'] = normalize_product_category($data['data']['category']);
+
+        return $data;
     }
 
     public function getProductById($id, $activeOnly = false)
@@ -224,9 +537,11 @@ class ProductModel extends Model
 
     public function getCustomerProducts(string $search = '', string $category = 'all'): array
     {
+        $this->ensureProductsTableSchema();
+
         $builder = $this->db->table('products p')
             ->select(
-                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.nicotine_level, p.expires_at, p.battery_capacity, p.eliquid_capacity, p.device_type, p.wattage_range, p.charging_port, p.compatibility, p.image_url, p.image_url AS image, COALESCE(p.description, '') AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                 false
             )
             ->where('p.is_active', 1);
@@ -289,6 +604,7 @@ class ProductModel extends Model
                 'price' => (float) ($variant['price'] ?? 0),
                 'stock' => (int) ($variant['stock_qty'] ?? 0),
                 'puffs' => $variant['puffs'] ?? null,
+                'expires_at' => $variant['expires_at'] ?? null,
             ];
         }
 
@@ -298,6 +614,8 @@ class ProductModel extends Model
                 $product['stock'] = array_sum(array_column($product['variants'], 'stock'));
                 $product['stock_qty'] = $product['stock'];
             }
+            $product['nicotine_level'] = trim((string) ($product['nicotine_level'] ?? ''));
+            $product['expires_at'] = $product['expires_at'] ?? null;
         }
         unset($product);
 
@@ -309,6 +627,8 @@ class ProductModel extends Model
         if (! $this->hasVariantTable()) {
             return true;
         }
+
+        helper('product');
 
         $now = date('Y-m-d H:i:s');
         $keptIds = [];
@@ -327,6 +647,7 @@ class ProductModel extends Model
                 'product_id' => $productId,
                 'flavor' => $name,
                 'puffs' => $defaults['puffs'] ?? null,
+                'expires_at' => null,
                 'price' => (float) ($defaults['price'] ?? 0),
                 'stock_qty' => $stock,
                 'is_active' => (int) ($defaults['is_active'] ?? 1),
@@ -565,7 +886,7 @@ class ProductModel extends Model
         if ($this->hasVariantTable()) {
             return $builder
                 ->select(
-                    "p.id, pv.id AS variant_id, p.name, p.category, p.brand, COALESCE(pv.flavor, p.flavor) AS flavor, p.unit_price, p.selling_price, COALESCE(pv.price, p.selling_price, p.price) AS price, COALESCE(pv.puffs, p.puffs) AS puffs, p.image_url, p.image_url AS image, '' AS description, COALESCE(pv.stock_qty, p.stock_qty) AS stock_qty, COALESCE(pv.stock_qty, p.stock_qty) AS stock, p.stock_qty AS product_stock_qty, p.is_active, COALESCE(pv.is_active, p.is_active) AS variant_is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                    "p.id, pv.id AS variant_id, p.name, p.category, p.brand, COALESCE(pv.flavor, p.flavor) AS flavor, p.unit_price, p.selling_price, COALESCE(pv.price, p.selling_price, p.price) AS price, COALESCE(pv.puffs, p.puffs) AS puffs, p.nicotine_level, p.expires_at, p.battery_capacity, p.eliquid_capacity, p.device_type, p.wattage_range, p.charging_port, p.compatibility, p.image_url, p.image_url AS image, COALESCE(p.description, '') AS description, COALESCE(pv.stock_qty, p.stock_qty) AS stock_qty, COALESCE(pv.stock_qty, p.stock_qty) AS stock, p.stock_qty AS product_stock_qty, p.is_active, COALESCE(pv.is_active, p.is_active) AS variant_is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                     false
                 )
                 ->join('product_variants pv', 'pv.product_id = p.id', 'left');
@@ -573,7 +894,7 @@ class ProductModel extends Model
 
         return $builder
             ->select(
-                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.image_url, p.image_url AS image, '' AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
+                "p.id, p.name, p.category, p.brand, p.flavor, p.unit_price, p.selling_price, COALESCE(p.selling_price, p.price) AS price, p.puffs, p.nicotine_level, p.expires_at, p.battery_capacity, p.eliquid_capacity, p.device_type, p.wattage_range, p.charging_port, p.compatibility, p.image_url, p.image_url AS image, COALESCE(p.description, '') AS description, p.stock_qty, p.stock_qty AS stock, p.is_active, CASE WHEN p.is_active = 1 THEN 'active' ELSE 'inactive' END AS status, p.created_at, p.updated_at",
                 false
             );
     }

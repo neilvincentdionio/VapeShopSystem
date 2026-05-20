@@ -176,19 +176,58 @@ if (!function_exists('mobile_format_puffs')) {
     }
 }
 
-if (!function_exists('mobile_build_spec')) {
-    function mobile_build_spec(string $category, int $puffs): string
+if (!function_exists('mobile_format_capacity')) {
+    function mobile_format_capacity(string $category, int $value): string
     {
-        $category = trim($category);
-        $puffLabel = mobile_format_puffs($puffs);
-        if ($category === '') {
-            return $puffLabel;
-        }
-        if ($puffLabel === '') {
-            return $category;
+        if ($value <= 0) {
+            return '';
         }
 
-        return $category . ' • ' . $puffLabel;
+        $slug = strtolower(str_replace([' ', '_'], '', $category));
+
+        if (str_contains($slug, 'eliquid') || str_contains($slug, 'liquid')) {
+            return $value . 'ML';
+        }
+
+        return number_format($value) . ' Puffs';
+    }
+}
+
+if (!function_exists('mobile_build_spec')) {
+    function mobile_build_spec(
+        string $category,
+        int $puffs,
+        string $nicotineLevel = '',
+        int $batteryCapacity = 0,
+        int $eliquidCapacity = 0
+    ): string {
+        $category = trim($category);
+        $slug = strtolower(str_replace([' ', '_'], '-', $category));
+        $nicotineLevel = trim($nicotineLevel);
+        $parts = [$category];
+
+        if (str_contains($slug, 'disposable')) {
+            if ($puffs > 0) {
+                $parts[] = number_format($puffs) . ' Puffs';
+            }
+            if ($batteryCapacity > 0) {
+                $parts[] = number_format($batteryCapacity) . 'mAh';
+            }
+            if ($eliquidCapacity > 0) {
+                $parts[] = $eliquidCapacity . 'ML E-Liquid';
+            }
+        } else {
+            $specLabel = mobile_format_capacity($category, $puffs);
+            if ($specLabel !== '') {
+                $parts[] = $specLabel;
+            }
+        }
+
+        if ($nicotineLevel !== '') {
+            $parts[] = $nicotineLevel;
+        }
+
+        return implode(' • ', array_filter($parts, static fn (string $part): bool => $part !== ''));
     }
 }
 

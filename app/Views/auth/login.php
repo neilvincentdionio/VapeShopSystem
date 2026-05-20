@@ -119,7 +119,7 @@
     <div class="book-login">
         <aside class="book-page book-page-left">
             <div class="brand-wrap">
-                <img src="<?= base_url('QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo">
+                <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo">
             </div>
             <div class="book-spine-mark"></div>
         </aside>

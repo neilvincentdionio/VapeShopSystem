@@ -19,6 +19,7 @@ class ProductSeeder extends Seeder
             }
 
             $this->applySeedProductPricing($product);
+            $this->applySeedComplianceDefaults($product);
         }
         unset($product);
 
@@ -40,6 +41,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 350.00,
                 'is_active' => 1,
                 'puffs' => 12000,
+                'nicotine_level' => '3mg',
+                'expires_at' => '2027-12-31',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -68,6 +71,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 350.00,
                 'is_active' => 1,
                 'puffs' => 8000,
+                'nicotine_level' => '3mg',
+                'expires_at' => '2027-11-30',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -98,6 +103,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 25000,
+                'nicotine_level' => '5mg',
+                'expires_at' => '2028-01-15',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -123,6 +130,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 30000,
+                'nicotine_level' => '3mg',
+                'expires_at' => '2027-10-31',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -148,6 +157,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 25000,
+                'nicotine_level' => '0mg',
+                'expires_at' => '2027-12-15',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -173,6 +184,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 450.00,
                 'is_active' => 1,
                 'puffs' => 20000,
+                'nicotine_level' => '5mg',
+                'expires_at' => '2027-11-15',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -197,6 +210,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 345.00,
                 'is_active' => 1,
                 'puffs' => 15000,
+                'nicotine_level' => '5mg',
+                'expires_at' => '2027-10-20',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -223,6 +238,8 @@ class ProductSeeder extends Seeder
                 'unit_price' => 220.00,
                 'is_active' => 1,
                 'puffs' => 20000,
+                'nicotine_level' => '3mg',
+                'expires_at' => '2027-09-30',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -251,6 +268,11 @@ class ProductSeeder extends Seeder
                 'is_active' => 1,
                 'flavor' => null,
                 'puffs' => null,
+                'device_type' => 'pod_mod',
+                'battery_capacity' => 700,
+                'wattage_range' => '10-15W',
+                'charging_port' => 'USB-C',
+                'compatibility' => 'Aspire Minican pods',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ],
@@ -265,6 +287,10 @@ class ProductSeeder extends Seeder
                 'is_active' => 1,
                 'flavor' => null,
                 'puffs' => null,
+                'device_type' => 'battery',
+                'battery_capacity' => 500,
+                'charging_port' => 'USB-C',
+                'compatibility' => 'BLACK V1 / BLACK ELITE pods',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ],
@@ -279,27 +305,34 @@ class ProductSeeder extends Seeder
                 'is_active' => 1,
                 'flavor' => null,
                 'puffs' => null,
+                'device_type' => 'pod_device',
+                'battery_capacity' => 650,
+                'charging_port' => 'USB-C',
+                'compatibility' => 'XVAPE SLIMBAR pods',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ],
 
-            // E-liquid Category - multiple flavors
+            // E-liquid Category - multiple flavors (puffs column stores bottle volume in ml)
             [
                 'name' => 'POD FORMULA',
-                'category' => 'E-liquid',
+                'category' => 'E-Liquid',
                 'brand' => 'CODED',
                 'image_url' => null,
                 'selling_price' => 180.00,
                 'unit_price' => 130.00,
                 'is_active' => 1,
+                'puffs' => 10,
+                'nicotine_level' => '6mg',
+                'expires_at' => '2027-06-30',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
-                    ['name' => 'Tobacco', 'stock_qty' => 25],
-                    ['name' => 'Vanilla', 'stock_qty' => 30],
-                    ['name' => 'Menthol', 'stock_qty' => 20],
-                    ['name' => 'Strawberry', 'stock_qty' => 35],
-                    ['name' => 'Coffee', 'stock_qty' => 28],
+                    ['name' => 'Tobacco', 'stock_qty' => 25, 'puffs' => 10],
+                    ['name' => 'Vanilla', 'stock_qty' => 30, 'puffs' => 10],
+                    ['name' => 'Menthol', 'stock_qty' => 20, 'puffs' => 10],
+                    ['name' => 'Strawberry', 'stock_qty' => 35, 'puffs' => 10],
+                    ['name' => 'Coffee', 'stock_qty' => 28, 'puffs' => 10],
                 ],
             ],
             // Disposable Category - multiple flavors
@@ -312,17 +345,21 @@ class ProductSeeder extends Seeder
                 'unit_price' => 400.00,
                 'is_active' => 1,
                 'puffs' => 15000,
+                'battery_capacity' => 650,
+                'eliquid_capacity' => 12,
+                'nicotine_level' => '5mg',
+                'expires_at' => '2027-09-30',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
-                    ['name' => 'Watermelon', 'stock_qty' => 10],
-                    ['name' => 'Strawberry Ice Cream', 'stock_qty' => 10],
-                    ['name' => 'Grape Jelly', 'stock_qty' => 10],
-                    ['name' => 'Yakult', 'stock_qty' => 10],
-                    ['name' => 'Banana', 'stock_qty' => 10],
-                    ['name' => 'Matcha', 'stock_qty' => 10],
-                    ['name' => 'Blueberry', 'stock_qty' => 10],
-                    ['name' => 'Green Mango', 'stock_qty' => 10],
+                    ['name' => 'Watermelon', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Strawberry Ice Cream', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Grape Jelly', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Yakult', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Banana', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Matcha', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Blueberry', 'stock_qty' => 10, 'puffs' => 15000],
+                    ['name' => 'Green Mango', 'stock_qty' => 10, 'puffs' => 15000],
                 ],
             ],
             [
@@ -334,6 +371,10 @@ class ProductSeeder extends Seeder
                 'unit_price' => 330.00,
                 'is_active' => 1,
                 'puffs' => 30000,
+                'battery_capacity' => 900,
+                'eliquid_capacity' => 18,
+                'nicotine_level' => '5mg',
+                'expires_at' => '2028-02-28',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -358,6 +399,10 @@ class ProductSeeder extends Seeder
                 'unit_price' => 330.00,
                 'is_active' => 1,
                 'puffs' => 30000,
+                'battery_capacity' => 850,
+                'eliquid_capacity' => 16,
+                'nicotine_level' => '3mg',
+                'expires_at' => '2028-03-31',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
                 'flavors' => [
@@ -454,7 +499,117 @@ class ProductSeeder extends Seeder
             'stock_qty' => (int) ($variantSeed['stock_qty'] ?? $seedProduct['stock_qty'] ?? 0),
             'flavor' => $this->normalizeNullableString($flavor),
             'puffs' => $this->normalizeNullableInt($variantSeed['puffs'] ?? $seedProduct['puffs'] ?? null),
+            'expires_at' => null,
         ];
+    }
+
+    private function normalizeDeviceType($value): ?string
+    {
+        helper('product');
+
+        return normalize_device_type($value);
+    }
+
+    private function normalizeExpirationDate($value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * @param array<string, mixed> $seedProduct
+     */
+    private function applySeedComplianceDefaults(array &$seedProduct): void
+    {
+        $category = strtolower(trim((string) ($seedProduct['category'] ?? '')));
+        if (! $this->usesSeedComplianceFields($category)) {
+            return;
+        }
+
+        $nicotineOptions = ['3mg', '5mg', '6mg', '0mg', '12mg'];
+        $productKey = strtolower(trim((string) ($seedProduct['name'] ?? '')) . '|' . $category);
+        $nicotineIndex = abs(crc32($productKey)) % count($nicotineOptions);
+
+        if (trim((string) ($seedProduct['nicotine_level'] ?? '')) === '') {
+            $seedProduct['nicotine_level'] = $this->resolveSeedNicotineLevel($seedProduct, $nicotineOptions[$nicotineIndex]);
+        }
+
+        $baseExpiry = $this->normalizeExpirationDate($seedProduct['expires_at'] ?? null)
+            ?? $this->defaultProductExpirationDate($productKey);
+
+        $seedProduct['expires_at'] = $baseExpiry;
+
+        $flavors = $seedProduct['flavors'] ?? null;
+        if (! is_array($flavors) || $flavors === []) {
+            return;
+        }
+
+        foreach ($flavors as &$flavorSeed) {
+            if (! is_array($flavorSeed)) {
+                continue;
+            }
+
+            unset($flavorSeed['expires_at']);
+
+            if (! isset($flavorSeed['puffs']) && isset($seedProduct['puffs'])) {
+                $flavorSeed['puffs'] = $seedProduct['puffs'];
+            }
+        }
+        unset($flavorSeed);
+
+        $seedProduct['flavors'] = $flavors;
+    }
+
+    private function usesSeedComplianceFields(string $category): bool
+    {
+        return in_array($category, ['pods', 'disposable', 'e-liquid', 'eliquid'], true)
+            || str_contains($category, 'liquid');
+    }
+
+    /**
+     * @param array<string, mixed> $seedProduct
+     */
+    private function resolveSeedNicotineLevel(array $seedProduct, string $fallback): string
+    {
+        $name = strtolower((string) ($seedProduct['name'] ?? ''));
+        $category = strtolower(trim((string) ($seedProduct['category'] ?? '')));
+
+        if (str_contains($category, 'liquid') || $category === 'e-liquid') {
+            if (str_contains($name, 'zero') || str_contains($name, '0mg')) {
+                return '0mg';
+            }
+
+            return '6mg';
+        }
+
+        if (str_contains($name, 'zero') || str_contains($name, 'vapor zero')) {
+            return '0mg';
+        }
+
+        if (str_contains($name, 'black?') || str_contains($name, 'uotofo') || str_contains($name, 'storm') || str_contains($name, 'bl?ck') || str_contains($name, 'vi bar')) {
+            return '5mg';
+        }
+
+        if (str_contains($name, 'crysm') || str_contains($name, 'kalo') || str_contains($name, 'elite')) {
+            return '3mg';
+        }
+
+        return $fallback;
+    }
+
+    private function defaultProductExpirationDate(string $productKey): string
+    {
+        $monthOffset = (abs(crc32($productKey)) % 18) + 6;
+
+        return date('Y-m-d', strtotime('+' . $monthOffset . ' months'));
+    }
+
+    private function staggerFlavorExpirationDate(string $baseExpiry, int $flavorIndex): string
+    {
+        $timestamp = strtotime($baseExpiry . ' +' . ($flavorIndex * 14) . ' days');
+
+        return $timestamp !== false ? date('Y-m-d', $timestamp) : $baseExpiry;
     }
 
     /**
@@ -535,15 +690,25 @@ class ProductSeeder extends Seeder
             $unitPrice = $this->deriveUnitPriceFromSelling($sellingPrice);
         }
 
+        helper('product');
+
         $productData = [
             'name' => trim((string) ($seedProduct['name'] ?? '')),
-            'category' => trim((string) ($seedProduct['category'] ?? '')),
+            'category' => normalize_product_category($seedProduct['category'] ?? ''),
             'brand' => $this->normalizeNullableString($seedProduct['brand'] ?? null),
             'flavor' => null,
             'unit_price' => $unitPrice,
             'selling_price' => $sellingPrice,
             'price' => $sellingPrice,
-            'puffs' => $this->normalizeNullableInt($firstVariant['puffs'] ?? null),
+            'puffs' => $this->normalizeNullableInt($seedProduct['puffs'] ?? $firstVariant['puffs'] ?? null),
+            'nicotine_level' => $this->normalizeNullableString($seedProduct['nicotine_level'] ?? null),
+            'expires_at' => $this->normalizeExpirationDate($seedProduct['expires_at'] ?? null),
+            'battery_capacity' => $this->normalizeNullableInt($seedProduct['battery_capacity'] ?? null),
+            'eliquid_capacity' => $this->normalizeNullableInt($seedProduct['eliquid_capacity'] ?? null),
+            'device_type' => $this->normalizeDeviceType($seedProduct['device_type'] ?? null),
+            'wattage_range' => $this->normalizeNullableString($seedProduct['wattage_range'] ?? null),
+            'charging_port' => $this->normalizeNullableString($seedProduct['charging_port'] ?? null),
+            'compatibility' => $this->normalizeNullableString($seedProduct['compatibility'] ?? null),
             'image_url' => $this->normalizeNullableString($seedProduct['image_url'] ?? null),
             'stock_qty' => $totalStock,
             'is_active' => array_key_exists('is_active', $seedProduct) ? (int) $seedProduct['is_active'] : 1,
@@ -564,6 +729,7 @@ class ProductSeeder extends Seeder
                 'product_id' => $productId,
                 'flavor' => $this->normalizeNullableString($variant['flavor'] ?? null),
                 'puffs' => $this->normalizeNullableInt($variant['puffs'] ?? null),
+                'expires_at' => null,
                 'price' => (float) ($variant['price'] ?? 0),
                 'stock_qty' => (int) ($variant['stock_qty'] ?? 0),
                 'is_active' => (int) ($seedProduct['is_active'] ?? 1),

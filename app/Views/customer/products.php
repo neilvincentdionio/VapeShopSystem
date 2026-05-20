@@ -1036,7 +1036,10 @@
                                 <div class="product-category"><?= esc($product['category']) ?></div>
                                 <h3 class="product-name"><?= esc($product['name']) ?></h3>
                                 <p class="product-description">
-                                    <?= esc($product['description'] ?? 'Premium quality product for the best vaping experience.') ?>
+                                    <?php $productDescription = trim((string) ($product['description'] ?? '')); ?>
+                                    <?= $productDescription !== ''
+                                        ? nl2br(esc($productDescription))
+                                        : 'Premium quality product for the best vaping experience.' ?>
                                 </p>
                                 <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
                                 <?php
@@ -2411,6 +2414,7 @@ function showProductDescription(product) {
                         <h2 id="modalProductName"></h2>
                         <p id="modalProductCategory"></p>
                         <div class="modal-price" id="modalProductPrice"></div>
+                        <div class="modal-meta" id="modalProductMeta" style="margin-top:.5rem;color:#64748b;font-size:.92rem;"></div>
                         <div class="modal-stock" id="modalProductStock"></div>
                     </div>
                 </div>
@@ -2585,6 +2589,62 @@ function showProductDescription(product) {
     document.getElementById('modalProductName').textContent = product.name;
     document.getElementById('modalProductCategory').textContent = product.category;
     document.getElementById('modalProductPrice').textContent = '₱' + parseFloat(product.price).toFixed(2);
+
+    const metaElement = document.getElementById('modalProductMeta');
+    if (metaElement) {
+        const metaParts = [];
+        const puffs = parseInt(product.puffs, 10) || 0;
+        const category = String(product.category || '').toLowerCase();
+        if (puffs > 0) {
+            metaParts.push((category.includes('liquid') || category === 'e-liquid') ? `${puffs}ML` : `${puffs.toLocaleString()} Puffs`);
+        }
+        if (category.includes('disposable')) {
+            const battery = parseInt(product.battery_capacity, 10) || 0;
+            const eliquid = parseInt(product.eliquid_capacity, 10) || 0;
+            if (battery > 0) {
+                metaParts.push(`${battery.toLocaleString()}mAh`);
+            }
+            if (eliquid > 0) {
+                metaParts.push(`${eliquid}ML E-Liquid`);
+            }
+        }
+        if (category === 'device' && product.device_type) {
+            const typeLabels = {
+                battery: 'Battery Only',
+                pod_mod: 'Pod Mod',
+                aio: 'AIO',
+                pod_device: 'Pod Device',
+                mod: 'Mod'
+            };
+            metaParts.push(typeLabels[product.device_type] || product.device_type);
+            const deviceBattery = parseInt(product.battery_capacity, 10) || 0;
+            if (deviceBattery > 0) {
+                metaParts.push(`${deviceBattery.toLocaleString()}mAh`);
+            }
+            if (product.wattage_range) {
+                metaParts.push(product.wattage_range);
+            }
+            if (product.charging_port) {
+                metaParts.push(product.charging_port);
+            }
+            if (product.compatibility) {
+                metaParts.push(`Fits: ${product.compatibility}`);
+            }
+        }
+        if (product.nicotine_level) {
+            metaParts.push(`Nicotine: ${product.nicotine_level}`);
+        }
+        if (product.expires_at) {
+            const expiryDate = new Date(`${product.expires_at}T00:00:00`);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const isExpired = !Number.isNaN(expiryDate.getTime()) && expiryDate < today;
+            metaParts.push(isExpired ? 'Expired product' : `Expires: ${product.expires_at}`);
+        }
+        metaElement.textContent = metaParts.join(' • ');
+        metaElement.style.display = metaParts.length ? 'block' : 'none';
+        metaElement.style.color = metaParts.some((part) => part === 'Expired product') ? '#b91c1c' : '';
+    }
     
     // Stock status
     const stockElement = document.getElementById('modalProductStock');
@@ -2610,7 +2670,9 @@ function showProductDescription(product) {
         if (availableVariants.length > 0) {
             flavorWrap.style.display = 'block';
             flavorList.innerHTML = availableVariants
-                .map((variant) => `<div>${variant.flavor} (${variant.stock} left)</div>`)
+                .map((variant) => {
+                    return `<div>${variant.flavor} (${variant.stock} left)</div>`;
+                })
                 .join('');
         } else if (variants.length > 0) {
             flavorWrap.style.display = 'block';

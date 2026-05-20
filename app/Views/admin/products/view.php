@@ -1,5 +1,8 @@
 <?php
+helper(['stock', 'product']);
+
 $product = $product ?? [];
+$productCategory = (string) ($product['category'] ?? '');
 $variants = $variants ?? [];
 $imageName = trim((string) ($product['image_url'] ?? $product['image'] ?? ''));
 $imageSrc = product_image_url($imageName);
@@ -170,6 +173,41 @@ $productReviews = $productReviews ?? [];
             color: #2563eb;
             background: #eff6ff;
             border-color: #bfdbfe;
+        }
+
+        .expiration-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: 0.5rem;
+            padding: 0.25rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .expiration-badge-expired {
+            color: #991b1b;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+        .expiration-alert {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem 1.1rem;
+            border-radius: 10px;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .expiration-alert p {
+            margin: 0.35rem 0 0;
+            color: #b91c1c;
+            font-size: 0.88rem;
         }
 
         .info-grid {
@@ -420,7 +458,7 @@ $productReviews = $productReviews ?? [];
                             <span class="badge <?= (int) ($product['is_active'] ?? 0) === 1 ? 'badge-active' : 'badge-inactive' ?>">
                                 <?= (int) ($product['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive' ?>
                             </span>
-                            <span class="badge badge-stock"><?= number_format($displayStock) ?> total stock</span>
+                            <span class="badge badge-stock"><?= esc(format_stock_display($displayStock, $productCategory)) ?> total</span>
                             <?php if ($hasVariants): ?>
                                 <span class="badge badge-stock"><?= number_format(count($variants)) ?> variants</span>
                             <?php endif; ?>
@@ -447,10 +485,81 @@ $productReviews = $productReviews ?? [];
                                 <div class="info-label">Selling Price</div>
                                 <div class="info-value">PHP <?= number_format((float) ($product['selling_price'] ?? $product['price'] ?? 0), 2) ?></div>
                             </div>
+                            <?php if (is_device_category($productCategory)): ?>
                             <div class="info-item">
-                                <div class="info-label">Puffs</div>
-                                <div class="info-value"><?= !empty($product['puffs']) ? number_format((int) $product['puffs']) : 'N/A' ?></div>
+                                <div class="info-label">Device Type</div>
+                                <div class="info-value"><?= esc(format_device_type_label($product['device_type'] ?? null)) ?></div>
                             </div>
+                            <?php
+                                $deviceVisibility = device_type_field_visibility((string) ($product['device_type'] ?? ''));
+                            ?>
+                            <?php if ($deviceVisibility['battery_capacity']): ?>
+                            <div class="info-item">
+                                <div class="info-label">Battery Capacity</div>
+                                <div class="info-value"><?= esc(format_product_battery_capacity($product['battery_capacity'] ?? null)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($deviceVisibility['wattage_range']): ?>
+                            <div class="info-item">
+                                <div class="info-label">Wattage / Power Range</div>
+                                <div class="info-value"><?= esc(format_device_wattage_range($product['wattage_range'] ?? null)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($deviceVisibility['charging_port']): ?>
+                            <div class="info-item">
+                                <div class="info-label">Charging Port</div>
+                                <div class="info-value"><?= esc(format_device_charging_port($product['charging_port'] ?? null)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($deviceVisibility['compatibility']): ?>
+                            <div class="info-item">
+                                <div class="info-label">Compatible With</div>
+                                <div class="info-value"><?= esc(format_device_compatibility($product['compatibility'] ?? null)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php else: ?>
+                            <div class="info-item">
+                                <div class="info-label"><?= esc(product_spec_column_label($productCategory)) ?></div>
+                                <div class="info-value"><?= esc(format_product_spec_value(! empty($product['puffs']) ? (int) $product['puffs'] : null, $productCategory)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if (is_disposable_category($productCategory)): ?>
+                            <div class="info-item">
+                                <div class="info-label">Battery Capacity</div>
+                                <div class="info-value"><?= esc(format_product_battery_capacity($product['battery_capacity'] ?? null)) ?></div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">E-Liquid Capacity</div>
+                                <div class="info-value"><?= esc(format_product_eliquid_capacity($product['eliquid_capacity'] ?? null)) ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if (product_uses_compliance_fields($productCategory)): ?>
+                            <div class="info-item">
+                                <div class="info-label">Nicotine Level</div>
+                                <div class="info-value"><?= esc(format_product_nicotine_level($product['nicotine_level'] ?? '')) ?></div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Expiration Date</div>
+                                <div class="info-value">
+                                    <?php $expirationStatus = product_expiration_status($product['expires_at'] ?? null); ?>
+                                    <?= esc($expirationStatus['label']) ?>
+                                    <?php if ($expirationStatus['is_expired']): ?>
+                                        <span class="expiration-badge expiration-badge-expired">
+                                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Expired
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php if (product_is_expired($product['expires_at'] ?? null)): ?>
+                            <div class="expiration-alert" role="alert">
+                                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                                <div>
+                                    <strong>Product expired</strong>
+                                    <p>This product is past its expiration date. Consider updating the date or marking the product inactive.</p>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
                             <div class="info-item">
                                 <div class="info-label">Image File</div>
                                 <div class="info-value"><?= esc($imageName !== '' ? $imageName : 'No image uploaded') ?></div>
@@ -463,9 +572,12 @@ $productReviews = $productReviews ?? [];
                                 <thead>
                                     <tr>
                                         <th>Flavor</th>
-                                        <th>Puffs</th>
+                                        <th><?= esc(product_spec_column_label($productCategory)) ?></th>
+                                        <?php if (product_uses_compliance_fields($productCategory)): ?>
+                                        <th>Nicotine</th>
+                                        <?php endif; ?>
                                         <th>Price</th>
-                                        <th>Stock</th>
+                                        <th>Stock (<?= esc(stock_unit_label($productCategory, 2)) ?>)</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
@@ -473,9 +585,12 @@ $productReviews = $productReviews ?? [];
                                     <?php foreach ($variants as $variant): ?>
                                         <tr>
                                             <td><?= esc(trim((string) ($variant['flavor'] ?? '')) !== '' ? $variant['flavor'] : 'Default') ?></td>
-                                            <td><?= !empty($variant['puffs']) ? number_format((int) $variant['puffs']) : 'N/A' ?></td>
+                                            <td><?= esc(format_product_spec_value(! empty($variant['puffs']) ? (int) $variant['puffs'] : null, $productCategory)) ?></td>
+                                            <?php if (product_uses_compliance_fields($productCategory)): ?>
+                                            <td><?= esc(format_product_nicotine_level($product['nicotine_level'] ?? '')) ?></td>
+                                            <?php endif; ?>
                                             <td>PHP <?= number_format((float) ($variant['price'] ?? 0), 2) ?></td>
-                                            <td><?= number_format((int) ($variant['stock_qty'] ?? 0)) ?></td>
+                                            <td><?= esc(format_stock_display((int) ($variant['stock_qty'] ?? 0), $productCategory)) ?></td>
                                             <td><?= (int) ($variant['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive' ?></td>
                                         </tr>
                                     <?php endforeach; ?>

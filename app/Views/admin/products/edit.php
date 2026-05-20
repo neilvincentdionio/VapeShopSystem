@@ -1,4 +1,6 @@
 <?php
+helper('product');
+$nicotineLevelOptions = product_nicotine_level_options();
 $selectedCategory = trim((string) old('category', $product['category'] ?? ''));
 $selectedCategoryAliases = [
     'device' => 'Device',
@@ -434,10 +436,15 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             padding: 1rem;
         }
 
-        .flavor-table-header {
+        .flavor-table-header,
+        .flavor-row {
             display: grid;
             grid-template-columns: 2fr 1fr auto;
             gap: 1rem;
+            align-items: center;
+        }
+
+        .flavor-table-header {
             padding: 0.75rem 1rem;
             background: #e9ecef;
             border-radius: 6px;
@@ -448,10 +455,6 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
         }
 
         .flavor-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr auto;
-            gap: 1rem;
-            align-items: center;
             padding: 0.5rem 0;
         }
 
@@ -460,8 +463,70 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             align-items: center;
         }
 
+        .expiration-warning {
+            display: none;
+            align-items: flex-start;
+            gap: 0.65rem;
+            margin-top: 0.75rem;
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            color: #991b1b;
+            font-size: 0.9rem;
+        }
+
+        .expiration-warning.is-visible {
+            display: flex;
+        }
+
+        .expiration-warning i {
+            margin-top: 0.1rem;
+        }
+
         .col-action {
             justify-content: center;
+        }
+
+        .flavor-inventory-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .flavor-collapse-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-height: 34px;
+            padding: 0.4rem 0.75rem;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .flavor-collapse-btn:hover {
+            background: #dbeafe;
+        }
+
+        .flavor-collapse-caret {
+            font-size: 0.65rem;
+            transition: transform 0.15s;
+        }
+
+        .flavor-inventory-body.is-collapsed .flavor-collapse-caret {
+            transform: rotate(-90deg);
+        }
+
+        .flavor-inventory-body.is-collapsed .flavor-table,
+        .flavor-inventory-body.is-collapsed .section-description {
+            display: none;
         }
 
         .btn-sm {
@@ -637,25 +702,67 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                         <h4 class="section-title">Stock & Specifications</h4>
                         <div class="form-grid">
                             <div class="form-group stock-quantity-field">
-                                <label for="stock_qty">Total Stock Quantity *</label>
+                                <label for="stock_qty" id="stockQtyLabel">Total Stock Quantity *</label>
                                 <input type="number" name="stock_qty" id="stock_qty" class="form-control" 
                                        value="<?= old('stock_qty', $product['stock_qty']) ?>" 
                                        min="0" required>
-                                <small class="help-text">Total stock across all flavors/variants</small>
+                                <small class="help-text" id="stockQtyHelp">Total stock across all flavors/variants</small>
                                 <?php if (isset($validation) && $validation->hasError('stock_qty')): ?>
                                     <div class="invalid-feedback"><?= $validation->getError('stock_qty') ?></div>
                                 <?php endif; ?>
                             </div>
 
-                            <div class="form-group puff-field" style="display: none;">
-                                <label for="puffs">Puffs Count</label>
+                            <div class="form-group spec-field" style="display: none;">
+                                <label for="puffs" id="specFieldLabel">Puffs Count</label>
                                 <input type="number" name="puffs" id="puffs" class="form-control" 
                                        value="<?= old('puffs', $product['puffs'] ?? '') ?>" 
                                        min="0" placeholder="e.g. 8000">
-                                <small class="help-text">Number of puffs (for Pods/Disposable)</small>
+                                <small class="help-text" id="specFieldHelp">Number of puffs (for Pods/Disposable)</small>
                                 <?php if (isset($validation) && $validation->hasError('puffs')): ?>
                                     <div class="invalid-feedback"><?= $validation->getError('puffs') ?></div>
                                 <?php endif; ?>
+                            </div>
+
+                            <div class="form-group disposable-spec-field" style="display: none;">
+                                <label for="battery_capacity">Battery Capacity (mAh)</label>
+                                <input type="number" name="battery_capacity" id="battery_capacity" class="form-control"
+                                       value="<?= old('battery_capacity', $product['battery_capacity'] ?? '') ?>"
+                                       min="0" placeholder="e.g. 650">
+                                <small class="help-text">Built-in battery size for this disposable device.</small>
+                            </div>
+
+                            <div class="form-group disposable-spec-field" style="display: none;">
+                                <label for="eliquid_capacity">E-Liquid Capacity (ML)</label>
+                                <input type="number" name="eliquid_capacity" id="eliquid_capacity" class="form-control"
+                                       value="<?= old('eliquid_capacity', $product['eliquid_capacity'] ?? '') ?>"
+                                       min="0" placeholder="e.g. 12">
+                                <small class="help-text">Pre-filled e-liquid volume in the device.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php include __DIR__ . '/partials/device_spec_fields.php'; ?>
+
+                    <div class="form-section compliance-section" style="display: none;">
+                        <h4 class="section-title"><i class="fas fa-shield-alt"></i> Nicotine & Expiration</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="nicotine_level">Nicotine Level</label>
+                                <select name="nicotine_level" id="nicotine_level" class="form-control">
+                                    <option value="">Select nicotine level</option>
+                                    <?php foreach ($nicotineLevelOptions as $level): ?>
+                                        <option value="<?= esc($level) ?>" <?= (string) old('nicotine_level', $product['nicotine_level'] ?? '') === $level ? 'selected' : '' ?>><?= esc($level) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="expires_at">Product Expiration Date</label>
+                                <input type="date" name="expires_at" id="expires_at" class="form-control" value="<?= esc(old('expires_at', $product['expires_at'] ?? '')) ?>">
+                                <small class="help-text">One expiration date for the entire product (all flavors).</small>
+                                <div class="expiration-warning<?= product_is_expired(old('expires_at', $product['expires_at'] ?? '')) ? ' is-visible' : '' ?>" id="expirationWarning" role="alert">
+                                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                                    <span id="expirationWarningText">This product is expired. Update the expiration date or deactivate the product.</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -664,16 +771,23 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                     <div class="form-section flavor-inventory-section" style="display: none;">
                         <div class="section-header">
                             <h4 class="section-title"><i class="fas fa-flask"></i> Flavor Inventory</h4>
+                        </div>
+                        <div class="flavor-inventory-toolbar">
+                            <button type="button" id="toggleFlavorInventoryBtn" class="flavor-collapse-btn" aria-expanded="false">
+                                <span id="flavorInventoryCount">0</span> Flavors
+                                <span class="flavor-collapse-caret" aria-hidden="true">▼</span>
+                            </button>
                             <button type="button" id="addFlavorBtn" class="btn btn-sm btn-primary">
                                 <i class="fas fa-plus"></i> Add Flavor
                             </button>
                         </div>
+                        <div class="flavor-inventory-body is-collapsed" id="flavorInventoryBody">
                         <p class="section-description">Manage individual flavor stocks. Total stock is calculated automatically from flavor quantities.</p>
                         
                         <div class="flavor-table">
                             <div class="flavor-table-header">
                                 <div class="col-flavor">Flavor Name</div>
-                                <div class="col-stock">Stock</div>
+                                <div class="col-stock" id="flavorStockHeader">Stock</div>
                                 <div class="col-action">Action</div>
                             </div>
                             <div class="flavor-rows" id="flavorRows">
@@ -722,6 +836,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                                 <?php endif; ?>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     <!-- Product Image Section -->
@@ -769,28 +884,144 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
     </div>
 <script>
         const categorySelect = document.getElementById('category');
-        const puffField = document.querySelector('.puff-field');
+        const specField = document.querySelector('.spec-field');
+        const disposableSpecFields = document.querySelectorAll('.disposable-spec-field');
+        const deviceSpecSection = document.querySelector('.device-spec-section');
+        const deviceTypeSelect = document.getElementById('device_type');
+        const deviceFieldVisibility = <?= json_encode(array_combine(
+            array_keys(product_device_type_options()),
+            array_map(static fn (string $slug): array => device_type_field_visibility($slug), array_keys(product_device_type_options()))
+        ), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        const complianceSection = document.querySelector('.compliance-section');
+        const specFieldLabel = document.getElementById('specFieldLabel');
+        const specFieldHelp = document.getElementById('specFieldHelp');
+        const puffsInput = document.getElementById('puffs');
 
-        // Handle category selection to show/hide flavor and puff fields
+        function stockUnitsForCategory(category) {
+            const slug = String(category || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+            if (slug.includes('eliquid') || slug.includes('liquid')) {
+                return { singular: 'bottle', plural: 'bottles' };
+            }
+            if (slug.includes('disposable')) {
+                return { singular: 'piece', plural: 'pieces' };
+            }
+            if (slug.includes('pod')) {
+                return { singular: 'pod', plural: 'pods' };
+            }
+            if (slug.includes('device')) {
+                return { singular: 'piece', plural: 'pieces' };
+            }
+
+            return { singular: 'unit', plural: 'units' };
+        }
+
+        function updateStockUnitLabels() {
+            const units = stockUnitsForCategory(categorySelect?.value || '');
+            const stockQtyLabel = document.getElementById('stockQtyLabel');
+            const stockQtyHelp = document.getElementById('stockQtyHelp');
+            const flavorStockHeader = document.getElementById('flavorStockHeader');
+
+            if (stockQtyLabel) {
+                stockQtyLabel.textContent = `Total Stock (${units.plural}) *`;
+            }
+            if (stockQtyHelp) {
+                stockQtyHelp.textContent = `1 stock = 1 ${units.singular}. Total inventory across all flavors/variants.`;
+            }
+            if (flavorStockHeader) {
+                flavorStockHeader.textContent = `Stock (${units.plural})`;
+            }
+        }
+
+        function updateSpecFieldLabels() {
+            const selectedCategory = (categorySelect?.value || '').toLowerCase();
+            const isEliquid = selectedCategory === 'e-liquid' || selectedCategory.includes('liquid');
+
+            if (specFieldLabel) {
+                specFieldLabel.textContent = isEliquid ? 'Capacity (ML) *' : 'Puffs Count';
+            }
+            if (specFieldHelp) {
+                specFieldHelp.textContent = isEliquid
+                    ? 'Bottle capacity (e.g. 10ML).'
+                    : 'Number of puffs (for Pods/Disposable).';
+            }
+            if (puffsInput) {
+                puffsInput.placeholder = isEliquid ? 'e.g. 10' : 'e.g. 8000';
+            }
+        }
+
+        function updateDeviceSpecFields() {
+            const deviceType = deviceTypeSelect?.value || '';
+            const visibility = deviceFieldVisibility[deviceType] || {};
+
+            document.querySelectorAll('.device-spec-field').forEach((field) => {
+                const key = field.dataset.deviceField || '';
+                field.style.display = visibility[key] ? 'block' : 'none';
+            });
+        }
+
+        // Handle category selection to show/hide flavor and spec fields
         function toggleFlavorPuffFields() {
             const selectedCategory = categorySelect.value.toLowerCase();
             const flavorInventorySection = document.querySelector('.flavor-inventory-section');
             const stockQuantityField = document.querySelector('.stock-quantity-field');
+
+            updateStockUnitLabels();
+            updateSpecFieldLabels();
             
-            if (selectedCategory === 'pods' || selectedCategory === 'disposable' || selectedCategory === 'e-liquid') {
-                puffField.style.display = selectedCategory === 'e-liquid' ? 'none' : 'block';
-                flavorInventorySection.style.display = 'block';
-                stockQuantityField.style.display = 'none'; // Hide individual stock field for flavor-based products
-                if (selectedCategory === 'e-liquid') {
-                    document.getElementById('puffs').value = '';
+            const isDisposable = selectedCategory === 'disposable';
+            const isDevice = selectedCategory === 'device';
+
+            if (isDevice) {
+                if (specField) {
+                    specField.style.display = 'none';
                 }
-            } else {
-                puffField.style.display = 'none';
+                disposableSpecFields.forEach((field) => {
+                    field.style.display = 'none';
+                });
+                if (complianceSection) {
+                    complianceSection.style.display = 'none';
+                }
+                if (deviceSpecSection) {
+                    deviceSpecSection.style.display = 'block';
+                }
                 flavorInventorySection.style.display = 'none';
-                stockQuantityField.style.display = 'block'; // Show individual stock field for non-flavor products
-                // Clear the values when hidden
-                document.getElementById('puffs').value = '';
-                // Clear flavor inventory
+                stockQuantityField.style.display = 'block';
+                updateDeviceSpecFields();
+                return;
+            }
+
+            if (deviceSpecSection) {
+                deviceSpecSection.style.display = 'none';
+            }
+
+            if (selectedCategory === 'pods' || isDisposable || selectedCategory === 'e-liquid') {
+                if (specField) {
+                    specField.style.display = 'block';
+                }
+                disposableSpecFields.forEach((field) => {
+                    field.style.display = isDisposable ? 'block' : 'none';
+                });
+                if (complianceSection) {
+                    complianceSection.style.display = 'block';
+                }
+                flavorInventorySection.style.display = 'block';
+                stockQuantityField.style.display = 'none';
+            } else {
+                if (specField) {
+                    specField.style.display = 'none';
+                }
+                disposableSpecFields.forEach((field) => {
+                    field.style.display = 'none';
+                });
+                if (complianceSection) {
+                    complianceSection.style.display = 'none';
+                }
+                flavorInventorySection.style.display = 'none';
+                stockQuantityField.style.display = 'block';
+                if (puffsInput) {
+                    puffsInput.value = '';
+                }
                 clearFlavorInventory();
             }
         }
@@ -822,6 +1053,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             
             flavorRows.appendChild(newRow);
             updateTotalStock();
+            updateFlavorInventorySummary();
         }
 
         function removeFlavorRow(button) {
@@ -829,6 +1061,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             if (document.querySelectorAll('.flavor-row').length > 1) {
                 row.remove();
                 updateTotalStock();
+                updateFlavorInventorySummary();
             }
         }
 
@@ -867,12 +1100,54 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             }
         }
 
+        function countNamedFlavors() {
+            let count = 0;
+            document.querySelectorAll('.flavor-name-input').forEach((input) => {
+                if ((input.value || '').trim() !== '') {
+                    count++;
+                }
+            });
+            return count;
+        }
+
+        function updateFlavorInventorySummary() {
+            const countNode = document.getElementById('flavorInventoryCount');
+            const rowCount = document.querySelectorAll('.flavor-row').length;
+            const namedCount = countNamedFlavors();
+            const displayCount = namedCount > 0 ? namedCount : rowCount;
+            if (countNode) {
+                countNode.textContent = String(displayCount);
+            }
+        }
+
+        function setFlavorInventoryCollapsed(collapsed) {
+            const body = document.getElementById('flavorInventoryBody');
+            const toggle = document.getElementById('toggleFlavorInventoryBtn');
+            if (!body || !toggle) {
+                return;
+            }
+            body.classList.toggle('is-collapsed', collapsed);
+            toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
+            const toggleFlavorInventoryBtn = document.getElementById('toggleFlavorInventoryBtn');
+            if (toggleFlavorInventoryBtn) {
+                toggleFlavorInventoryBtn.addEventListener('click', () => {
+                    const body = document.getElementById('flavorInventoryBody');
+                    setFlavorInventoryCollapsed(!body?.classList.contains('is-collapsed'));
+                });
+            }
+
             // Add flavor button
             const addFlavorBtn = document.getElementById('addFlavorBtn');
             if (addFlavorBtn) {
-                addFlavorBtn.addEventListener('click', addFlavorRow);
+                addFlavorBtn.addEventListener('click', () => {
+                    addFlavorRow();
+                    updateFlavorInventorySummary();
+                    setFlavorInventoryCollapsed(false);
+                });
             }
 
             // Update total stock when flavor stock changes
@@ -880,14 +1155,36 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                 if (e.target.classList.contains('flavor-stock-input')) {
                     updateTotalStock();
                 }
+                if (e.target.classList.contains('flavor-name-input')) {
+                    updateFlavorInventorySummary();
+                }
             });
+
+            updateFlavorInventorySummary();
+            setFlavorInventoryCollapsed(document.querySelectorAll('.flavor-row').length > 2);
         });
+
+        function updateExpirationWarning() {
+            const expiresInput = document.getElementById('expires_at');
+            const warning = document.getElementById('expirationWarning');
+            if (!expiresInput || !warning) {
+                return;
+            }
+
+            const value = expiresInput.value;
+            const isExpired = value !== '' && value < new Date().toISOString().slice(0, 10);
+            warning.classList.toggle('is-visible', isExpired);
+        }
 
         // Add event listener for category change
         categorySelect?.addEventListener('change', toggleFlavorPuffFields);
+        deviceTypeSelect?.addEventListener('change', updateDeviceSpecFields);
+        document.getElementById('expires_at')?.addEventListener('change', updateExpirationWarning);
+        document.getElementById('expires_at')?.addEventListener('input', updateExpirationWarning);
 
         // Initial check on page load
         toggleFlavorPuffFields();
+        updateExpirationWarning();
     </script>
 </body>
 </html>

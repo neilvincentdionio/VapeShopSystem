@@ -51,6 +51,15 @@ class ProductController extends BaseApiController
             'image' => $imageUrl,
             'brand' => $p['brand'] ?? null,
             'flavor' => $p['flavor'] ?? null,
+            'nicotine_level' => $p['nicotine_level'] ?? null,
+            'expires_at' => $p['expires_at'] ?? null,
+            'puffs' => isset($p['puffs']) ? (int) $p['puffs'] : null,
+            'battery_capacity' => isset($p['battery_capacity']) ? (int) $p['battery_capacity'] : null,
+            'eliquid_capacity' => isset($p['eliquid_capacity']) ? (int) $p['eliquid_capacity'] : null,
+            'device_type' => $p['device_type'] ?? null,
+            'wattage_range' => $p['wattage_range'] ?? null,
+            'charging_port' => $p['charging_port'] ?? null,
+            'compatibility' => $p['compatibility'] ?? null,
             'variants' => $p['variants'] ?? [],
         ];
     }

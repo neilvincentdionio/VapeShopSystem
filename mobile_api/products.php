@@ -53,7 +53,7 @@ function mobile_variants_by_product(PDO $db, array $productIds): array
 
     $placeholders = implode(',', array_fill(0, count($productIds), '?'));
     $stmt = $db->prepare(
-        "SELECT id, product_id, flavor, puffs, price, stock_qty, is_active
+        "SELECT id, product_id, flavor, puffs, expires_at, price, stock_qty, is_active
          FROM product_variants
          WHERE product_id IN ($placeholders) AND is_active = 1
          ORDER BY flavor ASC"
@@ -72,6 +72,7 @@ function mobile_variants_by_product(PDO $db, array $productIds): array
             'id' => (int) ($row['id'] ?? 0),
             'flavor' => $flavor,
             'puffs' => isset($row['puffs']) && $row['puffs'] !== null ? (int) $row['puffs'] : null,
+            'expires_at' => $row['expires_at'] ?? null,
             'price' => (float) ($row['price'] ?? 0),
             'stock_qty' => (int) ($row['stock_qty'] ?? 0),
         ];
@@ -110,7 +111,17 @@ function mobile_build_product_payload(array $row, array $variants, array $review
         'name' => (string) ($row['name'] ?? ''),
         'category' => $category,
         'puffs' => $puffs,
-        'spec' => mobile_build_spec($category, $puffs),
+        'nicotine_level' => trim((string) ($row['nicotine_level'] ?? '')),
+        'expires_at' => $row['expires_at'] ?? null,
+        'spec' => mobile_build_spec(
+            $category,
+            $puffs,
+            trim((string) ($row['nicotine_level'] ?? '')),
+            (int) ($row['battery_capacity'] ?? 0),
+            (int) ($row['eliquid_capacity'] ?? 0)
+        ),
+        'battery_capacity' => (int) ($row['battery_capacity'] ?? 0) ?: null,
+        'eliquid_capacity' => (int) ($row['eliquid_capacity'] ?? 0) ?: null,
         'price' => $price,
         'stock_qty' => $stockQty,
         'average_rating' => (float) ($review['average_rating'] ?? 0),
@@ -126,7 +137,7 @@ try {
 
     if ($productId > 0) {
         $stmt = $db->prepare(
-            "SELECT id, name, category, puffs, price, stock_qty, is_active
+            "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity, price, stock_qty, is_active
              FROM products
              WHERE id = :id AND is_active = 1
              LIMIT 1"
@@ -150,7 +161,7 @@ try {
     }
 
     $stmt = $db->query(
-        "SELECT id, name, category, puffs, price, stock_qty, is_active
+        "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity, price, stock_qty, is_active
          FROM products
          WHERE is_active = 1
          ORDER BY id ASC"

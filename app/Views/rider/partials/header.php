@@ -191,7 +191,7 @@
     <nav class="navbar">
         <div class="navbar-content">
             <a href="<?= site_url('rider/dashboard') ?>" class="brand">
-                <img src="<?= base_url('QuickPuff_logo2.png') ?>" alt="QuickPuff Vape Shop" class="brand-logo-image">
+                <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff Vape Shop" class="brand-logo-image">
             </a>
 
             <div class="nav-links">
