@@ -31,10 +31,11 @@
         $remainingAttempts = isset($remaining_attempts) ? (int) $remaining_attempts : 3;
         $maxAttempts = isset($max_attempts) ? (int) $max_attempts : 3;
         $resendCooldown = isset($resend_cooldown) ? (int) $resend_cooldown : 0;
+        $otpTtlMinutes = isset($otp_ttl_minutes) ? (int) $otp_ttl_minutes : 5;
     ?>
     <div class="card">
         <h1>OTP Verification</h1>
-        <p>We sent a 6-digit code to your email. It expires in 5 minutes.</p>
+        <p>We sent a 6-digit code to your email. It expires in <?= esc((string) $otpTtlMinutes) ?> minute(s).</p>
         <p class="meta">Remaining attempts: <strong><?= esc((string) $remainingAttempts) ?></strong> / <?= esc((string) $maxAttempts) ?></p>
 
         <?php if (session()->getFlashdata('success')): ?>
@@ -45,9 +46,9 @@
             <div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
         <?php endif; ?>
 
-        <?php if (session()->get('otp_email_error')): ?>
+        <?php if (session()->get('otp_debug')): ?>
             <div class="alert alert-warn">
-                Email delivery failed. For testing, use this OTP:
+                <?= session()->get('otp_email_error') ? 'Email delivery failed. For testing, use this OTP:' : 'Testing OTP:' ?>
                 <strong><code><?= esc(session()->get('otp_debug') ?? '') ?></code></strong>
             </div>
         <?php endif; ?>

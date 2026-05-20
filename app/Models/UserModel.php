@@ -109,7 +109,7 @@ class UserModel extends Model
 
         if (PasswordService::verify((string) $password, (string) $user['password'])) {
             if (PasswordService::needsRehash((string) $user['password'])) {
-                $this->update((int) $user['id'], ['password' => (string) $password]);
+                $this->update((int) $user['id'], ['password' => PasswordService::hash((string) $password)]);
             }
 
             $this->resetLoginAttempts((int) $user['id']);

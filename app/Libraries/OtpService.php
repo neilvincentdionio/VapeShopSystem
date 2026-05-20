@@ -52,7 +52,8 @@ class OtpService
             $this->maxAttempts()
         );
 
-        $sendResult = $this->mailer->sendOtp($email, $otp);
+        $ttlMinutes = (int) max(1, (int) ceil($this->ttlSeconds() / 60));
+        $sendResult = $this->mailer->sendOtp($email, $otp, $ttlMinutes);
 
         return [
             'sent' => (bool) ($sendResult['sent'] ?? false),

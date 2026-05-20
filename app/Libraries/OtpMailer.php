@@ -10,16 +10,17 @@ class OtpMailer
     /**
      * @return array{sent: bool, error: string|null}
      */
-    public function sendOtp(string $toEmail, string $otpCode): array
+    public function sendOtp(string $toEmail, string $otpCode, int $ttlMinutes = 5): array
     {
-        $smtpUser = (string) getenv('GMAIL_SMTP_USER');
-        $smtpPass = (string) getenv('GMAIL_SMTP_PASS');
-        $fromName = (string) (getenv('GMAIL_FROM_NAME') ?: 'VapeShop System');
+        $smtpUser = trim((string) env('GMAIL_SMTP_USER', getenv('GMAIL_SMTP_USER') ?: ''));
+        $smtpPass = trim((string) env('GMAIL_SMTP_PASS', getenv('GMAIL_SMTP_PASS') ?: ''));
+        $fromName = trim((string) env('GMAIL_FROM_NAME', getenv('GMAIL_FROM_NAME') ?: 'VapeShop System'));
 
         if ($smtpUser === '' || $smtpPass === '') {
-            return ['sent' => false, 'error' => 'Gmail SMTP not configured (set GMAIL_SMTP_USER and GMAIL_SMTP_PASS).'];
+            return ['sent' => false, 'error' => 'Gmail SMTP not configured (set GMAIL_SMTP_USER and GMAIL_SMTP_PASS in .env).'];
         }
 
+        $ttlMinutes = max(1, $ttlMinutes);
         $mail = new PHPMailer(true);
 
         try {
@@ -36,14 +37,16 @@ class OtpMailer
 
             $mail->isHTML(true);
             $mail->Subject = 'Your OTP Code';
-            $mail->Body    = '<p>Your OTP code is:</p><h2 style="letter-spacing:4px">' . htmlspecialchars($otpCode) . '</h2><p>This code expires in 5 minutes.</p>';
-            $mail->AltBody = "Your OTP code is: {$otpCode}\nThis code expires in 5 minutes.";
+            $mail->Body    = '<p>Your OTP code is:</p><h2 style="letter-spacing:4px">' . htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8') . '</h2><p>This code expires in ' . $ttlMinutes . ' minute(s).</p>';
+            $mail->AltBody = "Your OTP code is: {$otpCode}\nThis code expires in {$ttlMinutes} minute(s).";
 
             $mail->send();
 
             return ['sent' => true, 'error' => null];
         } catch (PHPMailerException $e) {
             return ['sent' => false, 'error' => $e->getMessage()];
+        } catch (\Throwable $e) {
+            return ['sent' => false, 'error' => 'Email error: ' . $e->getMessage()];
         }
     }
 }

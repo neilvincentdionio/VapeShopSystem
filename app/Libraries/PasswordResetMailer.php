@@ -12,12 +12,12 @@ class PasswordResetMailer
      */
     public function sendResetLink(string $toEmail, string $resetLink): array
     {
-        $smtpUser = (string) getenv('GMAIL_SMTP_USER');
-        $smtpPass = (string) getenv('GMAIL_SMTP_PASS');
-        $fromName = (string) (getenv('GMAIL_FROM_NAME') ?: 'VapeShop System');
+        $smtpUser = trim((string) env('GMAIL_SMTP_USER', getenv('GMAIL_SMTP_USER') ?: ''));
+        $smtpPass = trim((string) env('GMAIL_SMTP_PASS', getenv('GMAIL_SMTP_PASS') ?: ''));
+        $fromName = trim((string) env('GMAIL_FROM_NAME', getenv('GMAIL_FROM_NAME') ?: 'VapeShop System'));
 
         if ($smtpUser === '' || $smtpPass === '') {
-            return ['sent' => false, 'error' => 'Gmail SMTP not configured (set GMAIL_SMTP_USER and GMAIL_SMTP_PASS).'];
+            return ['sent' => false, 'error' => 'Gmail SMTP not configured (set GMAIL_SMTP_USER and GMAIL_SMTP_PASS in .env).'];
         }
 
         $mail = new PHPMailer(true);
@@ -51,6 +51,8 @@ class PasswordResetMailer
             return ['sent' => true, 'error' => null];
         } catch (PHPMailerException $e) {
             return ['sent' => false, 'error' => $e->getMessage()];
+        } catch (\Throwable $e) {
+            return ['sent' => false, 'error' => 'Email error: ' . $e->getMessage()];
         }
     }
 }

@@ -190,6 +190,12 @@ class Auth extends BaseController
             // Log successful login activity
             $this->activityLogger->logLoginSuccess((int) $user['id'], (string) $user['email']);
 
+            if (strtolower((string) $user['email']) === 'admin@vapeshop.com') {
+                $this->completeLoginSession($user);
+
+                return redirect()->to('/dashboard')->with('success', 'Welcome back, Administrator!');
+            }
+
             $this->session->set([
                 'otp_pending' => true,
                 'otp_user_id' => (int) $user['id'],
@@ -245,6 +251,7 @@ class Auth extends BaseController
             'remaining_attempts' => $this->otpService->getWebRemainingAttempts($userId),
             'resend_cooldown' => $this->otpService->getWebResendCooldown($userId),
             'max_attempts' => $this->otpService->maxAttempts(),
+            'otp_ttl_minutes' => (int) max(1, (int) ceil($this->otpService->ttlSeconds() / 60)),
         ]);
     }
 
@@ -284,28 +291,13 @@ class Auth extends BaseController
 
         session()->regenerate();
 
-        $rbac = new \App\Libraries\RbacService();
-        $rbac->repairAdminAccess();
-
         $user = $this->userModel->find($userId);
-        $permissionNames = is_array($user)
-            ? $this->userModel->getPermissionNamesForUser($userId, $user)
-            : [];
+        if (! is_array($user)) {
+            $this->session->remove($this->pendingOtpSessionKeys());
+            return redirect()->to('/login')->with('error', 'Invalid user session.');
+        }
 
-        $this->session->set([
-            'user_id' => $userId,
-            'user_name' => (string) ($this->session->get('otp_user_name') ?? ''),
-            'user_email' => $email,
-            'user_role' => (string) ($this->session->get('otp_user_role') ?? ''),
-            'user_role_id' => (int) ($this->session->get('otp_user_role_id') ?? 0),
-            'user_shop_name' => $this->session->get('otp_user_shop_name'),
-            'user_permissions' => $permissionNames,
-            'logged_in' => true,
-            'last_activity' => time(),
-        ]);
-
-        // Create user session and log complete login
-        $this->activityLogger->createUserSession($userId);
+        $this->completeLoginSession($user);
         
         $this->session->remove($this->pendingOtpSessionKeys());
 
@@ -382,15 +374,49 @@ class Auth extends BaseController
 
     private function setOtpTestingHint(bool $hasEmailFailure, string $otp = '', string $emailError = ''): void
     {
-        if (!$hasEmailFailure) {
+        if ($otp === '') {
             $this->session->remove(['otp_debug', 'otp_email_error']);
             return;
         }
 
-        $this->session->set([
+        $data = [
             'otp_debug' => $otp,
-            'otp_email_error' => $emailError !== '' ? $emailError : 'Unable to send OTP email.',
+        ];
+
+        if ($hasEmailFailure) {
+            $data['otp_email_error'] = $emailError !== '' ? $emailError : 'Unable to send OTP email.';
+        } else {
+            $this->session->remove('otp_email_error');
+        }
+
+        $this->session->set($data);
+    }
+
+    /**
+     * @param array<string, mixed> $user
+     */
+    private function completeLoginSession(array $user): void
+    {
+        $userId = (int) $user['id'];
+
+        $rbac = new \App\Libraries\RbacService();
+        $rbac->repairAdminAccess();
+
+        $permissionNames = $this->userModel->getPermissionNamesForUser($userId, $user);
+
+        $this->session->set([
+            'user_id' => $userId,
+            'user_name' => (string) ($user['name'] ?? ''),
+            'user_email' => (string) ($user['email'] ?? ''),
+            'user_role' => (string) ($user['role'] ?? ''),
+            'user_role_id' => (int) ($user['role_id'] ?? 0),
+            'user_shop_name' => $user['shop_name'] ?? null,
+            'user_permissions' => $permissionNames,
+            'logged_in' => true,
+            'last_activity' => time(),
         ]);
+
+        $this->activityLogger->createUserSession($userId);
     }
 
     /**

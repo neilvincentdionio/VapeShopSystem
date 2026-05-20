@@ -19,7 +19,7 @@ $isReports = $seg1 === 'admin' && $seg2 === 'reports';
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
         <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
-            <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo-image">
+            <img src="<?= base_url('QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo-image">
         </a>
 
         <div class="navbar-center">

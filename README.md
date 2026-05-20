@@ -64,8 +64,9 @@ Furthermore, the platform generates daily and monthly enterprise sales reports t
    ```
 
 3. **Configure Environment**
-   - Copy `.env.example` to `.env` (if it exists)
-   - Update database credentials in `.env` or `app/Config/Database.php`
+   - Copy `.env.example` to `.env` in the project root: `copy .env.example .env`
+   - Edit `.env` (database name, `app.baseURL`, optional Gmail SMTP for OTP email)
+   - Or use defaults in `app/Config/Database.php` if you skip `.env`
    ```php
    'hostname' => 'localhost',
    'username' => 'root',
@@ -97,3 +98,6 @@ Furthermore, the platform generates daily and monthly enterprise sales reports t
 - Ensure XAMPP is running before accessing the application
 - Check database connection settings if migration fails
 - Clear browser cache if you encounter display issues
+
+### Email OTP (Gmail / local testing)
+See [docs/email-otp-localhost.md](docs/email-otp-localhost.md) for Gmail SMTP (PHPMailer), `.env` variables, and testing when email is not configured.

@@ -25,6 +25,11 @@ class CreateOtpCodesTable extends Migration
                 'unsigned'   => true,
                 'null'       => false,
             ],
+            'email' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
+                'null'       => true,
+            ],
             'otp_code' => [
                 'type'       => 'VARCHAR',
                 'constraint' => 6,
@@ -35,20 +40,58 @@ class CreateOtpCodesTable extends Migration
                 'constraint' => 255,
                 'null'       => true,
             ],
+            'challenge_token_hash' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 64,
+                'null'       => true,
+            ],
             'expiry_time' => [
                 'type' => 'DATETIME',
                 'null' => false,
             ],
-            // Optional: limit OTP attempts (max 3)
+            'expires_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
             'attempts' => [
+                'type'       => 'TINYINT',
+                'constraint' => 3,
+                'unsigned'   => true,
+                'default'    => 0,
+                'null'       => false,
+            ],
+            'max_attempts' => [
+                'type'       => 'TINYINT',
+                'constraint' => 3,
+                'unsigned'   => true,
+                'default'    => 3,
+                'null'       => false,
+            ],
+            'is_used' => [
                 'type'       => 'TINYINT',
                 'constraint' => 1,
                 'default'    => 0,
                 'null'       => false,
             ],
+            'used_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'last_sent_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
+            'invalidated_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => false,
+            ],
+            'updated_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
         ]);
 
