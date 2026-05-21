@@ -4301,14 +4301,8 @@ class Dashboard extends BaseController
         }
 
         $orderId = (int) $this->request->getPost('order_id');
-        $requestType = (string) $this->request->getPost('request_type');
+        $requestType = validate_return_refund_request_type((string) $this->request->getPost('request_type'));
         $reason = trim((string) $this->request->getPost('reason'));
-
-        if ($orderId <= 0) {
-            return redirect()->to('/customer/orders')->with('error', 'Invalid return/refund request.');
-        }
-
-        $requestType = 'return_and_refund';
 
         $redirectBack = $this->request->getPost('redirect_to') === 'order-details'
             ? '/customer/order-details/' . $orderId
@@ -4567,18 +4561,42 @@ class Dashboard extends BaseController
             $db->transStart();
 
             try {
-                if (! $this->productModel->restoreStockForItems(
+                $damagedKeys = parse_return_damaged_item_keys($payload['damaged_items'] ?? []);
+                $requestType = (string) ($returnMeta['type'] ?? 'return_and_refund');
+                if ($damagedKeys === [] && $requestType === 'damaged_item') {
+                    foreach ((array) ($order['items'] ?? []) as $line) {
+                        if (! is_array($line)) {
+                            continue;
+                        }
+                        $productId = (int) ($line['id'] ?? $line['product_id'] ?? 0);
+                        if ($productId <= 0) {
+                            continue;
+                        }
+                        $variantId = isset($line['variant_id']) && (int) $line['variant_id'] > 0
+                            ? (int) $line['variant_id']
+                            : null;
+                        $damagedKeys[] = return_item_stock_key($productId, $variantId);
+                    }
+                    $damagedKeys = array_values(array_unique($damagedKeys));
+                }
+
+                if (! $this->productModel->processReturnedItemsStock(
                     (array) ($order['items'] ?? []),
+                    $damagedKeys,
                     'return_refund',
                     $orderId,
                     (int) $this->session->get('user_id')
                 )) {
-                    throw new \RuntimeException('Failed to restore stock for returned items.');
+                    throw new \RuntimeException('Failed to update stock for returned items.');
                 }
 
                 $returnMeta['status'] = 'return_refund';
                 $returnMeta['refunded_at'] = date('Y-m-d H:i:s');
                 $returnMeta['refunded_by'] = (int) $this->session->get('user_id');
+                $returnMeta['damaged_items'] = $damagedKeys;
+                if ($damagedKeys !== []) {
+                    $returnMeta['damaged_recorded_at'] = date('Y-m-d H:i:s');
+                }
                 if ($refundPayoutReference !== '') {
                     $returnMeta['refund_payout_reference'] = $refundPayoutReference;
                     $returnMeta['refund_sent_at'] = date('Y-m-d H:i:s');
@@ -4630,7 +4648,12 @@ class Dashboard extends BaseController
                 'related_id' => $orderId,
             ]);
 
-            return $this->response->setJSON(['success' => true, 'message' => 'Refund completed and stock restored']);
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => $damagedKeys !== []
+                    ? 'Refund completed. Resellable stock restored; damaged items recorded.'
+                    : 'Refund completed and stock restored',
+            ]);
         }
 
         return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Invalid action']);

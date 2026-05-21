@@ -798,6 +798,80 @@ class ProductModel extends Model
         return true;
     }
 
+    public function markItemsAsDamaged(array $items, ?string $referenceType = null, ?int $referenceId = null, ?int $createdBy = null): bool
+    {
+        $requirements = $this->normalizeStockItems($items);
+        if ($requirements === []) {
+            return true;
+        }
+
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($requirements as $item) {
+            $productId = (int) $item['product_id'];
+            $variantId = $item['variant_id'];
+            $quantity = (int) $item['quantity'];
+
+            if ($variantId !== null && $this->hasVariantTable()) {
+                $this->db->table('product_variants')
+                    ->where('id', $variantId)
+                    ->where('product_id', $productId)
+                    ->set('damaged_qty', 'damaged_qty + ' . $quantity, false)
+                    ->set('updated_at', $now)
+                    ->update();
+            }
+
+            if ($this->db->fieldExists('damaged_qty', 'products')) {
+                $this->db->table('products')
+                    ->where('id', $productId)
+                    ->set('damaged_qty', 'damaged_qty + ' . $quantity, false)
+                    ->set('updated_at', $now)
+                    ->update();
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param list<string> $damagedStockKeys Product keys in product_id:variant_id format.
+     */
+    public function processReturnedItemsStock(
+        array $items,
+        array $damagedStockKeys = [],
+        ?string $referenceType = null,
+        ?int $referenceId = null,
+        ?int $createdBy = null
+    ): bool {
+        $normalized = $this->normalizeStockItems($items);
+        if ($normalized === []) {
+            return true;
+        }
+
+        $damagedLookup = array_fill_keys($damagedStockKeys, true);
+        $toRestore = [];
+        $toDamage = [];
+
+        foreach ($normalized as $item) {
+            $key = $item['product_id'] . ':' . ($item['variant_id'] ?? 0);
+            if (isset($damagedLookup[$key])) {
+                $toDamage[] = $item;
+            } else {
+                $toRestore[] = $item;
+            }
+        }
+
+        if ($toRestore !== [] && ! $this->restoreStockForItems($toRestore, $referenceType, $referenceId, $createdBy)) {
+            return false;
+        }
+
+        if ($toDamage !== [] && ! $this->markItemsAsDamaged($toDamage, $referenceType, $referenceId, $createdBy)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function hasSufficientStock($id, $requiredQuantity)
     {
         $product = $this->getProductById($id);

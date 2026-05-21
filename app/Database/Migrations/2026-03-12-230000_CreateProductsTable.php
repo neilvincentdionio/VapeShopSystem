@@ -117,6 +117,13 @@ class CreateProductsTable extends Migration
                 'constraint' => 11,
                 'default' => 0,
             ],
+            'damaged_qty' => [
+                'type' => 'INT',
+                'constraint' => 11,
+                'unsigned' => true,
+                'default' => 0,
+                'comment' => 'Units returned or written off as damaged (not sellable)',
+            ],
             'is_active' => [
                 'type' => 'TINYINT',
                 'constraint' => 1,

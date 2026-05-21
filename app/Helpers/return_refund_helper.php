@@ -255,16 +255,59 @@ if (! function_exists('customer_can_request_return')) {
     }
 }
 
+if (! function_exists('return_refund_request_types')) {
+    /**
+     * @return array<string, string>
+     */
+    function return_refund_request_types(): array
+    {
+        return [
+            'return_and_refund' => 'Return & Refund',
+            'damaged_item' => 'Damaged Item',
+        ];
+    }
+}
+
+if (! function_exists('validate_return_refund_request_type')) {
+    function validate_return_refund_request_type(string $type): string
+    {
+        return array_key_exists($type, return_refund_request_types()) ? $type : 'return_and_refund';
+    }
+}
+
+if (! function_exists('return_item_stock_key')) {
+    function return_item_stock_key(int $productId, ?int $variantId = null): string
+    {
+        return $productId . ':' . max(0, (int) ($variantId ?? 0));
+    }
+}
+
+if (! function_exists('parse_return_damaged_item_keys')) {
+    /**
+     * @return list<string>
+     */
+    function parse_return_damaged_item_keys(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $keys = [];
+        foreach ($raw as $value) {
+            $key = trim((string) $value);
+            if (preg_match('/^\d+:\d+$/', $key) === 1) {
+                $keys[] = $key;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+}
+
 if (! function_exists('return_refund_type_label')) {
     function return_refund_type_label(string $type): string
     {
-        $labels = [
-            'return' => 'Return only',
-            'refund' => 'Refund only',
-            'return_and_refund' => 'Return & Refund',
-        ];
-
-        return $labels[$type] ?? ucfirst(str_replace('_', ' ', $type));
+        return return_refund_request_types()[$type] ?? ucfirst(str_replace('_', ' ', $type));
     }
 }
 
@@ -284,7 +327,7 @@ if (! function_exists('return_payout_methods')) {
 if (! function_exists('return_refund_requires_payout')) {
     function return_refund_requires_payout(string $type): bool
     {
-        return in_array($type, ['refund', 'return_and_refund'], true);
+        return in_array($type, ['refund', 'return_and_refund', 'damaged_item'], true);
     }
 }
 

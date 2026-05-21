@@ -85,6 +85,10 @@ $fontSize = $compact ? '.86rem' : '.9rem';
         <div style="margin-top:.4rem;font-size:.86rem;"><strong>Refund sent (ref):</strong> <?= esc($refundRef) ?></div>
     <?php endif; ?>
 
+    <?php if (! empty($returnMeta['damaged_items']) && is_array($returnMeta['damaged_items'])): ?>
+        <div style="margin-top:.4rem;font-size:.86rem;"><strong>Damaged items recorded:</strong> <?= count($returnMeta['damaged_items']) ?> item line(s) not restocked</div>
+    <?php endif; ?>
+
     <?php if (! empty($returnMeta['admin_note'])): ?>
         <div style="margin-top:.4rem;font-size:.86rem;"><strong>Note:</strong> <?= esc((string) $returnMeta['admin_note']) ?></div>
     <?php endif; ?>

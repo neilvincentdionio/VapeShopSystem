@@ -185,6 +185,33 @@
         }
         .refund-panel-compact__feedback.is-ok { color: #15803d; }
         .refund-panel-compact__feedback.is-error { color: #b91c1c; }
+        .refund-panel-compact__damage {
+            margin-bottom: .65rem;
+            padding: .55rem .6rem;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            background: #fef2f2;
+        }
+        .refund-panel-compact__hint {
+            margin: 0 0 .45rem;
+            font-size: .76rem;
+            color: #991b1b;
+            line-height: 1.35;
+        }
+        .refund-panel-compact__damage-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .refund-panel-compact__damage-item {
+            display: flex;
+            align-items: flex-start;
+            gap: .45rem;
+            font-size: .82rem;
+            color: #7f1d1d;
+            margin-bottom: .35rem;
+        }
+        .refund-panel-compact__damage-item:last-child { margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -510,7 +537,14 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
                 return;
             }
             payload.refund_payout_reference = payoutRef;
-            if (!confirm('Confirm refund was sent and complete stock restoration?')) {
+            payload.damaged_items = Array.from(panel.querySelectorAll('.js-damaged-item:checked')).map(function (input) {
+                return input.value;
+            });
+            const hasDamaged = payload.damaged_items.length > 0;
+            const confirmMsg = hasDamaged
+                ? 'Confirm refund was sent? Checked items will be recorded as damaged (not restocked).'
+                : 'Confirm refund was sent and complete stock restoration?';
+            if (!confirm(confirmMsg)) {
                 return;
             }
         }

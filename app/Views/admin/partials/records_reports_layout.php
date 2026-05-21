@@ -19,20 +19,20 @@
         justify-content: space-between;
         gap: 1rem;
         flex-wrap: wrap;
-        padding: 1.25rem 1.5rem;
+        padding: 0.95rem 1.25rem;
         border-bottom: 1px solid #eef0f2;
     }
     .records-reports-page .module-header h1,
     .records-reports-page .module-header h2 {
         margin: 0;
-        font-size: 1.45rem;
+        font-size: 1.2rem;
         font-weight: 700;
         color: #1f2937;
     }
     .records-reports-page .module-header p {
-        margin: 0.35rem 0 0;
+        margin: 0.25rem 0 0;
         color: #666;
-        font-size: 0.92rem;
+        font-size: 0.84rem;
     }
     .records-reports-page .module-header-meta {
         color: #6b7280;
@@ -43,8 +43,8 @@
         display: flex;
         flex-wrap: wrap;
         align-items: flex-end;
-        gap: 0.75rem;
-        padding: 1rem 1.5rem;
+        gap: 0.65rem;
+        padding: 0.7rem 1.25rem;
         border-bottom: 1px solid #eef0f2;
     }
     .records-reports-page .module-toolbar .filter-form {
@@ -96,9 +96,9 @@
         margin-left: auto;
     }
     .records-reports-page .module-meta {
-        padding: 0.85rem 1.5rem 1rem;
+        padding: 0.5rem 1.25rem 0.65rem;
         margin: 0;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: #6b7280;
         border-bottom: 1px solid #eef0f2;
     }
@@ -108,32 +108,39 @@
     }
     .records-reports-page .stats-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.25rem;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.55rem;
+        margin-bottom: 0.85rem;
     }
     .records-reports-page .stat-card {
         background: #fff;
         border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-        min-height: 92px;
+        border-radius: 10px;
+        padding: 0.55rem 0.65rem;
+        box-shadow: none;
+        min-height: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
     .records-reports-page .stat-card h3 {
         margin: 0;
-        font-size: 1.35rem;
+        font-size: 1rem;
         font-weight: 700;
         color: #27c56f;
-        line-height: 1.2;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .records-reports-page .stat-card p {
-        margin: 0.25rem 0 0;
-        font-size: 0.84rem;
+        margin: 0.12rem 0 0;
+        font-size: 0.72rem;
         color: #666;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .records-reports-page .stat-card.is-refund h3 {
         color: #6d28d9;
@@ -172,9 +179,14 @@
     .records-reports-page .tab-panel.active {
         display: block;
     }
-    @media (max-width: 1100px) {
+    @media (max-width: 1200px) {
         .records-reports-page .stats-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 900px) {
+        .records-reports-page .stats-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
         }
     }
     @media (max-width: 768px) {
@@ -192,7 +204,7 @@
             padding-right: 1rem;
         }
         .records-reports-page .stats-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .records-reports-page .module-actions-group {
             margin-left: 0;

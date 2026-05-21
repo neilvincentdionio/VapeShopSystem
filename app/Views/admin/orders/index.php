@@ -50,8 +50,21 @@ $ordersList = is_array($orders ?? null) ? $orders : [];
 $hasOrders = ! empty($ordersList);
 $highlightOrderId = (int) (service('request')->getGet('order_id') ?? 0);
 $totalOrders = count($ordersList);
-$totalRevenue = array_sum(array_map(
+$isCancelledOrder = static function (array $order): bool {
+    $deliveryStatus = (string) ($order['delivery_status'] ?? 'to_pay');
+    $orderStatus = (string) ($order['status'] ?? '');
+
+    return $orderStatus === 'cancelled'
+        || in_array($deliveryStatus, ['cancelled', 'return_refund'], true);
+};
+$paidRevenue = array_sum(array_map(
     static fn ($order) => (($order['payment_status'] ?? 'unpaid') === 'paid') ? (float) ($order['total_amount'] ?? 0) : 0.0,
+    $ordersList
+));
+$pendingPayment = array_sum(array_map(
+    static fn ($order) => (! $isCancelledOrder($order) && ($order['payment_status'] ?? 'unpaid') !== 'paid')
+        ? (float) ($order['total_amount'] ?? 0)
+        : 0.0,
     $ordersList
 ));
 $resolveOrderProfit = static function (array $order): float {
@@ -91,9 +104,13 @@ $completedOrders = count(array_filter(
     $ordersList,
     static fn ($order) => ($order['delivery_status'] ?? 'to_pay') === 'completed'
 ));
+$activeDeliveryStatuses = [
+    'to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider',
+    'to_receive', 'delivered', 'failed_delivery',
+];
 $activeDeliveries = count(array_filter(
     $ordersList,
-    static fn ($order) => in_array(($order['delivery_status'] ?? 'to_pay'), ['to_ship', 'to_receive'], true)
+    static fn ($order) => in_array(($order['delivery_status'] ?? 'to_pay'), $activeDeliveryStatuses, true)
 ));
 $returnStatusCounts = is_array($return_status_counts ?? null) ? $return_status_counts : [];
 $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($returnStatusCounts['return_approved'] ?? 0) + ($returnStatusCounts['return_picked_up'] ?? 0));
@@ -244,7 +261,140 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
 
         .orders-container {
             width: 100%;
-            zoom: 0.94;
+        }
+
+        .orders-page {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem 2.5rem;
+            width: 100%;
+        }
+
+        .orders-page .module-shell {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .orders-page .module-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #eef0f2;
+            background: linear-gradient(135deg, #f8f9fa, #ffffff);
+        }
+
+        .orders-page .module-header h1 {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .orders-page .module-header p {
+            margin: 0.35rem 0 0;
+            color: #666;
+            font-size: 0.92rem;
+        }
+
+        .orders-page .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 0.55rem;
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid #eef0f2;
+            background: #fafbfc;
+        }
+
+        .orders-page .stats-grid .stat-card {
+            min-height: 0;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0.55rem 0.65rem;
+            gap: 0.5rem;
+            border-radius: 10px;
+            box-shadow: none;
+        }
+
+        .orders-page .stats-grid .stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .orders-page .stats-grid .stat-content {
+            min-width: 0;
+        }
+
+        .orders-page .stats-grid .stat-content h3 {
+            font-size: 1rem;
+            margin-bottom: 0.05rem;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .orders-page .stats-grid .stat-content p {
+            font-size: 0.72rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .orders-page .stat-card.is-pending h3 {
+            color: #d97706;
+        }
+
+        .orders-page .module-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #eef0f2;
+        }
+
+        .orders-page .module-toolbar h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .orders-page .module-table-wrap {
+            padding: 0 1.5rem 1.25rem;
+            overflow-x: auto;
+        }
+
+        .delivery-info-cell {
+            max-width: 220px;
+        }
+
+        .delivery-info-line {
+            font-size: 0.82rem;
+            color: #374151;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .delivery-info-meta {
+            margin-top: 0.25rem;
+            font-size: 0.76rem;
+            color: #6b7280;
+            line-height: 1.35;
         }
 
         .page-header {
@@ -1030,9 +1180,32 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
             cursor: pointer;
         }
         
+        @media (max-width: 1200px) {
+            .orders-page .stats-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
         @media (max-width: 768px) {
+            .orders-page {
+                padding: 1rem;
+            }
+
+            .orders-page .module-header,
+            .orders-page .stats-grid,
+            .orders-page .module-toolbar,
+            .orders-page .module-table-wrap {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .orders-page .stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
             .page-header-content,
-            .data-card-header {
+            .data-card-header,
+            .orders-page .module-header {
                 flex-direction: column;
                 align-items: flex-start;
             }
@@ -1100,81 +1273,87 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
 <body>
     <?= $this->include('admin/partials/sidebar') ?>
 
-    <div class="container">
-        <div class="orders-container">
-            <div class="page-header">
-                <div class="page-header-content">
-                    <div class="page-title">
-                        <h1>Orders Management</h1>
-                        <p>Manage customer orders, payments, and delivery progress.</p>
+    <div class="container orders-page">
+        <div class="module-shell">
+            <div class="module-header">
+                <div>
+                    <h1>Orders Management</h1>
+                    <p>Manage customer orders, payments, and delivery progress.</p>
+                </div>
+                <a href="<?= site_url('admin/returns') ?>" class="btn btn-outline btn-return-refund">
+                    <i class="fas fa-undo"></i> Return/Refund Page
+                    <?php if ($pendingReturnCount > 0): ?>
+                        <span class="return-indicator-badge"><?= $pendingReturnCount > 99 ? '99+' : $pendingReturnCount ?></span>
+                    <?php endif; ?>
+                </a>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-receipt"></i>
                     </div>
-                    <a href="<?= site_url('admin/returns') ?>" class="btn btn-outline btn-return-refund">
-                        <i class="fas fa-undo"></i> Return/Refund Page
-                        <?php if ($pendingReturnCount > 0): ?>
-                            <span class="return-indicator-badge"><?= $pendingReturnCount > 99 ? '99+' : $pendingReturnCount ?></span>
-                        <?php endif; ?>
-                    </a>
+                    <div class="stat-content">
+                        <h3><?= $totalOrders ?></h3>
+                        <p>Total Orders</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>&#8369;<?= number_format((float) $paidRevenue, 2) ?></h3>
+                        <p>Paid Revenue</p>
+                    </div>
+                </div>
+                <div class="stat-card is-pending">
+                    <div class="stat-icon warning">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>&#8369;<?= number_format((float) $pendingPayment, 2) ?></h3>
+                        <p>Pending Payment</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon profit">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>&#8369;<?= number_format((float) $totalProfit, 2) ?></h3>
+                        <p>Paid Profit</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?= $completedOrders ?></h3>
+                        <p>Completed Orders</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon info">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?= $activeDeliveries ?></h3>
+                        <p>Active Deliveries</p>
+                    </div>
                 </div>
             </div>
-    
-        <div class="dashboard-stats">
-            <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-receipt"></i>
-                </div>
-                <div class="stat-content">
-                    <h3><?= $totalOrders ?></h3>
-                    <p>Total Orders</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon success">
-                    <i class="fas fa-wallet"></i>
-                </div>
-                <div class="stat-content">
-                    <h3>&#8369;<?= number_format((float) $totalRevenue, 2) ?></h3>
-                    <p>Total Revenue</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon profit">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <div class="stat-content">
-                    <h3>&#8369;<?= number_format((float) $totalProfit, 2) ?></h3>
-                    <p>Total Profit</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon warning">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div class="stat-content">
-                    <h3><?= $completedOrders ?></h3>
-                    <p>Completed Orders</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon info">
-                    <i class="fas fa-truck"></i>
-                </div>
-                <div class="stat-content">
-                    <h3><?= $activeDeliveries ?></h3>
-                    <p>Active Deliveries</p>
-                </div>
-            </div>
-        </div>
 
     <?php if ($hasOrders): ?>
-        <div class="data-card">
-            <div class="data-card-header">
+            <div class="module-toolbar">
                 <h3>Orders List</h3>
                 <div class="card-actions">
                     <div class="search-sort-container">
                         <div class="search-box">
-                            <input type="text" 
-                                   id="orderSearch" 
-                                   placeholder="Search orders..." 
+                            <input type="text"
+                                   id="orderSearch"
+                                   placeholder="Search orders..."
                                    onkeyup="filterOrders()">
                             <i class="fas fa-search"></i>
                         </div>
@@ -1198,7 +1377,7 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                     </div>
                 </div>
             </div>
-            <div class="table-responsive">
+            <div class="module-table-wrap">
                 <table class="data-table">
                 <thead>
                     <tr>
@@ -1210,10 +1389,7 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                         <th>Payment</th>
                         <th>Status</th>
                         <th>Delivery Status</th>
-                        <th>Tracking Number</th>
-                        <th>Shipping Address</th>
-                        <th>Address Description</th>
-                        <th>Contact Number</th>
+                        <th>Delivery Info</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -1284,35 +1460,38 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 </div>
                             </td>
                             <td>
-                                <?php 
+                                <?php
                                 $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
-                                // Debug: Uncomment next line to see actual status
-                                // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
                                 ?>
                                 <div class="order-status status-<?= esc($deliveryStatus) ?>">
                                     <?= getDeliveryStatusLabel($deliveryStatus) ?>
                                 </div>
                             </td>
-                            <td>
-                                <span class="detail-text">
-                                    <?= esc($order['tracking_number'] ?: 'No tracking') ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="shipping-text" title="<?= esc($order['shipping_address']) ?>">
-                                    <?= esc($order['shipping_address'] ?: 'Not provided') ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php $addressDescription = shipment_notes_for_display($order['shipment_notes'] ?? ''); ?>
-                                <span class="shipping-text" title="<?= esc($addressDescription) ?>">
-                                    <?= esc($addressDescription !== '' ? $addressDescription : 'No description') ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="detail-text">
-                                    <?= esc($order['contact_number'] ?: 'Not provided') ?>
-                                </span>
+                            <td class="delivery-info-cell">
+                                <?php
+                                $shippingAddress = (string) ($order['shipping_address'] ?: 'Not provided');
+                                $addressDescription = function_exists('shipment_notes_for_display')
+                                    ? shipment_notes_for_display($order['shipment_notes'] ?? '')
+                                    : '';
+                                $trackingNumber = trim((string) ($order['tracking_number'] ?? ''));
+                                $contactNumber = (string) ($order['contact_number'] ?: 'Not provided');
+                                $deliveryTitle = $shippingAddress;
+                                if ($addressDescription !== '') {
+                                    $deliveryTitle .= ' | ' . $addressDescription;
+                                }
+                                ?>
+                                <div class="delivery-info-line" title="<?= esc($deliveryTitle) ?>">
+                                    <?= esc($shippingAddress) ?>
+                                </div>
+                                <div class="delivery-info-meta">
+                                    <?php if ($trackingNumber !== ''): ?>
+                                        Track: <?= esc($trackingNumber) ?> ·
+                                    <?php endif; ?>
+                                    <?= esc($contactNumber) ?>
+                                    <?php if ($addressDescription !== ''): ?>
+                                        · <?= esc($addressDescription) ?>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                             <td>
                                 <div class="action-cell">
@@ -1365,9 +1544,8 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                 </tbody>
             </table>
             </div>
-        </div>
             <?php else: ?>
-                <div class="data-card">
+                <div class="module-table-wrap">
                     <div class="empty-state">
                         <i class="fas fa-shopping-bag"></i>
                         <h3>No Orders Found</h3>
@@ -1682,7 +1860,7 @@ function filterOrders() {
     if (filteredOrders.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="12" class="text-center">
+                <td colspan="10" class="text-center">
                     <div class="empty-state">
                         <i class="fas fa-search"></i>
                         <h3>No orders found</h3>
@@ -1764,7 +1942,7 @@ function sortOrders() {
             const statusName = statusFilter.toUpperCase();
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="12" class="text-center">
+                    <td colspan="10" class="text-center">
                         <div class="empty-state">
                             <i class="fas fa-filter"></i>
                             <h3>No ${statusName} orders found</h3>

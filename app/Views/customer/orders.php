@@ -1100,8 +1100,12 @@ window.addEventListener('beforeunload', function() {
         <form method="post" action="<?= site_url('customer/orders/return-refund') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <input type="hidden" name="order_id" id="returnModalOrderId" value="">
-            <input type="hidden" name="request_type" value="return_and_refund">
-            <p style="font-size:.88rem;font-weight:600;margin-bottom:.5rem;">Request type: Return &amp; Refund</p>
+            <label for="returnModalRequestType">Request type</label>
+            <select name="request_type" id="returnModalRequestType">
+                <?php foreach (return_refund_request_types() as $value => $label): ?>
+                    <option value="<?= esc($value) ?>"><?= esc($label) ?></option>
+                <?php endforeach; ?>
+            </select>
             <label for="returnModalReason">Reason</label>
             <textarea name="reason" id="returnModalReason" rows="4" minlength="10" maxlength="1000" required placeholder="Describe the issue with your order (minimum 10 characters)."></textarea>
             <label for="returnModalEvidence" style="margin-top:.65rem;">Photo / Video evidence</label>

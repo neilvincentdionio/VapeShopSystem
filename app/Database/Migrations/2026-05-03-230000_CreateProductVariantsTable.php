@@ -46,6 +46,13 @@ class CreateProductVariantsTable extends Migration
                     'constraint' => 11,
                     'default' => 0,
                 ],
+                'damaged_qty' => [
+                    'type' => 'INT',
+                    'constraint' => 11,
+                    'unsigned' => true,
+                    'default' => 0,
+                    'comment' => 'Damaged units for this variant',
+                ],
                 'is_active' => [
                     'type' => 'TINYINT',
                     'constraint' => 1,

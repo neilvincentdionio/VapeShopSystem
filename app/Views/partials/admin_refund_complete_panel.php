@@ -16,6 +16,9 @@ $refundAmount = (float) ($row['total_amount'] ?? 0);
 $ewalletLabel = $payoutMethod === 'maya' ? 'Maya' : 'GCash';
 $account = payout_account_for_send((string) ($meta['payout_account'] ?? ''));
 $name = trim((string) ($meta['payout_account_name'] ?? ''));
+$requestType = (string) ($meta['type'] ?? 'return_and_refund');
+$orderItems = is_array($row['items'] ?? null) ? $row['items'] : [];
+$defaultDamaged = $requestType === 'damaged_item';
 ?>
 <div class="refund-panel-compact js-refund-panel"
      data-order-id="<?= $orderId ?>"
@@ -31,6 +34,42 @@ $name = trim((string) ($meta['payout_account_name'] ?? ''));
         <div class="refund-panel-compact__amount">₱<?= number_format($refundAmount, 2) ?></div>
         <div class="refund-panel-compact__to"><?= esc($account) ?><?= $name !== '' ? ' · ' . esc($name) : '' ?></div>
     </div>
+
+    <?php if ($orderItems !== []): ?>
+        <div class="refund-panel-compact__damage">
+            <label class="refund-panel-compact__label">Stock disposition</label>
+            <p class="refund-panel-compact__hint">Check items that are damaged and should not return to sellable stock.</p>
+            <ul class="refund-panel-compact__damage-list">
+                <?php foreach ($orderItems as $line): ?>
+                    <?php
+                    if (! is_array($line)) {
+                        continue;
+                    }
+                    $productId = (int) ($line['id'] ?? $line['product_id'] ?? 0);
+                    if ($productId <= 0) {
+                        continue;
+                    }
+                    $variantId = isset($line['variant_id']) && (int) $line['variant_id'] > 0
+                        ? (int) $line['variant_id']
+                        : null;
+                    $stockKey = return_item_stock_key($productId, $variantId);
+                    $itemLabel = trim((string) ($line['name'] ?? $line['product_name'] ?? 'Product'));
+                    $itemQty = (int) ($line['qty'] ?? $line['quantity'] ?? 1);
+                    ?>
+                    <li>
+                        <label class="refund-panel-compact__damage-item">
+                            <input type="checkbox"
+                                   class="js-damaged-item"
+                                   name="damaged_items[]"
+                                   value="<?= esc($stockKey) ?>"
+                                   <?= $defaultDamaged ? 'checked' : '' ?>>
+                            <span><?= esc($itemLabel) ?> × <?= $itemQty ?></span>
+                        </label>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
 
     <button type="button" class="btn btn-block <?= $payoutMethod === 'maya' ? 'btn-maya' : 'btn-gcash' ?> js-send-ewallet">
         <i class="fas fa-paper-plane"></i> Send via <?= esc($ewalletLabel) ?>

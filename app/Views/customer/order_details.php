@@ -272,8 +272,12 @@ if (!function_exists('getDeliveryStatusLabel')) {
                         <?= csrf_field() ?>
                         <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                         <input type="hidden" name="redirect_to" value="order-details">
-                        <input type="hidden" name="request_type" value="return_and_refund">
-                        <p style="font-size:.88rem;font-weight:600;margin:.5rem 0 .65rem;">Request type: Return &amp; Refund</p>
+                        <label for="request_type" style="display:block;margin:.5rem 0 .25rem;font-weight:600;">Request type</label>
+                        <select name="request_type" id="request_type" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;">
+                            <?php foreach (return_refund_request_types() as $value => $label): ?>
+                                <option value="<?= esc($value) ?>"><?= esc($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                         <label for="reason" style="display:block;margin:.65rem 0 .25rem;font-weight:600;">Reason</label>
                         <textarea name="reason" id="reason" rows="4" minlength="10" maxlength="1000" required style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:8px;" placeholder="Describe the issue (minimum 10 characters)."></textarea>
                         <label for="return_evidence" style="display:block;margin:.65rem 0 .25rem;font-weight:600;">Photo / Video evidence</label>
