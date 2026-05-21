@@ -43,6 +43,7 @@ class SalesReportExporter
         $monthly = $report['monthly'] ?? [];
         $products = $report['top_products'] ?? [];
         $orders = $report['orders'] ?? [];
+        $refunds = $report['refunds'] ?? [];
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<?mso-application progid="Excel.Sheet"?>' . "\n";
@@ -64,6 +65,8 @@ class SalesReportExporter
         $xml .= $this->excelRow(['Total Orders', (string) ($summary['total_orders'] ?? 0)]);
         $xml .= $this->excelRow(['Products Sold', (string) ($summary['total_products_sold'] ?? 0)]);
         $xml .= $this->excelRow(['Average Order Value (PHP)', $money($summary['average_order_value'] ?? 0)]);
+        $xml .= $this->excelRow(['Return/Refunds', (string) ($summary['total_refunds'] ?? 0)]);
+        $xml .= $this->excelRow(['Refunded Amount (PHP)', $money($summary['refund_amount'] ?? 0)]);
         $xml .= '</Table></Worksheet>';
 
         $xml .= '<Worksheet ss:Name="Daily Sales"><Table>';
@@ -112,6 +115,20 @@ class SalesReportExporter
                 $money($row['total_profit'] ?? 0),
                 $row['payment_method'] ?? '',
                 $row['status'] ?? '',
+            ]);
+        }
+        $xml .= '</Table></Worksheet>';
+
+        $xml .= '<Worksheet ss:Name="Return Refunds"><Table>';
+        $xml .= $this->excelRow(['Reference', 'Customer', 'Paid At', 'Refunded Amount (PHP)', 'Payment', 'Status']);
+        foreach ($refunds as $row) {
+            $xml .= $this->excelRow([
+                $row['reference_number'] ?? ('#' . ($row['id'] ?? '')),
+                $row['customer_name'] ?? 'Guest',
+                $row['paid_at'] ?? ($row['created_at'] ?? ''),
+                $money($row['total_amount'] ?? 0),
+                $row['payment_method'] ?? '',
+                'Return/Refund',
             ]);
         }
         $xml .= '</Table></Worksheet>';

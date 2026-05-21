@@ -4017,7 +4017,9 @@ class Dashboard extends BaseController
 
             $deliveryStatus = strtolower((string) ($order['delivery_status'] ?? 'to_pay'));
             $recordStatus = 'pending';
-            if (in_array($deliveryStatus, ['cancelled', 'failed_delivery'], true)) {
+            if ($deliveryStatus === 'return_refund') {
+                $recordStatus = 'return_refund';
+            } elseif (in_array($deliveryStatus, ['cancelled', 'failed_delivery'], true)) {
                 $recordStatus = 'cancelled';
             } elseif ($deliveryStatus === 'completed') {
                 $recordStatus = 'completed';
@@ -4034,6 +4036,8 @@ class Dashboard extends BaseController
             }
             if ($recordStatus === 'completed') {
                 $paymentStatus = 'paid';
+            } elseif ($recordStatus === 'return_refund') {
+                $paymentStatus = 'unpaid';
             }
 
             $payload = [

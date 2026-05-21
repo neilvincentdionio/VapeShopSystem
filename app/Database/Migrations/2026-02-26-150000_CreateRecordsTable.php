@@ -61,7 +61,7 @@ class CreateRecordsTable extends Migration
                 'default'    => 'unpaid',
             ],
             'status' => [
-                'type'       => "ENUM('pending','completed','cancelled')",
+                'type'       => "ENUM('pending','completed','cancelled','return_refund')",
                 'null'       => false,
                 'default'    => 'pending',
             ],

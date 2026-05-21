@@ -69,6 +69,7 @@
         .status-pending { color: #f39c12; font-weight: bold; }
         .status-completed { color: #27ae60; font-weight: bold; }
         .status-cancelled { color: #e74c3c; font-weight: bold; }
+        .status-return_refund { color: #6d28d9; font-weight: bold; }
         .footer {
             margin-top: 30px;
             text-align: center;

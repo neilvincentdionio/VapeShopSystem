@@ -233,6 +233,7 @@
                         <option value="pending" <?= $currentStatus === 'pending' ? 'selected' : '' ?>>Pending</option>
                         <option value="completed" <?= $currentStatus === 'completed' ? 'selected' : '' ?>>Completed</option>
                         <option value="cancelled" <?= $currentStatus === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                        <option value="return_refund" <?= $currentStatus === 'return_refund' ? 'selected' : '' ?>>Return/Refund</option>
                     </select>
                 </div>
                 <div class="field">

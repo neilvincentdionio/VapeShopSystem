@@ -131,16 +131,18 @@ $routes->post('/admin/permissions/delete/(:num)', 'AdminPermissions::destroy/$1'
 $routes->group('records', ['filter' => ['auth:admin', 'permission:manage_records']], static function ($routes) {
     $routes->get('/', 'Records::index');
     $routes->get('create', 'Records::create');
-    $routes->get('(:num)', 'Records::show/$1');
-    $routes->post('store', 'Records::store');
-    $routes->get('edit/(:num)', 'Records::edit/$1');
-    $routes->post('update/(:num)', 'Records::update/$1');
-    $routes->post('delete/(:num)', 'Records::delete/$1');
-    // Export and print routes
+    $routes->get('reports', 'SalesReports::index');
+    $routes->get('reports/export/pdf', 'SalesReports::exportPdf');
+    $routes->get('reports/export/excel', 'SalesReports::exportExcel');
     $routes->get('export-csv', 'Records::exportCSV');
     $routes->get('export-excel', 'Records::exportExcel');
     $routes->get('generate-pdf', 'Records::generatePDF');
     $routes->get('print', 'Records::printView');
+    $routes->get('edit/(:num)', 'Records::edit/$1');
+    $routes->get('(:num)', 'Records::show/$1');
+    $routes->post('store', 'Records::store');
+    $routes->post('update/(:num)', 'Records::update/$1');
+    $routes->post('delete/(:num)', 'Records::delete/$1');
 });
 
 // Products module routes (Admin only)
@@ -228,9 +230,9 @@ $routes->get('/admin/export-logs', 'AdminController::exportLogs', ['filter' => [
 $routes->get('/admin/security-report', 'AdminController::exportSecurityReport', ['filter' => ['auth:admin', 'permission:activity_logs.view']]);
 
 // Sales reports (Admin)
-$routes->get('/admin/reports', 'SalesReports::index', ['filter' => 'auth:admin']);
-$routes->get('/admin/reports/export/pdf', 'SalesReports::exportPdf', ['filter' => 'auth:admin']);
-$routes->get('/admin/reports/export/excel', 'SalesReports::exportExcel', ['filter' => 'auth:admin']);
+$routes->get('/admin/reports', static fn () => redirect()->to(site_url('records/reports')), ['filter' => 'auth:admin']);
+$routes->get('/admin/reports/export/pdf', static fn () => redirect()->to(site_url('records/reports/export/pdf') . '?' . (service('request')->getServer('QUERY_STRING') ?? '')), ['filter' => 'auth:admin']);
+$routes->get('/admin/reports/export/excel', static fn () => redirect()->to(site_url('records/reports/export/excel') . '?' . (service('request')->getServer('QUERY_STRING') ?? '')), ['filter' => 'auth:admin']);
 $routes->get('/admin/messages', 'Messages::adminInbox', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 $routes->get('/admin/messages/(:num)', 'Messages::adminConversation/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);
 $routes->post('/admin/messages/(:num)/reply', 'Messages::adminReply/$1', ['filter' => ['auth:admin', 'permission:manage_orders']]);

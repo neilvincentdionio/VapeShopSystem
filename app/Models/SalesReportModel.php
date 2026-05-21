@@ -55,6 +55,8 @@ class SalesReportModel extends Model
             'total_orders' => 0,
             'total_products_sold' => 0,
             'average_order_value' => 0.0,
+            'total_refunds' => 0,
+            'refund_amount' => 0.0,
         ];
 
         if (!$this->db->tableExists('orders')) {
@@ -68,33 +70,30 @@ class SalesReportModel extends Model
                 ->selectSum('op.amount', 'total')
                 ->join('orders o', 'o.id = op.order_id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
-                ->where($paidDateExpr . ' <', $end)
-                ->get()
-                ->getRowArray();
+                ->where($paidDateExpr . ' <', $end);
+            $this->applyReportableOrderFilters($revenueRow);
+            $revenueRow = $revenueRow->get()->getRowArray();
             $summary['total_revenue'] = round((float) ($revenueRow['total'] ?? 0), 2);
 
             $ordersRow = $this->db->table('orders o')
                 ->select('COUNT(DISTINCT o.id) AS total', false)
                 ->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
-                ->where($paidDateExpr . ' <', $end)
-                ->get()
-                ->getRowArray();
+                ->where($paidDateExpr . ' <', $end);
+            $this->applyReportableOrderFilters($ordersRow);
+            $ordersRow = $ordersRow->get()->getRowArray();
             $summary['total_orders'] = (int) ($ordersRow['total'] ?? 0);
 
             $profitRow = $this->db->table('orders o')
                 ->selectSum('o.total_profit', 'total')
                 ->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
-                ->where($paidDateExpr . ' <', $end)
-                ->get()
-                ->getRowArray();
+                ->where($paidDateExpr . ' <', $end);
+            $this->applyReportableOrderFilters($profitRow);
+            $profitRow = $profitRow->get()->getRowArray();
             $summary['total_profit'] = round((float) ($profitRow['total'] ?? 0), 2);
 
             if ($summary['total_profit'] <= 0 && $this->db->tableExists('order_items')) {
@@ -103,11 +102,10 @@ class SalesReportModel extends Model
                     ->join('orders o', 'o.id = oi.order_id', 'inner')
                     ->join('order_payments op', 'op.order_id = o.id', 'inner')
                     ->where('op.status', 'paid')
-                    ->where('o.status !=', 'cancelled')
                     ->where($paidDateExpr . ' >=', $start)
-                    ->where($paidDateExpr . ' <', $end)
-                    ->get()
-                    ->getRowArray();
+                    ->where($paidDateExpr . ' <', $end);
+                $this->applyReportableOrderFilters($itemProfitRow);
+                $itemProfitRow = $itemProfitRow->get()->getRowArray();
                 $summary['total_profit'] = round((float) ($itemProfitRow['total'] ?? 0), 2);
             }
 
@@ -117,11 +115,10 @@ class SalesReportModel extends Model
                     ->join('orders o', 'o.id = oi.order_id', 'inner')
                     ->join('order_payments op', 'op.order_id = o.id', 'inner')
                     ->where('op.status', 'paid')
-                    ->where('o.status !=', 'cancelled')
                     ->where($paidDateExpr . ' >=', $start)
-                    ->where($paidDateExpr . ' <', $end)
-                    ->get()
-                    ->getRowArray();
+                    ->where($paidDateExpr . ' <', $end);
+                $this->applyReportableOrderFilters($soldRow);
+                $soldRow = $soldRow->get()->getRowArray();
                 $summary['total_products_sold'] = (int) ($soldRow['total'] ?? 0);
             }
         } else {
@@ -154,6 +151,10 @@ class SalesReportModel extends Model
             $summary['average_order_value'] = round($summary['total_revenue'] / $summary['total_orders'], 2);
         }
 
+        $refunds = $this->getRefundsSummary($start, $end);
+        $summary['total_refunds'] = $refunds['total_refunds'];
+        $summary['refund_amount'] = $refunds['refund_amount'];
+
         return $summary;
     }
 
@@ -176,25 +177,23 @@ class SalesReportModel extends Model
                 ->select('COUNT(DISTINCT o.id) AS orders', false)
                 ->join('orders o', 'o.id = op.order_id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
                 ->where($paidDateExpr . ' <', $end)
                 ->groupBy('sale_date')
-                ->orderBy('sale_date', 'ASC')
-                ->get()
-                ->getResultArray();
+                ->orderBy('sale_date', 'ASC');
+            $this->applyReportableOrderFilters($revenueRows);
+            $revenueRows = $revenueRows->get()->getResultArray();
 
             $profitRows = $this->db->table('orders o')
                 ->select("DATE({$paidDateExpr}) AS sale_date", false)
                 ->selectSum('o.total_profit', 'profit')
                 ->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
                 ->where($paidDateExpr . ' <', $end)
-                ->groupBy('sale_date')
-                ->get()
-                ->getResultArray();
+                ->groupBy('sale_date');
+            $this->applyReportableOrderFilters($profitRows);
+            $profitRows = $profitRows->get()->getResultArray();
 
             $profitByDate = [];
             foreach ($profitRows as $pr) {
@@ -256,25 +255,23 @@ class SalesReportModel extends Model
                 ->select('COUNT(DISTINCT o.id) AS orders', false)
                 ->join('orders o', 'o.id = op.order_id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
                 ->where($paidDateExpr . ' <', $end)
                 ->groupBy('sale_month')
-                ->orderBy('sale_month', 'ASC')
-                ->get()
-                ->getResultArray();
+                ->orderBy('sale_month', 'ASC');
+            $this->applyReportableOrderFilters($revenueRows);
+            $revenueRows = $revenueRows->get()->getResultArray();
 
             $profitRows = $this->db->table('orders o')
                 ->select("DATE_FORMAT({$paidDateExpr}, '%Y-%m') AS sale_month", false)
                 ->selectSum('o.total_profit', 'profit')
                 ->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
                 ->where($paidDateExpr . ' >=', $start)
                 ->where($paidDateExpr . ' <', $end)
-                ->groupBy('sale_month')
-                ->get()
-                ->getResultArray();
+                ->groupBy('sale_month');
+            $this->applyReportableOrderFilters($profitRows);
+            $profitRows = $profitRows->get()->getResultArray();
 
             $profitByMonth = [];
             foreach ($profitRows as $pr) {
@@ -311,7 +308,6 @@ class SalesReportModel extends Model
             ->select('oi.product_name, SUM(oi.quantity) AS units_sold', false)
             ->selectSum('oi.subtotal', 'revenue')
             ->join('orders o', 'o.id = oi.order_id', 'inner')
-            ->where('o.status !=', 'cancelled')
             ->where($paidDateExpr . ' >=', $start)
             ->where($paidDateExpr . ' <', $end)
             ->groupBy('oi.product_id, oi.product_name')
@@ -321,6 +317,7 @@ class SalesReportModel extends Model
         if ($this->db->tableExists('order_payments')) {
             $builder->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid');
+            $this->applyReportableOrderFilters($builder);
         } else {
             $builder->where('o.status', 'completed');
         }
@@ -358,7 +355,6 @@ class SalesReportModel extends Model
                 false
             )
             ->join('users u', 'u.id = o.customer_id', 'left')
-            ->where('o.status !=', 'cancelled')
             ->where($paidDateExpr . ' >=', $start)
             ->where($paidDateExpr . ' <', $end)
             ->orderBy('o.created_at', 'DESC')
@@ -368,6 +364,7 @@ class SalesReportModel extends Model
             $builder->select('op.amount AS paid_amount, op.status AS payment_status, op.method AS payment_method', false)
                 ->join('order_payments op', 'op.order_id = o.id', 'inner')
                 ->where('op.status', 'paid');
+            $this->applyReportableOrderFilters($builder);
         } else {
             $builder->where('o.status', 'completed');
         }
@@ -399,7 +396,124 @@ class SalesReportModel extends Model
             'monthly' => $this->getMonthlyBreakdown($range['start'], $range['end']),
             'top_products' => $this->getTopProducts($range['start'], $range['end']),
             'orders' => $this->getOrderLines($range['start'], $range['end']),
+            'refunds' => $this->getRefundOrderLines($range['start'], $range['end']),
         ];
+    }
+
+    /**
+     * @return array{total_refunds: int, refund_amount: float}
+     */
+    public function getRefundsSummary(string $start, string $end): array
+    {
+        $summary = [
+            'total_refunds' => 0,
+            'refund_amount' => 0.0,
+        ];
+
+        if (! $this->db->tableExists('orders') || ! $this->db->tableExists('order_shipments')) {
+            return $summary;
+        }
+
+        $paidDateExpr = $this->paidDateExpression();
+        $builder = $this->db->table('orders o')
+            ->select('COUNT(DISTINCT o.id) AS total_refunds', false)
+            ->join('order_shipments s', 's.order_id = o.id', 'inner')
+            ->where('s.status', 'return_refund');
+
+        if ($this->db->tableExists('order_payments')) {
+            $builder->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid')
+                ->where($paidDateExpr . ' >=', $start)
+                ->where($paidDateExpr . ' <', $end);
+        } else {
+            $builder->where('o.created_at >=', $start)
+                ->where('o.created_at <', $end);
+        }
+
+        $countRow = $builder->get()->getRowArray();
+        $summary['total_refunds'] = (int) ($countRow['total_refunds'] ?? 0);
+
+        $amountBuilder = $this->db->table('orders o')
+            ->select('SUM(COALESCE(o.total_amount, 0)) AS refund_amount', false)
+            ->join('order_shipments s', 's.order_id = o.id', 'inner')
+            ->where('s.status', 'return_refund');
+
+        if ($this->db->tableExists('order_payments')) {
+            $amountBuilder->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid')
+                ->where($paidDateExpr . ' >=', $start)
+                ->where($paidDateExpr . ' <', $end);
+        } else {
+            $amountBuilder->where('o.created_at >=', $start)
+                ->where('o.created_at <', $end);
+        }
+
+        $amountRow = $amountBuilder->get()->getRowArray();
+        $summary['refund_amount'] = round((float) ($amountRow['refund_amount'] ?? 0), 2);
+
+        return $summary;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getRefundOrderLines(string $start, string $end, int $limit = 500): array
+    {
+        if (! $this->db->tableExists('orders') || ! $this->db->tableExists('order_shipments')) {
+            return [];
+        }
+
+        $limit = max(1, min(2000, $limit));
+        $paidDateExpr = $this->paidDateExpression();
+
+        $builder = $this->db->table('orders o')
+            ->select(
+                "o.id, o.reference_number, o.created_at, o.total_profit, u.name AS customer_name, u.email AS customer_email, {$paidDateExpr} AS paid_at, s.status AS delivery_status",
+                false
+            )
+            ->join('order_shipments s', 's.order_id = o.id', 'inner')
+            ->join('users u', 'u.id = o.customer_id', 'left')
+            ->where('s.status', 'return_refund')
+            ->orderBy('o.updated_at', 'DESC')
+            ->limit($limit);
+
+        if ($this->db->tableExists('order_payments')) {
+            $builder->select('op.amount AS paid_amount, op.method AS payment_method', false)
+                ->join('order_payments op', 'op.order_id = o.id', 'inner')
+                ->where('op.status', 'paid')
+                ->where($paidDateExpr . ' >=', $start)
+                ->where($paidDateExpr . ' <', $end);
+        } else {
+            $builder->where('o.created_at >=', $start)
+                ->where('o.created_at <', $end);
+        }
+
+        $rows = $builder->get()->getResultArray();
+        foreach ($rows as &$row) {
+            $row['total_amount'] = round((float) ($row['paid_amount'] ?? 0), 2);
+            $row['status'] = 'return_refund';
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Exclude cancelled and fully refunded orders from net sales metrics.
+     *
+     * @param \CodeIgniter\Database\BaseBuilder $builder
+     */
+    private function applyReportableOrderFilters($builder, string $orderAlias = 'o'): void
+    {
+        $builder->where($orderAlias . '.status !=', 'cancelled');
+
+        if ($this->db->tableExists('order_shipments')) {
+            $builder->where(
+                "NOT EXISTS (SELECT 1 FROM order_shipments srs WHERE srs.order_id = {$orderAlias}.id AND srs.status = 'return_refund')",
+                null,
+                false
+            );
+        }
     }
 
     private function paidDateExpression(): string

@@ -9,25 +9,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; --accent: #27c56f; }
         body { font-family: var(--main-font); background: #f5f7fa; min-height: 100vh; color: #333; }
-        .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem 2rem 2.5rem; }
-        .page-header {
-            background: #fff; border: 1px solid #e0e0e0; border-radius: 16px;
-            padding: 1.5rem 1.75rem; margin-bottom: 1.25rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,.05);
-        }
-        .page-header h1 { font-size: 1.65rem; font-weight: 700; margin-bottom: .35rem; }
-        .page-header p { color: #666; font-size: .95rem; }
-        .filter-panel, .section-card {
-            background: #fff; border: 1px solid #e0e0e0; border-radius: 16px;
-            padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,.05);
-        }
-        .filter-form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
-        .filter-form label { display: block; font-size: .82rem; color: #666; margin-bottom: .25rem; }
-        .filter-form input {
-            border: 1px solid #e0e0e0; border-radius: 8px; padding: .55rem .7rem;
-            font-family: inherit; font-size: .92rem;
-        }
+        .container { max-width: none; margin: 0; padding: 0; }
         .btn {
             display: inline-flex; align-items: center; gap: .4rem;
             padding: .55rem 1rem; border-radius: 8px; border: none;
@@ -40,16 +22,6 @@
         .btn-outline { background: #fff; color: #333; border: 1px solid #e0e0e0; }
         .btn:hover { filter: brightness(.96); }
         .export-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; }
-        .stats-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem; margin-bottom: 1.25rem;
-        }
-        .stat-card {
-            background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
-            padding: 1.1rem 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,.04);
-        }
-        .stat-card h3 { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
-        .stat-card p { font-size: .85rem; color: #666; margin-top: .2rem; }
         .section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: .75rem; }
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: .9rem; }
@@ -57,28 +29,22 @@
         th { background: #f8f9fa; font-weight: 600; color: #444; }
         .text-right { text-align: right; }
         .empty { color: #888; padding: 1rem 0; font-size: .9rem; }
-        .tabs { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: 1rem; }
-        .tab-btn {
-            padding: .45rem .85rem; border-radius: 999px; border: 1px solid #e0e0e0;
-            background: #fff; cursor: pointer; font-family: inherit; font-size: .85rem;
-        }
-        .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
+        .text-right { text-align: right; }
         @media (max-width: 768px) {
             .export-actions { margin-left: 0; width: 100%; }
             .filter-form { flex-direction: column; align-items: stretch; }
         }
         @media print {
-            .admin-sidebar, .filter-panel, .tabs, .export-actions, .btn { display: none !important; }
+            .admin-sidebar, .module-toolbar, .records-module-nav, .tabs, .export-actions, .btn { display: none !important; }
             body { background: #fff; }
             .tab-panel { display: block !important; }
-            .section-card { box-shadow: none; border: none; }
+            .module-shell { box-shadow: none; border: none; }
         }
     </style>
 </head>
 <body>
 <?= $this->include('admin/partials/sidebar_styles') ?>
+<?= view('admin/partials/records_reports_layout') ?>
 <?= $this->include('admin/partials/sidebar') ?>
 
 <?php
@@ -89,43 +55,52 @@ $daily = $report['daily'] ?? [];
 $monthly = $report['monthly'] ?? [];
 $products = $report['top_products'] ?? [];
 $orders = $report['orders'] ?? [];
+$refunds = $report['refunds'] ?? [];
 $fmt = static fn ($n) => '₱' . number_format((float) $n, 2);
 $queryBase = http_build_query([
     'date_from' => $filters['date_from'] ?? '',
     'date_to' => $filters['date_to'] ?? '',
 ]);
+$reportsBase = site_url('records/reports');
 ?>
 
-<div class="container">
-    <header class="page-header">
-        <h1><i class="fas fa-chart-pie"></i> Sales Reports</h1>
-        <p>View system sales performance and export reports as PDF or Excel.</p>
-    </header>
+<div class="container records-reports-page">
+    <?= view('admin/partials/records_reports_nav', ['activeTab' => 'reports']) ?>
 
-    <section class="filter-panel">
-        <form class="filter-form" method="get" action="<?= site_url('admin/reports') ?>">
-            <fieldset style="border:0;padding:0;margin:0">
-                <label for="date_from">From</label>
-                <input type="date" id="date_from" name="date_from" value="<?= esc($filters['date_from'] ?? '') ?>" required>
-            </fieldset>
-            <fieldset style="border:0;padding:0;margin:0">
-                <label for="date_to">To</label>
-                <input type="date" id="date_to" name="date_to" value="<?= esc($filters['date_to'] ?? '') ?>" required>
-            </fieldset>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
-            <div class="export-actions">
-                <a class="btn btn-danger" href="<?= site_url('admin/reports/export/pdf?' . $queryBase) ?>" target="_blank" rel="noopener">
-                    <i class="fas fa-file-pdf"></i> Download PDF
-                </a>
-                <a class="btn btn-secondary" href="<?= site_url('admin/reports/export/excel?' . $queryBase) ?>">
-                    <i class="fas fa-file-excel"></i> Export Excel
-                </a>
-                <button type="button" class="btn btn-outline" onclick="window.print()">
-                    <i class="fas fa-print"></i> Print
-                </button>
+    <section class="module-shell">
+        <div class="module-header">
+            <div>
+                <h1><i class="fas fa-chart-pie"></i> Sales Reports</h1>
+                <p>View system sales performance and export reports as PDF or Excel.</p>
             </div>
-        </form>
-        <p style="margin-top:.75rem;font-size:.85rem;color:#6b7280;">
+        </div>
+
+        <div class="module-toolbar">
+            <form class="filter-form" method="get" action="<?= esc($reportsBase) ?>">
+                <div>
+                    <label for="date_from">From</label>
+                    <input type="date" id="date_from" name="date_from" value="<?= esc($filters['date_from'] ?? '') ?>" required>
+                </div>
+                <div>
+                    <label for="date_to">To</label>
+                    <input type="date" id="date_to" name="date_to" value="<?= esc($filters['date_to'] ?? '') ?>" required>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
+                <div class="export-actions">
+                    <a class="btn btn-danger" href="<?= esc($reportsBase . '/export/pdf?' . $queryBase) ?>" target="_blank" rel="noopener">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </a>
+                    <a class="btn btn-secondary" href="<?= esc($reportsBase . '/export/excel?' . $queryBase) ?>">
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </a>
+                    <button type="button" class="btn btn-outline" onclick="window.print()">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <p class="module-meta">
             Report period: <strong><?= esc($report['date_from'] ?? '') ?></strong> — <strong><?= esc($report['date_to'] ?? '') ?></strong>
             · Generated <?= esc($report['generated_at'] ?? '') ?>
         </p>
@@ -136,10 +111,10 @@ $queryBase = http_build_query([
             <h3><?= esc($fmt($summary['total_revenue'] ?? 0)) ?></h3>
             <p>Total Revenue</p>
         </div>
-        <article class="stat-card">
+        <div class="stat-card">
             <h3><?= esc($fmt($summary['total_profit'] ?? 0)) ?></h3>
             <p>Total Profit</p>
-        </article>
+        </div>
         <div class="stat-card">
             <h3><?= number_format((int) ($summary['total_orders'] ?? 0)) ?></h3>
             <p>Orders</p>
@@ -152,16 +127,28 @@ $queryBase = http_build_query([
             <h3><?= esc($fmt($summary['average_order_value'] ?? 0)) ?></h3>
             <p>Avg. Order Value</p>
         </div>
+        <div class="stat-card is-refund">
+            <h3><?= number_format((int) ($summary['total_refunds'] ?? 0)) ?></h3>
+            <p>Return/Refunds</p>
+        </div>
+        <div class="stat-card is-refund">
+            <h3><?= esc($fmt($summary['refund_amount'] ?? 0)) ?></h3>
+            <p>Refunded Amount</p>
+        </div>
     </div>
 
-    <section class="section-card">
+    <section class="module-shell">
+        <div class="section-tabs">
         <div class="tabs" role="tablist">
             <button type="button" class="tab-btn active" data-tab="daily">Daily Sales</button>
             <button type="button" class="tab-btn" data-tab="monthly">Monthly</button>
             <button type="button" class="tab-btn" data-tab="products">Top Products</button>
             <button type="button" class="tab-btn" data-tab="orders">Orders</button>
+            <button type="button" class="tab-btn" data-tab="refunds">Return/Refunds</button>
+        </div>
         </div>
 
+        <div class="section-body">
         <div id="tab-daily" class="tab-panel active">
             <h2 class="section-title">Daily breakdown</h2>
             <div class="table-wrap">
@@ -270,6 +257,41 @@ $queryBase = http_build_query([
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        <div id="tab-refunds" class="tab-panel">
+            <h2 class="section-title">Return/Refunds (<?= count($refunds) ?>)</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Customer</th>
+                            <th>Paid</th>
+                            <th class="text-right">Refunded Amount</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if ($refunds === []): ?>
+                        <tr><td colspan="6" class="empty">No return/refund orders in this period.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($refunds as $row): ?>
+                        <tr>
+                            <td><?= esc($row['reference_number'] ?? ('#' . ($row['id'] ?? ''))) ?></td>
+                            <td><?= esc($row['customer_name'] ?? 'Guest') ?></td>
+                            <td><?= esc(substr((string) ($row['paid_at'] ?? $row['created_at'] ?? ''), 0, 16)) ?></td>
+                            <td class="text-right"><?= esc($fmt($row['total_amount'] ?? 0)) ?></td>
+                            <td><?= esc(ucfirst((string) ($row['payment_method'] ?? ''))) ?></td>
+                            <td>Return/Refund</td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
         </div>
     </section>
 </div>

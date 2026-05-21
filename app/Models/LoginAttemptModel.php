@@ -46,18 +46,22 @@ class LoginAttemptModel extends Model
     }
 
     /**
-     * Checks failed attempts from same IP in a short time window.
+     * Checks failed attempts from same IP (optionally same email) in a short window.
      * Fail-open on DB issues to avoid locking out all users.
      */
-    public function isIpBlocked(string $ipAddress, int $minutes = 15, int $maxAttempts = 10): bool
+    public function isIpBlocked(string $ipAddress, int $minutes = 15, int $maxAttempts = 10, string $email = ''): bool
     {
         try {
             $since = date('Y-m-d H:i:s', strtotime("-{$minutes} minutes"));
-
-            $count = $this->where('ip_address', $ipAddress)
+            $builder = $this->where('ip_address', $ipAddress)
                 ->where('success', 0)
-                ->where('attempt_time >', $since)
-                ->countAllResults();
+                ->where('attempt_time >', $since);
+
+            if ($email !== '') {
+                $builder = $builder->where('email', $email);
+            }
+
+            $count = $builder->countAllResults();
 
             return $count >= $maxAttempts;
         } catch (\Throwable $e) {

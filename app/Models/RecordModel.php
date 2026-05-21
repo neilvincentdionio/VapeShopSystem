@@ -43,7 +43,7 @@ class RecordModel extends Model
         'unit_price' => 'required|decimal|greater_than_equal_to[0]',
         'payment_method' => 'permit_empty|in_list[cash,card,gcash,bank_transfer]',
         'payment_status' => 'permit_empty|in_list[paid,partial,unpaid]',
-        'status' => 'required|in_list[pending,completed,cancelled]',
+        'status' => 'required|in_list[pending,completed,cancelled,return_refund]',
         'notes' => 'permit_empty|max_length[1000]',
     ];
 
@@ -81,6 +81,8 @@ class RecordModel extends Model
         $row['total_amount'] = round(((float) ($row['quantity'] ?? 0)) * ((float) ($row['unit_price'] ?? 0)), 2);
         if (($row['status'] ?? '') === 'completed') {
             $row['payment_status'] = 'paid';
+        } elseif (($row['status'] ?? '') === 'return_refund') {
+            $row['payment_status'] = 'unpaid';
         }
         return $row;
     }

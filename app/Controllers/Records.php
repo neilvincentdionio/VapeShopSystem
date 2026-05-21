@@ -9,7 +9,7 @@ class Records extends BaseController
     protected $recordModel;
     protected $session;
     private const RECORD_TYPES = ['purchase', 'inventory', 'expense', 'sales'];
-    private const RECORD_STATUSES = ['pending', 'completed', 'cancelled'];
+    private const RECORD_STATUSES = ['pending', 'completed', 'cancelled', 'return_refund'];
     private const PAYMENT_METHODS = ['cash', 'card', 'gcash', 'bank_transfer'];
     private const PAYMENT_STATUSES = ['paid', 'partial', 'unpaid'];
     private ?bool $hasExpectedSchema = null;
@@ -429,7 +429,7 @@ class Records extends BaseController
                 $totalAmount,
                 ucfirst($record['payment_method'] ?? ''),
                 ucfirst($record['payment_status']),
-                ucfirst($record['status']),
+                $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')),
                 $this->escapeCSV($record['notes'] ?? ''),
                 $record['created_at']
             );
@@ -531,7 +531,7 @@ class Records extends BaseController
                 $totalAmount,
                 ucfirst($record['payment_method'] ?? ''),
                 ucfirst($record['payment_status']),
-                ucfirst($record['status']),
+                $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')),
                 $record['notes'] ?? '',
                 $record['created_at']
             );
@@ -790,7 +790,7 @@ class Records extends BaseController
                 <td>₱' . number_format($record['unit_price'], 2) . '</td>
                 <td>₱' . number_format($totalAmount, 2) . '</td>
                 <td>' . ucfirst($record['payment_method'] ?? '') . '</td>
-                <td>' . ucfirst($record['status']) . '</td>
+                <td>' . $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')) . '</td>
             </tr>';
         }
         
@@ -901,5 +901,17 @@ class Records extends BaseController
         $date = \DateTime::createFromFormat('Y-m-d', $normalized);
 
         return ($date && $date->format('Y-m-d') === $normalized) ? $normalized : '';
+    }
+
+    private function formatRecordStatusLabel(string $status): string
+    {
+        $labels = [
+            'pending' => 'Pending',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+            'return_refund' => 'Return/Refund',
+        ];
+
+        return $labels[$status] ?? ucfirst($status);
     }
 }

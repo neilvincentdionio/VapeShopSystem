@@ -41,8 +41,8 @@ class ApiAuth extends BaseController
         }
 
         $ipAddress = $request->getIPAddress();
-        if ($this->loginAttemptModel->isIpBlocked($ipAddress)) {
-            return $this->jsonError('Too many login attempts from this IP. Please try again later.', 429);
+        if ($this->loginAttemptModel->isIpBlocked($ipAddress, 15, 10, $email)) {
+            return $this->jsonError('Too many login attempts for this account from your IP. Please try again later.', 429);
         }
 
         $user = $this->userModel->verifyCredentials($email, $password);

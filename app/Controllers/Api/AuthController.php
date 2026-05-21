@@ -69,7 +69,7 @@ class AuthController extends BaseApiController
             return $this->errorResponse('Email and password are required.', [], 422);
         }
 
-        if ($this->loginAttemptModel->isIpBlocked($this->request->getIPAddress())) {
+        if ($this->loginAttemptModel->isIpBlocked($this->request->getIPAddress(), 15, 10, $email)) {
             return $this->errorResponse('Too many login attempts. Please try again later.', [], 429);
         }
 

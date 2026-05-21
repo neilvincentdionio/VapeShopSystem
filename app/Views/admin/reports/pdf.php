@@ -43,6 +43,8 @@ $fmt = static fn ($n) => '₱' . number_format((float) $n, 2);
         <tr><td class="label">Total Orders</td><td class="value"><?= esc((string) ($summary['total_orders'] ?? 0)) ?></td></tr>
         <tr><td class="label">Products Sold</td><td class="value"><?= esc((string) ($summary['total_products_sold'] ?? 0)) ?></td></tr>
         <tr><td class="label">Average Order Value</td><td class="value"><?= esc($fmt($summary['average_order_value'] ?? 0)) ?></td></tr>
+        <tr><td class="label">Return/Refunds</td><td class="value"><?= esc((string) ($summary['total_refunds'] ?? 0)) ?></td></tr>
+        <tr><td class="label">Refunded Amount</td><td class="value"><?= esc($fmt($summary['refund_amount'] ?? 0)) ?></td></tr>
     </table>
 
     <h2>Daily Sales</h2>

@@ -9,7 +9,7 @@
         :root { --main-font: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body {
             font-family: var(--main-font);
-            background: #ffffff;
+            background: #f5f7fa;
             min-height: 100vh; position: relative; color: #333333;
         }
         .navbar {
@@ -95,7 +95,7 @@
             color: #666666;
         }
 
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; position: relative; z-index: 2; }
+        .container { max-width: none; margin: 0; padding: 0; position: relative; z-index: 2; }
         .panel {
             background: #ffffff;
             border: 1px solid #e0e0e0;
@@ -144,6 +144,7 @@
         .sort-link:hover { text-decoration: underline; }
         .status-active { color: #28a745; font-weight: 600; }
         .status-inactive { color: #dc3545; font-weight: 600; }
+        .status-return-refund { color: #6d28d9; font-weight: 600; }
         .alert { padding: .8rem; border-radius: 8px; margin-bottom: 1rem; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
@@ -233,12 +234,32 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <?= $this->include('admin/partials/sidebar_styles') ?>
+<?= view('admin/partials/records_reports_layout') ?>
 </head>
 <body>
     <?= $this->include('admin/partials/sidebar') ?>
+<?php
+    $recordStatusLabels = [
+        'pending' => 'Pending',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'return_refund' => 'Return/Refund',
+    ];
+    $recordStatusClass = static function (string $status): string {
+        if ($status === 'completed') {
+            return 'status-active';
+        }
+        if ($status === 'return_refund') {
+            return 'status-return-refund';
+        }
 
-    <div class="container">
+        return 'status-inactive';
+    };
+?>
+
+    <div class="container records-reports-page">
         <?php if (session()->getFlashdata('success')): ?>
             <div class="alert alert-success"><?= htmlspecialchars(session()->getFlashdata('success')) ?></div>
         <?php endif; ?>
@@ -246,51 +267,61 @@
             <div class="alert alert-error"><?= htmlspecialchars(session()->getFlashdata('error')) ?></div>
         <?php endif; ?>
 
-        <div class="panel">
-            <div class="row" style="justify-content: space-between;">
-                <h2>Records Module</h2>
-                <?php if (!empty($user_shop_name)): ?><span>Shop: <?= htmlspecialchars($user_shop_name) ?></span><?php endif; ?>
+        <?= view('admin/partials/records_reports_nav', ['activeTab' => 'records']) ?>
+
+        <section class="module-shell">
+            <div class="module-header">
+                <div>
+                    <h2>Records Module</h2>
+                    <?php if (!empty($user_shop_name)): ?>
+                        <p>Shop: <?= htmlspecialchars($user_shop_name) ?></p>
+                    <?php endif; ?>
+                </div>
                 <a href="<?= site_url('records/create') ?>" class="btn btn-success">Add Record</a>
             </div>
-        </div>
 
-        <div class="panel">
-            <form action="<?= site_url('records') ?>" method="get" class="row">
-                <input type="hidden" name="date_sort" value="<?= htmlspecialchars($date_sort) ?>">
-                <input type="text" name="q" placeholder="Search reference, title, description..." value="<?= htmlspecialchars($search) ?>">
-                <select name="record_type">
-                    <option value="">All Types</option>
-                    <?php foreach ($record_types as $type): ?>
-                        <option value="<?= htmlspecialchars($type['record_type']) ?>" <?= $record_type === $type['record_type'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars(ucfirst($type['record_type'])) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="status">
-                    <option value="">All Status</option>
-                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending</option>
-                    <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
-                    <option value="cancelled" <?= $status === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
-                </select>
-                <label for="from_date">From</label>
-                <input id="from_date" type="date" name="from_date" value="<?= htmlspecialchars($from_date) ?>" title="From Date">
-                <label for="to_date">To</label>
-                <input id="to_date" type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" title="To Date">
-                <button type="submit" class="btn btn-primary">Filter</button>
-                <a href="<?= site_url('records') ?>" class="btn btn-secondary">Reset</a>
-            </form>
-        </div>
-
-        <div class="panel">
-            <div class="row" style="justify-content: flex-end; gap: 0.5rem;">
-                <strong style="margin-right: auto;">Export Options:</strong>
-                <button type="button" class="btn btn-info" onclick="exportRecords('excel')">Export Excel</button>
-                <button type="button" class="btn btn-info" onclick="exportRecords('pdf')">Export PDF</button>
-                <button type="button" class="btn btn-info" onclick="printRecords()">Print View</button>
+            <div class="module-toolbar">
+                <form action="<?= site_url('records') ?>" method="get" class="filter-form">
+                    <input type="hidden" name="date_sort" value="<?= htmlspecialchars($date_sort) ?>">
+                    <input type="text" class="search-input" name="q" placeholder="Search reference, title, description..." value="<?= htmlspecialchars($search) ?>">
+                    <select name="record_type">
+                        <option value="">All Types</option>
+                        <?php foreach ($record_types as $type): ?>
+                            <option value="<?= htmlspecialchars($type['record_type']) ?>" <?= $record_type === $type['record_type'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars(ucfirst($type['record_type'])) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="status">
+                        <option value="">All Status</option>
+                        <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="cancelled" <?= $status === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                        <option value="return_refund" <?= $status === 'return_refund' ? 'selected' : '' ?>>Return/Refund</option>
+                    </select>
+                    <div>
+                        <label for="from_date">From</label>
+                        <input id="from_date" type="date" name="from_date" value="<?= htmlspecialchars($from_date) ?>" title="From Date">
+                    </div>
+                    <div>
+                        <label for="to_date">To</label>
+                        <input id="to_date" type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" title="To Date">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="<?= site_url('records') ?>" class="btn btn-secondary">Reset</a>
+                </form>
             </div>
-        </div>
 
-        <div class="panel" style="overflow-x:auto;">
+            <div class="module-actions-bar">
+                <strong>Export Options</strong>
+                <div class="module-actions-group">
+                    <button type="button" class="btn btn-info" onclick="exportRecords('excel')">Export Excel</button>
+                    <button type="button" class="btn btn-info" onclick="exportRecords('pdf')">Export PDF</button>
+                    <button type="button" class="btn btn-info" onclick="printRecords()">Print View</button>
+                </div>
+            </div>
+
+            <div class="module-table-wrap">
             <table>
                 <thead>
                     <tr>
@@ -326,7 +357,7 @@
                                 <td>&#8369;<?= number_format((float) ($item['unit_price'] ?? 0), 2) ?></td>
                                 <td>&#8369;<?= number_format((float) ($item['total_amount'] ?? 0), 2) ?></td>
                                 <td><?= htmlspecialchars(ucfirst((string) ($item['payment_status'] ?? 'unpaid'))) ?></td>
-                                <td class="<?= ($item['status'] ?? '') === 'completed' ? 'status-active' : 'status-inactive' ?>"><?= htmlspecialchars(ucfirst((string) ($item['status'] ?? 'pending'))) ?></td>
+                                <td class="<?= esc($recordStatusClass((string) ($item['status'] ?? 'pending'))) ?>"><?= htmlspecialchars($recordStatusLabels[(string) ($item['status'] ?? 'pending')] ?? ucfirst((string) ($item['status'] ?? 'pending'))) ?></td>
                                 <td>
                                     <div class="actions">
                                         <button type="button" class="btn btn-info js-view-record" data-id="<?= (int) $item['id'] ?>">View</button>
@@ -350,7 +381,8 @@
             <div class="pagination-wrap">
                 <?= $pager->links() ?>
             </div>
-        </div>
+            </div>
+        </section>
 
         <div id="record-modal" class="modal-overlay" aria-hidden="true">
             <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="record-modal-title">

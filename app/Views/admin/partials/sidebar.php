@@ -5,6 +5,7 @@ $seg2 = service('uri')->getSegment(2);
 $isDashboard = $seg1 === 'dashboard' && !in_array($seg2, ['profile', 'settings'], true);
 $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
+$isReports = $seg1 === 'records' && $seg2 === 'reports';
 $isOrders = $seg1 === 'orders' || ($seg1 === 'admin' && str_starts_with((string) $seg2, 'order') && $seg2 !== 'returns');
 $isUsers = $seg1 === 'user-management';
 $isRoles = $seg1 === 'admin' && $seg2 === 'roles';
@@ -14,7 +15,6 @@ $isSettings = $seg1 === 'dashboard' && $seg2 === 'settings';
 $isSessionLogs = $seg1 === 'admin' && $seg2 === 'session-logs';
 $isActivityLogs = $seg1 === 'admin' && $seg2 === 'activity-logs';
 $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
-$isReports = $seg1 === 'admin' && $seg2 === 'reports';
 ?>
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
@@ -28,8 +28,7 @@ $isReports = $seg1 === 'admin' && $seg2 === 'reports';
                 <a href="<?= site_url('products') ?>" class="nav-link <?= $isProducts ? 'active' : '' ?>">Products</a>
                 <a href="<?= site_url('orders') ?>" class="nav-link <?= $isOrders ? 'active' : '' ?>">Orders</a>
                 <a href="<?= site_url('admin/messages') ?>" class="nav-link <?= $isMessages ? 'active' : '' ?>">Messages</a>
-                <a href="<?= site_url('records') ?>" class="nav-link <?= $isRecords ? 'active' : '' ?>">Records</a>
-                <a href="<?= site_url('admin/reports') ?>" class="nav-link <?= $isReports ? 'active' : '' ?>">Sales Reports</a>
+                <a href="<?= site_url('records') ?>" class="nav-link <?= ($isRecords || $isReports) ? 'active' : '' ?>">Records &amp; Reports</a>
                 <a href="<?= site_url('admin/session-logs') ?>" class="nav-link <?= $isSessionLogs ? 'active' : '' ?>">Session Logs</a>
                 <a href="<?= site_url('admin/activity-logs') ?>" class="nav-link <?= $isActivityLogs ? 'active' : '' ?>">Activity Logs</a>
                 <a href="<?= site_url('user-management') ?>" class="nav-link <?= $isUsers ? 'active' : '' ?>">User Management</a>
