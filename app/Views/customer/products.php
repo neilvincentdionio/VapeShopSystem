@@ -112,23 +112,80 @@
         background: #ffffff;
         border: 1px solid #e0e0e0;
         border-radius: 16px;
-        padding: 1.25rem;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        padding: 1.1rem 1.15rem 1.15rem;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 120px);
     }
 
-    .cart-sidebar h2 {
+    .cart-sidebar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .5rem;
+        margin-bottom: .85rem;
+        padding-bottom: .75rem;
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .cart-sidebar-head h2 {
         font-size: 1.05rem;
-        font-weight: 900;
-        color: #333333;
-        margin-bottom: .75rem;
+        font-weight: 800;
+        color: #1e293b;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: .4rem;
     }
 
-    .cart-sidebar .cart-empty-text {
-        color: #666666;
-        line-height: 1.6;
-        margin-top: .25rem;
-        margin-bottom: 1rem;
+    .cart-count-badge {
+        font-size: .72rem;
+        font-weight: 700;
+        color: #0e7490;
+        background: #e0f7fa;
+        border: 1px solid #b2ebf2;
+        border-radius: 999px;
+        padding: .2rem .55rem;
+        white-space: nowrap;
+    }
+
+    .cart-sidebar-body {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        margin-bottom: .5rem;
+    }
+
+    .cart-empty-state {
+        text-align: center;
+        padding: 1.25rem .35rem 1rem;
+    }
+
+    .cart-empty-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e0f7fa, #b2ebf2);
+        color: #00838f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        margin: 0 auto .85rem;
+    }
+
+    .cart-empty-title {
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: .25rem;
         font-size: .95rem;
+    }
+
+    .cart-empty-hint {
+        color: #64748b;
+        font-size: .86rem;
+        line-height: 1.5;
     }
 
     .cart-mini-items {
@@ -141,11 +198,11 @@
         display: grid;
         grid-template-columns: 54px 1fr;
         gap: .7rem;
-        align-items: center;
-        padding: .75rem;
-        border: 1px solid #eaeaea;
-        border-radius: 14px;
-        background: #fff;
+        align-items: start;
+        padding: .7rem;
+        border: 1px solid #e8edf3;
+        border-radius: 12px;
+        background: #fafbfc;
     }
 
     .cart-mini-thumb {
@@ -215,20 +272,55 @@
     }
 
     .cart-sidebar .cart-summary {
-        border-top: 1px solid #eaeaea;
-        padding-top: 1rem;
+        border-top: 1px solid #eef2f7;
+        padding-top: .9rem;
         display: grid;
-        gap: .75rem;
+        gap: .7rem;
+        margin-top: auto;
     }
 
     .cart-sidebar .cart-total {
-        font-size: 1.1rem;
-        font-weight: 1000;
-        color: #333333;
+        font-size: 1rem;
+        font-weight: 800;
+        color: #1e293b;
         display: flex;
         justify-content: space-between;
         gap: 1rem;
         align-items: baseline;
+    }
+
+    .cart-sidebar .cart-total span:last-child {
+        font-size: 1.2rem;
+        color: #00838f;
+    }
+
+    .cart-order-btn {
+        width: 100%;
+        padding: .72rem 1rem;
+        font-size: .92rem;
+        font-weight: 700;
+        border-radius: 10px;
+        border: none;
+        justify-content: center;
+    }
+
+    .cart-order-btn:not(:disabled) {
+        background: linear-gradient(135deg, #00bcd4, #00acc1);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(0, 188, 212, 0.35);
+    }
+
+    .cart-order-btn:not(:disabled):hover {
+        background: linear-gradient(135deg, #00acc1, #0097a7);
+        transform: translateY(-1px);
+    }
+
+    .cart-order-btn:disabled {
+        background: #e2e8f0;
+        color: #94a3b8;
+        opacity: 1;
+        cursor: not-allowed;
+        box-shadow: none;
     }
 
     .btn-danger {
@@ -545,45 +637,106 @@
 
     .checkout-modal-card {
         width: 100%;
-        max-width: 560px;
+        max-width: 520px;
         max-height: 92vh;
-        overflow-y: auto;
         background: #ffffff;
         border: 1px solid #e0e0e0;
-        border-radius: 16px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
-        padding: 1.25rem;
+        border-radius: 18px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     }
 
     .checkout-modal-head {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.75rem;
+        padding: 1.1rem 1.25rem .75rem;
+        flex-shrink: 0;
     }
 
     .checkout-modal-title {
-        font-size: 1.05rem;
+        font-size: 1.15rem;
         font-weight: 800;
-        color: #333333;
+        color: #1e293b;
     }
 
     .checkout-modal-close {
-        background: transparent;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #f1f5f9;
         border: none;
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         cursor: pointer;
-        color: #666666;
+        color: #64748b;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
-    .checkout-modal-total {
-        background: #f8f9fa;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 0.8rem 0.9rem;
-        margin-bottom: 1rem;
+    .checkout-modal-close:hover {
+        background: #e2e8f0;
+        color: #334155;
+    }
+
+    .checkout-summary-banner {
+        margin: 0 1.25rem .9rem;
+        padding: .9rem 1rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #e0f7fa 0%, #f0fdfa 100%);
+        border: 1px solid #b2ebf2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-shrink: 0;
+    }
+
+    .checkout-summary-label {
+        font-size: .78rem;
         font-weight: 700;
-        color: #333333;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #0e7490;
+        margin-bottom: .15rem;
+    }
+
+    .checkout-summary-meta {
+        font-size: .82rem;
+        color: #64748b;
+    }
+
+    .checkout-summary-amount {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #006064;
+        white-space: nowrap;
+    }
+
+    .checkout-form-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 1.25rem .25rem;
+        min-height: 0;
+    }
+
+    .checkout-form-footer {
+        flex-shrink: 0;
+        padding: .85rem 1.25rem 1.15rem;
+        border-top: 1px solid #eef2f7;
+        background: #fff;
+        box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.06);
+    }
+
+    .checkout-place-btn {
+        width: 100%;
+        padding: .78rem 1rem;
+        font-size: .95rem;
+        font-weight: 700;
+        border-radius: 10px;
     }
 
     .checkout-field {
@@ -605,32 +758,125 @@
         padding: 0.7rem 0.85rem;
         font-size: 0.9rem;
         outline: none;
+        background: #fff;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .checkout-input:focus {
+        border-color: #00bcd4;
+        box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.12);
+    }
+
+    textarea.checkout-input {
+        resize: vertical;
+        min-height: 72px;
+    }
+
+    .checkout-section-title {
+        font-size: .72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #64748b;
+        margin: 1rem 0 .55rem;
+    }
+
+    .checkout-section-title:first-child {
+        margin-top: 0;
     }
 
     .checkout-address-card {
-        border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        padding: .9rem;
-        margin-bottom: .8rem;
-        background: #f8f9fa;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: .85rem;
+        margin-bottom: .5rem;
+        background: #f8fafc;
     }
 
     .checkout-address-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .75rem;
+        gap: .65rem;
+        margin-top: .65rem;
     }
 
     .checkout-address-grid .full {
         grid-column: 1 / -1;
     }
 
-    .checkout-location-row {
-        display: flex;
-        gap: .6rem;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-top: .75rem;
+    .address-mode-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .35rem;
+        background: #e2e8f0;
+        padding: .3rem;
+        border-radius: 10px;
+        margin-top: .35rem;
+    }
+
+    .address-mode-tab {
+        position: relative;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    .address-mode-tab input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .address-mode-tab span {
+        display: block;
+        text-align: center;
+        padding: .5rem .45rem;
+        border-radius: 8px;
+        font-size: .82rem;
+        font-weight: 700;
+        color: #64748b;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+
+    .address-mode-tab input:checked + span {
+        background: #ffffff;
+        color: #00838f;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+    }
+
+    .address-mode-tab input:disabled + span {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    .saved-address-card {
+        margin-top: .65rem;
+        padding: .75rem .85rem;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid #cfe8ef;
+    }
+
+    .saved-address-label {
+        font-size: .72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #0e7490;
+        margin-bottom: .35rem;
+    }
+
+    .saved-address-text {
+        font-size: .88rem;
+        color: #334155;
+        line-height: 1.45;
+        font-weight: 600;
+    }
+
+    .saved-address-note {
+        margin-top: .45rem;
+        font-size: .8rem;
+        color: #64748b;
+        line-height: 1.4;
     }
 
     .btn-location {
@@ -1109,8 +1355,20 @@
             <?php endif; ?>
         </div>
 
+        <?php
+            $cartCount = count($cart_items ?? []);
+            $hasSavedAddress = ! empty($customer_delivery_address);
+            $hasSavedPin = ! empty($customer_delivery_latitude) && ! empty($customer_delivery_longitude);
+            $defaultAddressMode = ($hasSavedAddress && $hasSavedPin) ? 'saved_address' : 'manual';
+        ?>
         <aside class="cart-sidebar">
-            <h2>Cart</h2>
+            <div class="cart-sidebar-head">
+                <h2>Cart</h2>
+                <?php if ($cartCount > 0): ?>
+                    <span class="cart-count-badge"><?= $cartCount ?> <?= $cartCount === 1 ? 'item' : 'items' ?></span>
+                <?php endif; ?>
+            </div>
+            <div class="cart-sidebar-body">
             <?php if (!empty($cart_items)): ?>
                 <div class="cart-mini-items">
                     <?php foreach ($cart_items as $item): ?>
@@ -1154,14 +1412,13 @@
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div class="cart-empty-text">
-                    <div class="cart-icon" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#27c56f,#7ef0b2); color:#fff; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 1rem;">
-                        🛒
-                    </div>
-                    <div class="cart-empty-text">Your cart is empty.</div>
-                    <div class="cart-empty-text">Add items from the list on the left.</div>
+                <div class="cart-empty-state">
+                    <div class="cart-empty-icon" aria-hidden="true">🛒</div>
+                    <div class="cart-empty-title">Your cart is empty</div>
+                    <div class="cart-empty-hint">Add items from the product list to start your order.</div>
                 </div>
             <?php endif; ?>
+            </div>
 
             <div class="cart-summary">
                 <div class="cart-total">
@@ -1170,15 +1427,15 @@
                 </div>
 
                 <?php if (!empty($age_allowed)): ?>
-                    <button class="btn btn-primary" 
+                    <button type="button"
+                            class="btn cart-order-btn"
                             onclick="processDirectOrder()"
-                            <?= empty($cart_items) ? 'disabled' : '' ?>
-                            style="display:inline-flex; width:100%; justify-content:center;">
-                        Order it
+                            <?= empty($cart_items) ? 'disabled' : '' ?>>
+                        <?= empty($cart_items) ? 'Add items to checkout' : 'Proceed to Checkout' ?>
                     </button>
                 <?php else: ?>
-                    <a class="btn btn-outline" href="<?= site_url('customer/age-verification') ?>" style="display:inline-flex; width:100%; justify-content:center; border-width:2px;">
-                        Verify 18+
+                    <a class="btn btn-outline cart-order-btn" href="<?= site_url('customer/age-verification') ?>" style="display:inline-flex; justify-content:center; border-width:2px;">
+                        Verify 18+ to Order
                     </a>
                 <?php endif; ?>
             </div>
@@ -1203,13 +1460,19 @@
     <div class="checkout-modal-card">
         <div class="checkout-modal-head">
             <div class="checkout-modal-title">Checkout</div>
-            <button type="button" class="checkout-modal-close" onclick="closeCheckoutModal()">&times;</button>
-        </div>
-        <div class="checkout-modal-total">
-            Total: ₱<?= number_format((float) ($cart_total ?? 0), 2) ?>
+            <button type="button" class="checkout-modal-close" onclick="closeCheckoutModal()" aria-label="Close checkout">&times;</button>
         </div>
 
-        <form method="post" action="<?= site_url('customer/checkout') ?>" id="checkoutModalForm" onsubmit="return validateCheckoutModal();">
+        <div class="checkout-summary-banner">
+            <div>
+                <div class="checkout-summary-label">Order total</div>
+                <div class="checkout-summary-meta"><?= $cartCount ?> <?= $cartCount === 1 ? 'item' : 'items' ?> in cart</div>
+            </div>
+            <div class="checkout-summary-amount">₱<?= number_format((float) ($cart_total ?? 0), 2) ?></div>
+        </div>
+
+        <form method="post" action="<?= site_url('customer/checkout') ?>" id="checkoutModalForm" class="checkout-form-scroll" onsubmit="return validateCheckoutModal();">
+            <div class="checkout-section-title">Payment</div>
             <div class="checkout-field">
                 <label class="checkout-label" for="popup_payment_method">Payment Method</label>
                 <select class="checkout-input" id="popup_payment_method" name="payment_method" onchange="toggleCheckoutModalFields()" required>
@@ -1233,22 +1496,23 @@
                 <input class="checkout-input" type="text" id="popup_gcash_reference" name="gcash_reference" maxlength="50" placeholder="Enter GCash reference number">
             </div>
 
+            <div class="checkout-section-title">Delivery</div>
             <div class="checkout-address-card">
-                <div class="checkout-field">
+                <div class="checkout-field" style="margin-bottom:0;">
                     <label class="checkout-label">Delivery Address</label>
-                    <div class="checkout-location-row" style="margin-top:0;">
-                        <label>
-                            <input type="radio" name="delivery_address_mode" value="manual" checked onchange="toggleDeliveryAddressMode()">
-                            Enter address
+                    <div class="address-mode-tabs">
+                        <label class="address-mode-tab">
+                            <input type="radio" name="delivery_address_mode" value="manual" <?= $defaultAddressMode === 'manual' ? 'checked' : '' ?> onchange="toggleDeliveryAddressMode()">
+                            <span>Enter address</span>
                         </label>
-                        <label>
-                            <input type="radio" name="delivery_address_mode" value="saved_address" onchange="toggleDeliveryAddressMode()">
-                            Use My Address
+                        <label class="address-mode-tab">
+                            <input type="radio" name="delivery_address_mode" value="saved_address" <?= $defaultAddressMode === 'saved_address' ? 'checked' : '' ?> onchange="toggleDeliveryAddressMode()" <?= ! $hasSavedAddress ? 'disabled' : '' ?>>
+                            <span>Use My Address</span>
                         </label>
                     </div>
                 </div>
 
-                <div id="manual_delivery_fields" class="checkout-address-grid">
+                <div id="manual_delivery_fields" class="checkout-address-grid" style="<?= $defaultAddressMode === 'manual' ? '' : 'display:none;' ?>">
                     <div class="checkout-field full">
                         <label class="checkout-label" for="delivery_address_line">Street Address</label>
                         <input class="checkout-input" type="text" id="delivery_address_line" name="delivery_address_line" placeholder="Street / House No.">
@@ -1289,32 +1553,43 @@
                     </div>
                 </div>
 
-                <div id="saved_address_fields" style="display:none;">
-                    <div class="location-status">
-                        <?= !empty($customer_delivery_address)
-                            ? 'Saved address: ' . esc($customer_delivery_address)
-                            : 'No saved address found. Please enter your delivery address manually.' ?>
+                <div id="saved_address_fields" style="<?= $defaultAddressMode === 'saved_address' ? '' : 'display:none;' ?>">
+                    <div class="saved-address-card">
+                        <div class="saved-address-label">Saved address</div>
+                        <div class="saved-address-text">
+                            <?= ! empty($customer_delivery_address)
+                                ? esc($customer_delivery_address)
+                                : 'No saved address found. Please enter your delivery address manually.' ?>
+                        </div>
+                        <?php if ($hasSavedPin): ?>
+                            <div class="saved-address-note">
+                                Your registered map location will be sent to the rider and admin automatically.
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
+
+                <input type="hidden" name="delivery_latitude" id="delivery_latitude">
+                <input type="hidden" name="delivery_longitude" id="delivery_longitude">
 
                 <div class="checkout-field" style="margin-top:.8rem;">
                     <label class="checkout-label" for="delivery_description">Description</label>
                     <textarea class="checkout-input" id="delivery_description" name="delivery_description" rows="3" maxlength="255" placeholder="Add delivery notes, landmarks, or instructions"></textarea>
                 </div>
-                <div class="checkout-field" style="margin-top:.8rem;">
+                <div id="checkout_pin_section" class="checkout-field" style="margin-top:.8rem;<?= ($defaultAddressMode === 'saved_address' && $hasSavedPin) ? 'display:none;' : '' ?>">
                     <label class="checkout-label">Pin Delivery Location</label>
-                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem;flex-wrap:wrap;align-items:center;">
                         <button type="button" class="btn btn-outline" style="padding:.45rem .7rem;" onclick="checkoutUseCurrentLocation()">Use Current Location</button>
                         <span id="checkout_geo_status" class="location-status"></span>
                     </div>
-                    <div id="checkout_map" style="height:220px;border:1px solid #e0e0e0;border-radius:10px;"></div>
-                    <input type="hidden" name="delivery_latitude" id="delivery_latitude">
-                    <input type="hidden" name="delivery_longitude" id="delivery_longitude">
+                    <div id="checkout_map" style="height:200px;border:1px solid #e0e0e0;border-radius:10px;"></div>
                 </div>
             </div>
-
-            <button type="submit" class="btn btn-primary" style="width:100%;">Place Order</button>
         </form>
+
+        <div class="checkout-form-footer">
+            <button type="submit" form="checkoutModalForm" class="btn btn-primary checkout-place-btn">Place Order — ₱<?= number_format((float) ($cart_total ?? 0), 2) ?></button>
+        </div>
     </div>
 </div>
 
@@ -1368,6 +1643,9 @@ const gcashMerchantName = 'QuickPuff VapeShop';
 const checkoutTotal = <?= json_encode((float) ($cart_total ?? 0)) ?>;
 const productCatalog = <?= json_encode(array_column($products ?? [], null, 'id')) ?>;
 const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
+const savedDeliveryLatitude = <?= json_encode(isset($customer_delivery_latitude) ? (float) $customer_delivery_latitude : null) ?>;
+const savedDeliveryLongitude = <?= json_encode(isset($customer_delivery_longitude) ? (float) $customer_delivery_longitude : null) ?>;
+let checkoutMapLocked = false;
 let currentGcashQrPayload = '';
 let pendingFlavorProductId = null;
 let pendingFlavorVariantId = null;
@@ -1520,6 +1798,10 @@ function showToast(message, type = 'processing', showSpinner = false) {
 }
 
 function processDirectOrder() {
+    if (!checkoutTotal || checkoutTotal <= 0) {
+        showToast('Add items to your cart first.', 'error');
+        return;
+    }
     openCheckoutModal();
 }
 
@@ -1527,8 +1809,25 @@ function openCheckoutModal() {
     const modal = document.getElementById('checkoutModal');
     if (!modal) return;
     initDeliveryAddressFields();
+    const hasSavedCoords = savedDeliveryLatitude !== null && savedDeliveryLongitude !== null;
+    if (savedDeliveryAddress.trim() && hasSavedCoords) {
+        const savedRadio = document.querySelector('input[name="delivery_address_mode"][value="saved_address"]');
+        const manualRadio = document.querySelector('input[name="delivery_address_mode"][value="manual"]');
+        if (savedRadio && !savedRadio.disabled) {
+            savedRadio.checked = true;
+            if (manualRadio) {
+                manualRadio.checked = false;
+            }
+        }
+    }
     modal.classList.add('show');
-    setTimeout(initCheckoutMap, 250);
+    setTimeout(() => {
+        toggleDeliveryAddressMode();
+        const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        if (mode === 'manual' || savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
+            initCheckoutMap();
+        }
+    }, 250);
 }
 
 function closeCheckoutModal() {
@@ -1612,12 +1911,52 @@ function validateCheckoutModal() {
             alert('No saved address found. Please enter your delivery address manually.');
             return false;
         }
+        if (savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
+            alert('Your account has no saved map location yet. Please enter your address manually and pin the map.');
+            return false;
+        }
+    }
+    if (addressMode === 'saved_address') {
+        applySavedDeliveryLocation();
     }
     if (!document.getElementById('delivery_latitude').value || !document.getElementById('delivery_longitude').value) {
-        alert('Please pin your exact delivery location on the map.');
+        alert(addressMode === 'saved_address'
+            ? 'Your saved delivery location is missing. Please enter your address manually and pin the map.'
+            : 'Please pin your exact delivery location on the map.');
         return false;
     }
 
+    return true;
+}
+
+function bindCheckoutMapClick() {
+    if (!checkoutMap) {
+        return;
+    }
+    checkoutMap.off('click');
+    if (!checkoutMapLocked) {
+        checkoutMap.on('click', (e) => {
+            setCheckoutPin(e.latlng.lat, e.latlng.lng);
+        });
+    }
+}
+
+function setDeliveryCoordinates(lat, lng) {
+    const latInput = document.getElementById('delivery_latitude');
+    const lngInput = document.getElementById('delivery_longitude');
+    if (latInput) {
+        latInput.value = String(lat);
+    }
+    if (lngInput) {
+        lngInput.value = String(lng);
+    }
+}
+
+function applySavedDeliveryLocation() {
+    if (savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
+        return false;
+    }
+    setDeliveryCoordinates(savedDeliveryLatitude, savedDeliveryLongitude);
     return true;
 }
 
@@ -1626,18 +1965,23 @@ function initCheckoutMap() {
     if (!checkoutMap) {
         checkoutMap = L.map('checkout_map').setView([6.1164, 125.1716], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(checkoutMap);
-        checkoutMap.on('click', (e) => {
-            setCheckoutPin(e.latlng.lat, e.latlng.lng);
-        });
-        setCheckoutPin(6.1164, 125.1716);
+        bindCheckoutMapClick();
+        if (savedDeliveryLatitude !== null && savedDeliveryLongitude !== null) {
+            setCheckoutPin(savedDeliveryLatitude, savedDeliveryLongitude);
+        } else {
+            setCheckoutPin(6.1164, 125.1716);
+        }
     } else {
         checkoutMap.invalidateSize();
+        bindCheckoutMapClick();
     }
 }
 
 function setCheckoutPin(lat, lng) {
-    document.getElementById('delivery_latitude').value = String(lat);
-    document.getElementById('delivery_longitude').value = String(lng);
+    setDeliveryCoordinates(lat, lng);
+    if (!checkoutMap) {
+        return;
+    }
     if (!checkoutMarker) {
         checkoutMarker = L.marker([lat, lng]).addTo(checkoutMap);
     } else {
@@ -1959,6 +2303,10 @@ function toggleDeliveryAddressMode() {
     const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
     const manualFields = document.getElementById('manual_delivery_fields');
     const savedAddressFields = document.getElementById('saved_address_fields');
+    const pinSection = document.getElementById('checkout_pin_section');
+    const useSavedWithPin = mode === 'saved_address'
+        && savedDeliveryLatitude !== null
+        && savedDeliveryLongitude !== null;
 
     if (manualFields) {
         manualFields.style.display = mode === 'manual' ? 'grid' : 'none';
@@ -1966,10 +2314,34 @@ function toggleDeliveryAddressMode() {
     if (savedAddressFields) {
         savedAddressFields.style.display = mode === 'saved_address' ? 'block' : 'none';
     }
-    if (mode === 'saved_address' && savedDeliveryAddress.trim()) {
-        geocodeCheckoutAddressToMap(savedDeliveryAddress);
-    } else if (mode === 'manual') {
+    if (pinSection) {
+        pinSection.style.display = useSavedWithPin ? 'none' : 'block';
+    }
+
+    if (useSavedWithPin) {
+        checkoutMapLocked = true;
+        applySavedDeliveryLocation();
+    } else if (mode === 'saved_address') {
+        checkoutMapLocked = false;
+        if (savedDeliveryAddress.trim()) {
+            if (!checkoutMap) {
+                initCheckoutMap();
+            }
+            geocodeCheckoutAddressToMap(savedDeliveryAddress);
+        }
+    } else {
+        checkoutMapLocked = false;
+        const status = document.getElementById('checkout_geo_status');
+        if (status) {
+            status.textContent = '';
+        }
+        if (!checkoutMap) {
+            initCheckoutMap();
+        } else {
+            checkoutMap.invalidateSize();
+        }
         geocodeCheckoutAddressDebounced();
+        bindCheckoutMapClick();
     }
 }
 

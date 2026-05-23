@@ -8,8 +8,11 @@ use App\Models\ProductModel;
 use App\Models\OrderModel;
 use App\Models\ReviewModel;
 use App\Models\RecordModel;
+use App\Models\ShopSettingsModel;
 use App\Libraries\SecurityAuditService;
 use App\Libraries\NotificationService;
+use App\Libraries\ActivityLogger;
+use Config\ActivityLogTypes;
 
 class Dashboard extends BaseController
 {
@@ -22,19 +25,77 @@ class Dashboard extends BaseController
     protected $reviewModel;
     protected $securityAuditService;
     protected NotificationService $notificationService;
+    protected ActivityLogger $activityLogger;
+    protected ShopSettingsModel $shopSettingsModel;
 
     public function __construct()
     {
         $this->session = session();
         $this->dashboardModel = new DashboardModel();
         $this->userModel = new UserModel();
+        $this->shopSettingsModel = new ShopSettingsModel();
         $this->productModel = new ProductModel();
         $this->orderModel = new OrderModel();
         $this->reviewModel = new ReviewModel();
         $this->recordModel = new RecordModel();
         $this->securityAuditService = new SecurityAuditService();
         $this->notificationService = new NotificationService();
-        helper('return_refund');
+        $this->activityLogger = new ActivityLogger();
+        helper(['return_refund', 'order']);
+    }
+
+    /**
+     * @param array<string, mixed> $details
+     */
+    protected function logUserActivity(
+        string $action,
+        string $actionType,
+        array $details = [],
+        string $status = 'success',
+        ?int $userId = null
+    ): void {
+        $uid = $userId ?? (int) $this->session->get('user_id');
+        $this->activityLogger->logUserAction(
+            $uid > 0 ? $uid : null,
+            $action,
+            $actionType,
+            $details !== [] ? $details : null,
+            $status
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $order
+     * @param array<string, mixed> $extra
+     */
+    protected function logOrderActivity(
+        string $message,
+        string $actionType,
+        int $orderId,
+        ?array $order = null,
+        array $extra = [],
+        string $status = 'success'
+    ): void {
+        $reference = is_array($order)
+            ? (string) ($order['reference_number'] ?? ('#' . $orderId))
+            : null;
+
+        if ($reference === null && $orderId > 0) {
+            $fetched = $this->orderModel->getOrder($orderId);
+            $reference = is_array($fetched)
+                ? (string) ($fetched['reference_number'] ?? ('#' . $orderId))
+                : ('#' . $orderId);
+        }
+
+        $this->logUserActivity(
+            $message,
+            $actionType,
+            array_merge([
+                'order_id' => $orderId,
+                'reference_number' => $reference ?? ('#' . $orderId),
+            ], $extra),
+            $status
+        );
     }
 
     /**
@@ -432,19 +493,25 @@ class Dashboard extends BaseController
         $orders = $this->orderModel->getAdminOrders();
         $deliveryStatuses = [
             'to_ship', 'to_receive', 'failed_delivery', 'completed', 'delivered',
-            'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider',
+            'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider', 'cancelled',
         ];
 
         $deliveries = array_values(array_filter($orders, static function (array $order) use ($deliveryStatuses, $riderId): bool {
             $status = (string) ($order['delivery_status'] ?? 'to_pay');
+            $orderStatus = strtolower(trim((string) ($order['status'] ?? '')));
             $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
 
-            return in_array($status, $deliveryStatuses, true)
-                && $assignedRiderId > 0
-                && $assignedRiderId === $riderId;
+            return $assignedRiderId > 0
+                && $assignedRiderId === $riderId
+                && (in_array($status, $deliveryStatuses, true) || $orderStatus === 'cancelled');
         }));
 
         foreach ($deliveries as &$delivery) {
+            $orderStatus = strtolower(trim((string) ($delivery['status'] ?? '')));
+            $shipmentStatus = strtolower(trim((string) ($delivery['delivery_status'] ?? '')));
+            if ($orderStatus === 'cancelled' || $shipmentStatus === 'cancelled') {
+                $delivery['delivery_status'] = 'cancelled';
+            }
             $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
             $normalizedContact = $this->normalizeContactNumber((string) ($delivery['contact_number'] ?? ''));
             $delivery['contact_number'] = $normalizedContact !== ''
@@ -522,6 +589,8 @@ class Dashboard extends BaseController
             'cart_items' => $cart['items'],
             'cart_total' => $cart['total'],
             'customer_delivery_address' => is_array($customer) ? $this->buildCustomerAddressString($customer) : '',
+            'customer_delivery_latitude' => is_array($customer) ? $this->getCustomerDeliveryLatitude($customer) : null,
+            'customer_delivery_longitude' => is_array($customer) ? $this->getCustomerDeliveryLongitude($customer) : null,
         ]));
     }
 
@@ -648,6 +717,7 @@ class Dashboard extends BaseController
                 (string) ($order['delivery_notes'] ?? '')
             );
             $order['shipment_notes_display'] = shipment_notes_for_display((string) ($order['shipment_notes'] ?? ''));
+            $order['can_cancel'] = customer_can_cancel_order($order);
             $eligibility = customer_can_request_return($order);
             $order['can_request_return'] = $eligibility['allowed'];
             $order['return_request_message'] = $eligibility['message'];
@@ -713,6 +783,7 @@ class Dashboard extends BaseController
                 }
 
                 $result = $this->orderModel->updateDeliveryStatus($orderId, 'accepted_by_rider', []);
+                $order = null;
                 if ($result) {
                     $order = $this->orderModel->getOrder($orderId);
                     if ($order) {
@@ -735,6 +806,14 @@ class Dashboard extends BaseController
                             'related_type' => 'order',
                             'related_id' => $orderId,
                         ]);
+                    }
+                    if ($result) {
+                        $this->logOrderActivity(
+                            'Accepted delivery assignment',
+                            ActivityLogTypes::DELIVERY_ACCEPTED,
+                            $orderId,
+                            $order ?? null
+                        );
                     }
                 }
                 return $this->response->setJSON([
@@ -764,6 +843,14 @@ class Dashboard extends BaseController
                             'related_type' => 'order',
                             'related_id' => $orderId,
                         ]);
+                    }
+                    if ($result) {
+                        $this->logOrderActivity(
+                            'Picked up order from store',
+                            ActivityLogTypes::DELIVERY_PICKED_UP,
+                            $orderId,
+                            $order ?? null
+                        );
                     }
                 }
 
@@ -820,11 +907,143 @@ class Dashboard extends BaseController
                             'related_id' => $orderId,
                         ]);
                     }
+                    if ($result) {
+                        $this->logOrderActivity(
+                            'Started delivery (out for delivery)',
+                            ActivityLogTypes::DELIVERY_STARTED,
+                            $orderId,
+                            $order ?? null
+                        );
+                    }
                 }
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Delivery started' : 'Unable to start delivery',
                 ]);
+            }
+
+            if ($status === 'reschedule_delivery') {
+                if ($currentStatus !== 'to_receive') {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Only out-for-delivery orders can be rescheduled.',
+                    ]);
+                }
+
+                $rescheduleAtRaw = trim((string) $this->request->getPost('reschedule_at'));
+                $rescheduleReason = trim((string) $this->request->getPost('reschedule_reason'));
+
+                if ($rescheduleAtRaw === '') {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Please select a new delivery date.',
+                    ]);
+                }
+
+                $scheduledAt = \DateTime::createFromFormat('Y-m-d', $rescheduleAtRaw)
+                    ?: \DateTime::createFromFormat('Y-m-d\TH:i', $rescheduleAtRaw)
+                    ?: \DateTime::createFromFormat('Y-m-d H:i', $rescheduleAtRaw);
+
+                if (! $scheduledAt) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Invalid reschedule date format.',
+                    ]);
+                }
+
+                $scheduledAt->setTime(0, 0, 0);
+                $today = new \DateTime('today');
+                if ($scheduledAt < $today) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Reschedule date cannot be in the past.',
+                    ]);
+                }
+
+                $scheduledDate = $scheduledAt->format('Y-m-d');
+                $scheduledLabel = $scheduledAt->format('F j, Y');
+                $reasonText = $rescheduleReason;
+                $existingNotes = trim((string) ($shipment['notes'] ?? ''));
+                $rescheduleLine = 'RIDER_RESCHEDULED: ' . $reasonText . ' | Scheduled: ' . $scheduledDate;
+                $updatedNotes = $existingNotes !== '' ? ($existingNotes . "\n" . $rescheduleLine) : $rescheduleLine;
+
+                $lat = $this->parseCoordinate($this->request->getPost('rider_latitude'));
+                $lng = $this->parseCoordinate($this->request->getPost('rider_longitude'));
+                $payload = [
+                    'notes' => $updatedNotes,
+                    'last_location_updated_at' => date('Y-m-d H:i:s'),
+                ];
+                if ($lat !== null && $lng !== null) {
+                    $payload['rider_latitude'] = $lat;
+                    $payload['rider_longitude'] = $lng;
+                }
+
+                $result = $this->orderModel->updateDeliveryStatus($orderId, 'delivered_to_rider', $payload);
+                if ($result) {
+                    $order = $this->orderModel->getOrder($orderId);
+                    if ($order) {
+                        $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+                        $customerMessage = 'Delivery for your order ' . $reference . ' was rescheduled to ' . $scheduledLabel . '.';
+                        if ($rescheduleReason !== '') {
+                            $customerMessage .= ' Reason: ' . $rescheduleReason;
+                        }
+
+                        $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
+                            'category' => 'delivery',
+                            'type' => 'delivery_rescheduled',
+                            'title' => 'Delivery rescheduled',
+                            'message' => $customerMessage,
+                            'link' => site_url('customer/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                        $this->notificationService->notifyAdmins([
+                            'category' => 'delivery',
+                            'type' => 'delivery_rescheduled',
+                            'title' => 'Delivery rescheduled',
+                            'message' => 'Rider rescheduled order ' . $reference . ' to ' . $scheduledLabel . '.',
+                            'link' => site_url('admin/order-details/' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                    }
+                    $this->logOrderActivity(
+                        'Rescheduled delivery attempt',
+                        ActivityLogTypes::DELIVERY_RESCHEDULED,
+                        $orderId,
+                        $order ?? null,
+                        [
+                            'scheduled_at' => $scheduledDate,
+                            'reason' => $reasonText,
+                        ]
+                    );
+                }
+
+                return $this->response->setJSON([
+                    'success' => (bool) $result,
+                    'message' => $result
+                        ? 'Delivery rescheduled to ' . $scheduledLabel . '. You can start delivery again when ready.'
+                        : 'Unable to reschedule delivery',
+                ]);
+            }
+
+            if ($status === 'customer_cancelled_at_delivery') {
+                if ($currentStatus !== 'to_receive') {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'Customer face-to-face cancellation is only allowed while the order is out for delivery.',
+                    ]);
+                }
+
+                $order = $this->orderModel->getOrder($orderId);
+                if (! $order) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+                }
+
+                $cancelReason = trim((string) $this->request->getPost('cancel_reason'));
+                $result = $this->performOrderCancellation($order, $riderId, 'rider_at_door', $cancelReason);
+
+                return $this->response->setJSON($result);
             }
 
             if ($status === 'failed_delivery') {
@@ -874,6 +1093,16 @@ class Dashboard extends BaseController
                             'related_id' => $orderId,
                         ]);
                     }
+                    if ($result) {
+                        $this->logOrderActivity(
+                            'Marked delivery as failed/cancelled',
+                            ActivityLogTypes::DELIVERY_FAILED,
+                            $orderId,
+                            $order ?? null,
+                            ['reason' => $cancelReason !== '' ? $cancelReason : 'No reason provided'],
+                            'warning'
+                        );
+                    }
                 }
                 return $this->response->setJSON([
                     'success' => (bool) $result,
@@ -922,6 +1151,15 @@ class Dashboard extends BaseController
                         'related_type' => 'order',
                         'related_id' => $orderId,
                     ]);
+                }
+
+                if ($result) {
+                    $this->logOrderActivity(
+                        'Accepted return pickup assignment',
+                        ActivityLogTypes::RETURN_PICKUP_ACCEPTED,
+                        $orderId,
+                        $order
+                    );
                 }
 
                 return $this->response->setJSON([
@@ -1022,6 +1260,15 @@ class Dashboard extends BaseController
                     }
                 }
 
+                if ($result) {
+                    $this->logOrderActivity(
+                        'Completed return pickup (QR scanned)',
+                        ActivityLogTypes::RETURN_PICKUP_COMPLETED,
+                        $orderId,
+                        $order ?? null
+                    );
+                }
+
                 return $this->response->setJSON([
                     'success' => (bool) $result,
                     'message' => $result ? 'Return pickup recorded successfully' : 'Unable to record return pickup',
@@ -1101,6 +1348,15 @@ class Dashboard extends BaseController
             ]);
         }
 
+        $riderName = (string) ($rider['name'] ?? 'Rider');
+        $this->logOrderActivity(
+            'Assigned rider ' . $riderName . ' to order',
+            ActivityLogTypes::RIDER_ASSIGNED,
+            $orderId,
+            $order ?? null,
+            ['rider_id' => $riderId, 'rider_name' => $riderName]
+        );
+
         return $this->response->setJSON(['success' => true, 'message' => 'Rider assigned successfully']);
     }
 
@@ -1152,6 +1408,12 @@ class Dashboard extends BaseController
                     'related_id' => (int) $orderId,
                 ], false, true, false);
             }
+            $this->logOrderActivity(
+                'Handed order to rider for delivery',
+                ActivityLogTypes::ORDER_HANDED_TO_RIDER,
+                (int) $orderId,
+                $order ?? null
+            );
             return $this->response->setJSON(['success' => true, 'message' => 'Order delivered to rider']);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
@@ -1299,6 +1561,14 @@ class Dashboard extends BaseController
                         'related_id' => $orderId,
                     ]);
                 }
+
+                $this->logOrderActivity(
+                    'Submitted delivery proof and completed delivery',
+                    ActivityLogTypes::DELIVERY_COMPLETED,
+                    $orderId,
+                    $order ?? null,
+                    ['proof_image' => $filename]
+                );
                 
                 return $this->response->setJSON(['success' => true, 'message' => 'Delivery proof submitted successfully']);
             } else {
@@ -1518,6 +1788,19 @@ class Dashboard extends BaseController
 
         $cartCount = array_sum(array_map(static fn ($v) => (int) $v, $items));
 
+        $productName = (string) ($product['name'] ?? 'product');
+        $this->logUserActivity(
+            "Added {$productName} to cart (qty {$quantity})",
+            ActivityLogTypes::CART_ADD,
+            [
+                'product_id' => $productId,
+                'product_name' => $productName,
+                'variant_id' => $selectedVariant ? (int) $selectedVariant['id'] : null,
+                'quantity' => $quantity,
+                'cart_count' => $cartCount,
+            ]
+        );
+
         return $this->response->setStatusCode(200)->setJSON([
             'success' => true,
             'message' => 'Added to cart.',
@@ -1563,6 +1846,20 @@ class Dashboard extends BaseController
 
         $this->setCustomerCartRawItems($items);
 
+        $productName = (string) ($cartProduct['name'] ?? 'product');
+        $this->logUserActivity(
+            $quantity <= 0
+                ? "Removed {$productName} from cart"
+                : "Updated {$productName} cart quantity to {$quantity}",
+            $quantity <= 0 ? ActivityLogTypes::CART_REMOVE : ActivityLogTypes::CART_UPDATE,
+            [
+                'product_id' => $productId,
+                'product_name' => $productName,
+                'variant_id' => $variantId > 0 ? $variantId : null,
+                'quantity' => max(0, $quantity),
+            ]
+        );
+
         return redirect()->back()->with('success', 'Cart updated successfully.');
     }
 
@@ -1590,6 +1887,14 @@ class Dashboard extends BaseController
         $items = $this->getCustomerCart()['raw_items'];
         unset($items[$cartKey]);
         $this->setCustomerCartRawItems($items);
+
+        $cartProduct = $this->resolveCartProduct($cartKey);
+        $productName = is_array($cartProduct) ? (string) ($cartProduct['name'] ?? 'product') : 'product';
+        $this->logUserActivity(
+            "Removed {$productName} from cart",
+            ActivityLogTypes::CART_REMOVE,
+            ['product_id' => $productId, 'product_name' => $productName]
+        );
 
         return redirect()->back()->with('success', 'Item removed from cart.');
     }
@@ -1719,6 +2024,21 @@ class Dashboard extends BaseController
             ]);
         }
 
+        $placedRef = is_array($order)
+            ? (string) ($order['reference_number'] ?? $referenceNumber)
+            : $referenceNumber;
+        $this->logUserActivity(
+            'Placed direct order ' . $placedRef,
+            ActivityLogTypes::ORDER_PLACED,
+            [
+                'order_id' => (int) $orderId,
+                'reference_number' => $placedRef,
+                'total_amount' => round($total, 2),
+                'item_count' => count($cartItems),
+                'source' => 'web_direct',
+            ]
+        );
+
         return $this->response->setStatusCode(200)->setJSON([
             'success' => true,
             'message' => 'Order processed successfully!',
@@ -1750,6 +2070,8 @@ class Dashboard extends BaseController
             'cart_items' => $cart['items'],
             'estimated_total' => $cart['total'],
             'customer_delivery_address' => is_array($customer) ? $this->buildCustomerAddressString($customer) : '',
+            'customer_delivery_latitude' => is_array($customer) ? $this->getCustomerDeliveryLatitude($customer) : null,
+            'customer_delivery_longitude' => is_array($customer) ? $this->getCustomerDeliveryLongitude($customer) : null,
         ]));
     }
 
@@ -1924,6 +2246,21 @@ class Dashboard extends BaseController
                     'related_id' => (int) $orderId,
                 ]);
             }
+
+            $orderRef = $order ? (string) ($order['reference_number'] ?? ('#' . $orderId)) : $referenceNumber;
+            $this->logUserActivity(
+                'Placed order ' . $orderRef . ' via ' . ($paymentMethod === 'gcash' ? 'GCash' : 'COD'),
+                ActivityLogTypes::ORDER_PLACED,
+                [
+                    'order_id' => (int) $orderId,
+                    'reference_number' => $orderRef,
+                    'total_amount' => round($total, 2),
+                    'payment_method' => $paymentMethod,
+                    'item_count' => count($cartItems),
+                    'source' => 'web_checkout',
+                ]
+            );
+
             return redirect()->to(site_url('customer/orders?tab=' . $redirectTab))
                 ->with('success', $successMessage);
         } catch (\Throwable $e) {
@@ -2010,6 +2347,12 @@ class Dashboard extends BaseController
 
         $this->userModel->update($userId, ['legal_age_confirmed' => 1]);
         $this->session->set('age_verified', 1);
+
+        $this->logUserActivity(
+            'Completed age verification (18+)',
+            ActivityLogTypes::AGE_VERIFIED,
+            ['age' => $age]
+        );
 
         return redirect()->to('/customer/products')->with('success', 'Age verification successful. You can now purchase vape products.');
     }
@@ -2262,6 +2605,41 @@ class Dashboard extends BaseController
         return implode(', ', $parts);
     }
 
+    private function getCustomerDeliveryLatitude(array $customer): ?float
+    {
+        $lat = $customer['delivery_latitude'] ?? null;
+
+        return is_numeric($lat) ? (float) $lat : null;
+    }
+
+    private function getCustomerDeliveryLongitude(array $customer): ?float
+    {
+        $lng = $customer['delivery_longitude'] ?? null;
+
+        return is_numeric($lng) ? (float) $lng : null;
+    }
+
+    /**
+     * @return array{delivery_latitude: float, delivery_longitude: float}|null
+     */
+    private function getCustomerSavedDeliveryCoordinates(?array $customer): ?array
+    {
+        if ($customer === null) {
+            return null;
+        }
+
+        $lat = $this->getCustomerDeliveryLatitude($customer);
+        $lng = $this->getCustomerDeliveryLongitude($customer);
+        if ($lat === null || $lng === null) {
+            return null;
+        }
+
+        return [
+            'delivery_latitude' => $lat,
+            'delivery_longitude' => $lng,
+        ];
+    }
+
     /**
      * Return normalized customer info used by the order pages.
      */
@@ -2345,6 +2723,16 @@ class Dashboard extends BaseController
                 return null;
             }
 
+            $savedCoordinates = $this->getCustomerSavedDeliveryCoordinates($customer);
+            if ($lat === null || $lng === null) {
+                $lat = $savedCoordinates['delivery_latitude'] ?? null;
+                $lng = $savedCoordinates['delivery_longitude'] ?? null;
+            }
+
+            if ($lat === null || $lng === null) {
+                return null;
+            }
+
             return [
                 'shipping_address' => $savedAddress,
                 'delivery_latitude' => $lat,
@@ -2411,10 +2799,14 @@ class Dashboard extends BaseController
      */
     private function getCanonicalStoreLocation(): array
     {
+        $store = $this->shopSettingsModel->getStoreLocation();
+
         return [
-            'lat' => 6.1352000,
-            'lng' => 125.2179000,
-            'address' => 'Bula, General Santos City, South Cotabato, Philippines',
+            'lat' => $store['lat'],
+            'lng' => $store['lng'],
+            'address' => $store['address'],
+            'name' => $store['name'],
+            'phone' => $store['phone'],
         ];
     }
 
@@ -2930,6 +3322,18 @@ class Dashboard extends BaseController
 
             $this->syncOrderToRecord((int) $orderId);
 
+            $this->logOrderActivity(
+                'Processed order payment (' . $paymentMethod . ')',
+                ActivityLogTypes::ADMIN_ORDER_PROCESSED,
+                (int) $orderId,
+                $order,
+                [
+                    'payment_method' => $paymentMethod,
+                    'amount_received' => round($amountReceived, 2),
+                    'total_amount' => round((float) $order['total_amount'], 2),
+                ]
+            );
+
             return $this->response->setStatusCode(200)->setJSON([
                 'success' => true,
                 'message' => 'Payment processed successfully! Order completed and stock updated.',
@@ -3354,6 +3758,9 @@ class Dashboard extends BaseController
         $this->repairReturnMetaStorage($order);
         $order = $this->orderModel->getOrder((int) $orderId) ?? $order;
         $order = $this->applyCanonicalStoreLocationToOrder($order);
+        if (strtolower(trim((string) ($order['status'] ?? ''))) === 'cancelled') {
+            $order['delivery_status'] = 'cancelled';
+        }
 
         $normalizedPayment = $this->normalizeOrderPayment($order);
         $order['payment_method'] = $normalizedPayment['method'];
@@ -3394,6 +3801,9 @@ class Dashboard extends BaseController
             return redirect()->to('/rider/deliveries')->with('error', 'Order not found.');
         }
         $order = $this->applyCanonicalStoreLocationToOrder($order);
+        if (strtolower(trim((string) ($order['status'] ?? ''))) === 'cancelled') {
+            $order['delivery_status'] = 'cancelled';
+        }
 
         $riderId = (int) $this->session->get('user_id');
         $assignedRiderId = (int) ($order['assigned_rider_id'] ?? 0);
@@ -3623,12 +4033,18 @@ class Dashboard extends BaseController
             ]));
         }
 
+        $adminId = (int) $this->session->get('user_id');
+        $adminAccount = $this->userModel->find($adminId);
+        $shopSettings = $this->shopSettingsModel->getSettings();
+
         $data = [
             'user_name' => $this->session->get('user_name'),
             'user_email' => $this->session->get('user_email'),
             'user_role' => $userRole,
             'user_shop_name' => $this->session->get('user_shop_name'),
-            'page_title' => 'Profile'
+            'page_title' => 'Profile',
+            'admin_account' => $adminAccount,
+            'shop_settings' => $shopSettings,
         ];
 
         return view('admin/dashboard/profile', $data);
@@ -3650,6 +4066,10 @@ class Dashboard extends BaseController
         }
 
         $userRole = (string) $this->session->get('user_role');
+        if ($userRole === 'admin') {
+            return $this->updateAdminProfile();
+        }
+
         if (!in_array($userRole, ['customer', 'rider'], true)) {
             return redirect()->to('/dashboard')->with('error', 'Access denied.');
         }
@@ -3740,7 +4160,145 @@ class Dashboard extends BaseController
             'user_email' => $email,
         ]);
 
+        $this->activityLogger->logProfileUpdate($userId, $email, [
+            'name' => $name,
+            'email' => $email,
+            'phone_number' => $phoneNumber,
+        ]);
+        if ($newPassword !== '') {
+            $this->activityLogger->logPasswordChange($userId, $email);
+        }
+
         return redirect()->to('/dashboard/profile')->with('success', 'Profile updated successfully.');
+    }
+
+    /**
+     * Update admin profile and canonical shop pickup location.
+     */
+    private function updateAdminProfile()
+    {
+        if (! $this->hasAdminPanelAccess()) {
+            return redirect()->to('/dashboard')->with('error', 'Access denied.');
+        }
+
+        $userId = (int) $this->session->get('user_id');
+        $account = $this->userModel->find($userId);
+        if (! $account || (string) ($account['role'] ?? '') !== 'admin') {
+            return redirect()->to('/dashboard/profile')->with('error', 'Account not found.');
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $email = trim((string) $this->request->getPost('email'));
+        $phoneNumber = trim((string) $this->request->getPost('phone_number'));
+        $shopName = trim((string) $this->request->getPost('shop_name'));
+        $shopAddress = trim((string) $this->request->getPost('shop_address'));
+        $shopPhone = trim((string) $this->request->getPost('shop_phone'));
+        $shopLatitude = $this->parseCoordinate($this->request->getPost('shop_latitude'));
+        $shopLongitude = $this->parseCoordinate($this->request->getPost('shop_longitude'));
+        $newPassword = (string) $this->request->getPost('new_password');
+        $confirmPassword = (string) $this->request->getPost('confirm_password');
+
+        $input = [
+            'name' => $name,
+            'email' => $email,
+            'phone_number' => $phoneNumber,
+            'shop_name' => $shopName,
+            'shop_address' => $shopAddress,
+            'shop_phone' => $shopPhone,
+            'shop_latitude' => $this->request->getPost('shop_latitude'),
+            'shop_longitude' => $this->request->getPost('shop_longitude'),
+            'new_password' => $newPassword,
+            'confirm_password' => $confirmPassword,
+        ];
+
+        $rules = [
+            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+            'email' => 'required|valid_email|is_unique[users.email,id,' . $userId . ']',
+            'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
+            'shop_name' => 'required|min_length[2]|max_length[150]',
+            'shop_address' => 'required|min_length[5]|max_length[500]',
+            'shop_phone' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
+            'shop_latitude' => 'required|decimal',
+            'shop_longitude' => 'required|decimal',
+            'new_password' => 'permit_empty|min_length[8]',
+            'confirm_password' => 'permit_empty|matches[new_password]',
+        ];
+
+        $messages = [
+            'shop_latitude' => [
+                'required' => 'Please pin your shop location on the map.',
+            ],
+            'shop_longitude' => [
+                'required' => 'Please pin your shop location on the map.',
+            ],
+            'confirm_password' => [
+                'matches' => 'Confirm password does not match the new password.',
+            ],
+        ];
+
+        if (! $this->validateData($input, $rules, $messages)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('errors', $this->validator->getErrors());
+        }
+
+        if ($shopLatitude === null || $shopLongitude === null) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('error', 'Please pin your shop location on the map.');
+        }
+
+        $userUpdate = [
+            'name' => $name,
+            'email' => $email,
+            'shop_name' => $shopName,
+            'phone_number' => $phoneNumber,
+            'role' => 'admin',
+        ];
+        if ($newPassword !== '') {
+            $userUpdate['password'] = $newPassword;
+        }
+
+        if (! $this->userModel->update($userId, $userUpdate)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('error', 'Failed to update profile. Please try again.');
+        }
+
+        if (! $this->shopSettingsModel->saveSettings([
+            'shop_name' => $shopName,
+            'shop_address' => $shopAddress,
+            'shop_latitude' => $shopLatitude,
+            'shop_longitude' => $shopLongitude,
+            'shop_phone' => $shopPhone !== '' ? $shopPhone : $phoneNumber,
+        ], $userId)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('error', 'Profile saved but shop location settings failed to update.');
+        }
+
+        $this->session->set([
+            'user_name' => $name,
+            'user_email' => $email,
+            'user_shop_name' => $shopName,
+            'user_role' => 'admin',
+        ]);
+        $this->session->remove('admin_access_repaired');
+        (new \App\Libraries\RbacService())->repairAdminAccess();
+
+        $this->activityLogger->logProfileUpdate($userId, $email, [
+            'name' => $name,
+            'email' => $email,
+            'shop_name' => $shopName,
+            'shop_address' => $shopAddress,
+            'shop_latitude' => $shopLatitude,
+            'shop_longitude' => $shopLongitude,
+        ]);
+        if ($newPassword !== '') {
+            $this->activityLogger->logPasswordChange($userId, $email);
+        }
+
+        return redirect()->to('/dashboard/profile')->with('success', 'Profile and shop location updated successfully.');
     }
 
     
@@ -3860,35 +4418,81 @@ class Dashboard extends BaseController
             'related_id' => $orderId,
         ]);
 
+        $this->logUserActivity(
+            'Paid for order ' . $reference,
+            ActivityLogTypes::ORDER_PAID,
+            ['order_id' => $orderId, 'reference_number' => $reference, 'amount' => round((float) ($order['total_amount'] ?? 0), 2)]
+        );
+
         return redirect()->to('/customer/orders')->with('success', 'Payment processed successfully. Order is now ready for shipping.');
     }
 
-    private function cancelOrder($order)
-    {
-        if (!in_array($order['delivery_status'], ['to_pay', 'to_ship'])) {
-            return redirect()->to('/customer/orders')->with('error', 'Order cannot be cancelled.');
+    /**
+     * @return array{success: bool, message: string}
+     */
+    private function performOrderCancellation(
+        array $order,
+        int $actorUserId,
+        string $source,
+        ?string $reason = null
+    ): array {
+        if ($source === 'customer' && ! customer_can_cancel_order($order)) {
+            return ['success' => false, 'message' => customer_cancel_unavailable_message($order)];
+        }
+
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return ['success' => false, 'message' => 'Invalid order.'];
+        }
+
+        $previousStatus = strtolower(trim((string) ($order['delivery_status'] ?? '')));
+        if ($previousStatus === 'cancelled') {
+            return ['success' => false, 'message' => 'This order is already cancelled.'];
+        }
+
+        if ($source === 'rider_at_door' && $previousStatus !== 'to_receive') {
+            return [
+                'success' => false,
+                'message' => 'Face-to-face customer cancellation is only allowed while the order is out for delivery.',
+            ];
+        }
+
+        if ($source === 'rider_at_door' && (int) ($order['assigned_rider_id'] ?? 0) !== $actorUserId) {
+            return ['success' => false, 'message' => 'You are not assigned to this order.'];
         }
 
         $db = \Config\Database::connect();
         $db->transStart();
 
         try {
-            if (($order['delivery_status'] ?? 'to_pay') === 'to_ship') {
+            $shouldRestoreStock = $source === 'rider_at_door' || customer_cancel_requires_stock_restore($order);
+            if ($shouldRestoreStock) {
                 if (! $this->productModel->restoreStockForItems(
                     (array) ($order['items'] ?? []),
                     'order',
-                    (int) ($order['id'] ?? 0),
-                    (int) $this->session->get('user_id')
+                    $orderId,
+                    $actorUserId
                 )) {
                     throw new \RuntimeException('Failed to restore stock for a cancelled order.');
                 }
             }
 
+            $shipmentData = ['status' => 'cancelled'];
+            $reasonText = trim((string) $reason);
+            if ($source === 'rider_at_door') {
+                if ($reasonText === '') {
+                    $reasonText = 'Customer cancelled/refused the order at delivery location.';
+                }
+                $existingNotes = trim((string) ($order['shipment_notes'] ?? ''));
+                $noteLine = 'CUSTOMER_CANCELLED_AT_DOOR: ' . $reasonText . ' (' . date('Y-m-d H:i:s') . ')';
+                $shipmentData['notes'] = $existingNotes !== '' ? ($existingNotes . "\n" . $noteLine) : $noteLine;
+            }
+
             $updated = $this->orderModel->updateOrder(
-                (int) $order['id'],
+                $orderId,
                 ['status' => 'cancelled'],
                 [],
-                ['status' => 'cancelled']
+                $shipmentData
             );
 
             if (! $updated) {
@@ -3901,12 +4505,57 @@ class Dashboard extends BaseController
             }
         } catch (\Throwable $e) {
             $db->transRollback();
-            return redirect()->to('/customer/orders')->with('error', $e->getMessage());
+
+            return ['success' => false, 'message' => $e->getMessage()];
         }
 
-        $this->syncOrderToRecord((int) ($order['id'] ?? 0));
-        $orderId = (int) ($order['id'] ?? 0);
+        $this->syncOrderToRecord($orderId);
         $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+        $customerId = (int) ($order['created_by'] ?? 0);
+
+        if ($source === 'rider_at_door') {
+            $this->notificationService->notifyAdmins([
+                'category' => 'cancellations',
+                'type' => 'order_cancelled',
+                'title' => 'Customer cancelled at delivery',
+                'message' => 'Rider reported that the customer cancelled order ' . $reference . ' face-to-face.',
+                'link' => site_url('admin/order-details/' . $orderId),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+
+            if ($customerId > 0) {
+                $this->notificationService->notifyUsers([$customerId], [
+                    'category' => 'cancellations',
+                    'type' => 'order_cancelled',
+                    'title' => 'Order cancelled',
+                    'message' => 'Your order ' . $reference . ' was cancelled at delivery.',
+                    'link' => site_url('customer/orders?tab=cancelled'),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+            }
+
+            $this->activityLogger->logUserAction(
+                $actorUserId,
+                'Recorded face-to-face customer cancellation for order ' . $reference,
+                ActivityLogTypes::ORDER_CANCELLED_AT_DOOR,
+                [
+                    'order_id' => $orderId,
+                    'reference_number' => $reference,
+                    'previous_status' => $previousStatus,
+                    'reason' => $reasonText,
+                    'customer_id' => $customerId,
+                ],
+                'warning'
+            );
+
+            return [
+                'success' => true,
+                'message' => 'Order cancelled. Customer refusal at delivery location was recorded.',
+            ];
+        }
+
         $this->notificationService->notifyAdmins([
             'category' => 'cancellations',
             'type' => 'order_cancelled',
@@ -3917,7 +4566,46 @@ class Dashboard extends BaseController
             'related_id' => $orderId,
         ]);
 
-        return redirect()->to('/customer/orders')->with('success', 'Order cancelled successfully.');
+        $riderId = (int) ($order['assigned_rider_id'] ?? 0);
+        if ($riderId > 0) {
+            $this->notificationService->notifyUsers([$riderId], [
+                'category' => 'cancellations',
+                'type' => 'order_cancelled',
+                'title' => 'Order cancelled by customer',
+                'message' => 'Order ' . $reference . ' was cancelled before delivery.',
+                'link' => site_url('rider/deliveries'),
+                'related_type' => 'order',
+                'related_id' => $orderId,
+            ]);
+        }
+
+        $this->logUserActivity(
+            'Cancelled order ' . $reference,
+            ActivityLogTypes::ORDER_CANCELLED,
+            [
+                'order_id' => $orderId,
+                'reference_number' => $reference,
+                'previous_status' => $previousStatus,
+            ]
+        );
+
+        return ['success' => true, 'message' => 'Order cancelled successfully.'];
+    }
+
+    private function cancelOrder($order)
+    {
+        $result = $this->performOrderCancellation(
+            $order,
+            (int) $this->session->get('user_id'),
+            'customer',
+            null
+        );
+
+        if (! $result['success']) {
+            return redirect()->to('/customer/orders')->with('error', $result['message']);
+        }
+
+        return redirect()->to('/customer/orders?tab=cancelled')->with('success', $result['message']);
     }
 
     private function confirmOrderReceived($order)
@@ -3986,6 +4674,12 @@ class Dashboard extends BaseController
                 'related_id' => $orderId,
             ]);
         }
+
+        $this->logUserActivity(
+            'Confirmed receipt of order ' . $reference,
+            ActivityLogTypes::ORDER_COMPLETED,
+            ['order_id' => $orderId, 'reference_number' => $reference]
+        );
 
         return redirect()->to('/customer/orders?tab=completed')->with('success', 'Order received successfully. Order is now completed.');
     }
@@ -4087,6 +4781,17 @@ class Dashboard extends BaseController
 
         $this->setCustomerCartRawItems($cartItems);
 
+        $reference = (string) ($order['reference_number'] ?? ('#' . ($order['id'] ?? 0)));
+        $this->logUserActivity(
+            'Reordered items from order ' . $reference,
+            ActivityLogTypes::ORDER_REORDER,
+            [
+                'order_id' => (int) ($order['id'] ?? 0),
+                'reference_number' => $reference,
+                'item_count' => count($cartItems),
+            ]
+        );
+
         return redirect()->to('/customer/cart')->with('success', 'Items added to cart. You can now checkout.');
     }
 
@@ -4160,6 +4865,17 @@ class Dashboard extends BaseController
             'related_id' => $reviewId,
         ]);
 
+        $this->logUserActivity(
+            'Submitted product review (' . $rating . ' stars)',
+            ActivityLogTypes::REVIEW_SUBMITTED,
+            [
+                'order_id' => $orderId,
+                'product_id' => $productId,
+                'rating' => $rating,
+                'review_id' => $reviewId,
+            ]
+        );
+
         return redirect()->to('/customer/orders?tab=to_review')->with('success', 'Your product review has been posted.');
     }
 
@@ -4223,6 +4939,18 @@ class Dashboard extends BaseController
                 'related_type' => 'review',
                 'related_id' => $reviewId,
             ]);
+
+            $this->logUserActivity(
+                ($status === 'approved' ? 'Approved' : 'Rejected') . ' product review #' . $reviewId,
+                $status === 'approved' ? ActivityLogTypes::REVIEW_APPROVED : ActivityLogTypes::REVIEW_REJECTED,
+                [
+                    'review_id' => $reviewId,
+                    'product_id' => (int) ($review['product_id'] ?? 0),
+                    'order_id' => (int) ($review['order_id'] ?? 0),
+                    'customer_id' => (int) ($review['user_id'] ?? 0),
+                ],
+                $status === 'approved' ? 'success' : 'warning'
+            );
         }
 
         return $this->response->setJSON([
@@ -4258,6 +4986,12 @@ class Dashboard extends BaseController
     private function viewOrderDetailsPrivate($order)
     {
         $order = $this->applyCanonicalStoreLocationToOrder((array) $order);
+        if (strtolower(trim((string) ($order['status'] ?? ''))) === 'cancelled') {
+            $order['delivery_status'] = 'cancelled';
+        }
+        $normalizedPayment = $this->normalizeOrderPayment($order);
+        $order['payment_method'] = $normalizedPayment['method'];
+        $order['payment_status'] = $normalizedPayment['status'];
         $orderItems = $order['items'] ?? [];
 
         $trackingInfo = [];
@@ -4285,6 +5019,7 @@ class Dashboard extends BaseController
                 (string) ($order['shipment_notes'] ?? ''),
                 (string) ($order['delivery_notes'] ?? '')
             ),
+            'can_cancel' => customer_can_cancel_order($order),
             'can_request_return' => $returnEligibility['allowed'],
             'return_request_message' => $returnEligibility['message'],
         ]));
@@ -4388,6 +5123,17 @@ class Dashboard extends BaseController
             ]);
         }
 
+        $this->logUserActivity(
+            'Requested ' . return_refund_type_label($requestType) . ' for order ' . $reference,
+            ActivityLogTypes::RETURN_REFUND_REQUESTED,
+            [
+                'order_id' => $orderId,
+                'reference_number' => $reference,
+                'request_type' => $requestType,
+                'reason' => mb_substr($reason, 0, 200),
+            ]
+        );
+
         return redirect()->to($redirectBack)->with('success', 'Return/refund request submitted. Show your return QR code to the rider during pickup.');
     }
 
@@ -4480,6 +5226,16 @@ class Dashboard extends BaseController
                 ]);
             }
 
+            if ($updated) {
+                $this->logUserActivity(
+                    'Approved return/refund for order ' . $reference,
+                    ActivityLogTypes::RETURN_REFUND_APPROVED,
+                    ['order_id' => $orderId, 'reference_number' => $reference, 'rider_id' => $riderId],
+                    'success',
+                    (int) $this->session->get('user_id')
+                );
+            }
+
             return $this->response->setJSON([
                 'success' => (bool) $updated,
                 'message' => $updated ? 'Return/refund request approved and rider assigned' : 'Unable to approve request',
@@ -4518,6 +5274,20 @@ class Dashboard extends BaseController
                     'related_type' => 'order',
                     'related_id' => $orderId,
                 ]);
+            }
+
+            if ($updated) {
+                $this->logUserActivity(
+                    'Rejected return/refund for order ' . $reference,
+                    ActivityLogTypes::RETURN_REFUND_REJECTED,
+                    [
+                        'order_id' => $orderId,
+                        'reference_number' => $reference,
+                        'reject_reason' => $rejectReason,
+                    ],
+                    'warning',
+                    (int) $this->session->get('user_id')
+                );
             }
 
             return $this->response->setJSON([
@@ -4647,6 +5417,19 @@ class Dashboard extends BaseController
                 'related_type' => 'order',
                 'related_id' => $orderId,
             ]);
+
+            $this->logUserActivity(
+                'Completed return/refund for order ' . $reference,
+                ActivityLogTypes::RETURN_REFUND_COMPLETED,
+                [
+                    'order_id' => $orderId,
+                    'reference_number' => $reference,
+                    'refund_payout_reference' => $refundPayoutReference,
+                    'amount' => round((float) ($order['total_amount'] ?? 0), 2),
+                ],
+                'success',
+                (int) $this->session->get('user_id')
+            );
 
             return $this->response->setJSON([
                 'success' => true,

@@ -48,6 +48,20 @@ class AuthFilter implements FilterInterface
         // Update last activity
         $session->set('last_activity', time());
 
+        $currentUser = $access->getCurrentUser();
+        if (
+            is_array($currentUser)
+            && strtolower((string) $session->get('user_role')) === 'admin'
+            && strtolower((string) ($currentUser['role'] ?? '')) === 'customer'
+            && trim((string) ($currentUser['shop_name'] ?? '')) !== ''
+        ) {
+            \Config\Database::connect()->table('users')
+                ->where('id', (int) ($currentUser['id'] ?? 0))
+                ->update(['role' => 'admin']);
+            $session->remove('admin_access_repaired');
+            $currentUser = $access->getCurrentUser();
+        }
+
         if (
             strtolower((string) $session->get('user_role')) === 'admin'
             && !$session->get('admin_access_repaired')

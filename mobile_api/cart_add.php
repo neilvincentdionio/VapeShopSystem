@@ -188,6 +188,20 @@ try {
 
     $db->commit();
 
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        $userId,
+        'Added ' . (string) $product['name'] . ' to cart (mobile)',
+        'CART_ADD',
+        [
+            'product_id' => $productId,
+            'product_name' => (string) $product['name'],
+            'variant_id' => $variantParam,
+            'quantity' => $newQuantity,
+            'source' => 'mobile_api',
+        ]
+    );
+
     json_response(true, 'Product added to cart.', [
         'cart_id' => $cartId,
         'product_id' => $productId,

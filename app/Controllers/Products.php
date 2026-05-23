@@ -5,6 +5,8 @@ namespace App\Controllers;
 use App\Models\ProductModel;
 use App\Models\ReviewModel;
 use App\Libraries\NotificationService;
+use App\Libraries\ActivityLogger;
+use Config\ActivityLogTypes;
 
 class Products extends BaseController
 {
@@ -14,6 +16,7 @@ class Products extends BaseController
     protected $productModel;
     protected $reviewModel;
     protected NotificationService $notificationService;
+    protected ActivityLogger $activityLogger;
 
     public function __construct()
     {
@@ -21,7 +24,22 @@ class Products extends BaseController
         $this->productModel = new ProductModel();
         $this->reviewModel = new ReviewModel();
         $this->notificationService = new NotificationService();
+        $this->activityLogger = new ActivityLogger();
         helper(['text', 'form', 'product', 'stock']);
+    }
+
+    /**
+     * @param array<string, mixed> $details
+     */
+    protected function logProductActivity(string $action, string $actionType, array $details = []): void
+    {
+        $userId = (int) $this->session->get('user_id');
+        $this->activityLogger->logUserAction(
+            $userId > 0 ? $userId : null,
+            $action,
+            $actionType,
+            $details !== [] ? $details : null
+        );
     }
 
     /**
@@ -193,6 +211,17 @@ class Products extends BaseController
                 $imageName
             );
 
+            $this->logProductActivity(
+                'Created product ' . (string) $productData['name'],
+                ActivityLogTypes::PRODUCT_CREATED,
+                [
+                    'product_id' => (int) $productId,
+                    'name' => (string) $productData['name'],
+                    'category' => (string) $productData['category'],
+                    'stock_qty' => (int) $productData['stock_qty'],
+                ]
+            );
+
             return redirect()->to('/products')->with('success', 'Product created successfully.');
         }
 
@@ -338,6 +367,12 @@ class Products extends BaseController
                     (string) ($product['name'] ?? '')
                 );
 
+                $this->logProductActivity(
+                    'Updated product ' . (string) $productData['name'],
+                    ActivityLogTypes::PRODUCT_UPDATED,
+                    ['product_id' => (int) $id, 'name' => (string) $productData['name'], 'category' => (string) $productData['category']]
+                );
+
                 return redirect()->to('/products')->with('success', 'Product updated successfully.');
             }
         } else {
@@ -350,6 +385,12 @@ class Products extends BaseController
                     (string) $productData['name'],
                     $imageName,
                     (string) ($product['name'] ?? '')
+                );
+
+                $this->logProductActivity(
+                    'Updated product ' . (string) $productData['name'],
+                    ActivityLogTypes::PRODUCT_UPDATED,
+                    ['product_id' => (int) $id, 'name' => (string) $productData['name'], 'category' => (string) $productData['category']]
                 );
 
                 return redirect()->to('/products')->with('success', 'Product updated successfully.');
@@ -376,6 +417,12 @@ class Products extends BaseController
         }
 
         if ($this->productModel->delete($id)) {
+            $this->logProductActivity(
+                'Deleted product ' . (string) ($product['name'] ?? ('#' . $id)),
+                ActivityLogTypes::PRODUCT_DELETED,
+                ['product_id' => (int) $id, 'name' => (string) ($product['name'] ?? '')]
+            );
+
             return redirect()->to('/products')->with('success', 'Product deleted successfully.');
         }
 

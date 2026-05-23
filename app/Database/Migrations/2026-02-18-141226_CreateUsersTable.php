@@ -155,6 +155,16 @@ class CreateUsersTable extends Migration
                 'type'       => 'TEXT',
                 'null'       => true,
             ],
+            'delivery_latitude' => [
+                'type'       => 'DECIMAL',
+                'constraint' => '10,7',
+                'null'       => true,
+            ],
+            'delivery_longitude' => [
+                'type'       => 'DECIMAL',
+                'constraint' => '10,7',
+                'null'       => true,
+            ],
             'is_primary' => [
                 'type'       => 'TINYINT',
                 'constraint' => 1,

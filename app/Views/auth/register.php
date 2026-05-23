@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Account - Vape Shop System</title>
     <link rel="stylesheet" href="<?= base_url('assets/css/background.css') ?>">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -207,6 +209,61 @@
             font-size: 0.85rem;
             color: #2e5d46;
             line-height: 1.4;
+        }
+
+        .map-panel {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e3ebe6;
+        }
+
+        .map-panel h4 {
+            margin: 0 0 .35rem;
+            color: #1a2a24;
+            font-size: 1rem;
+        }
+
+        .map-panel p {
+            margin: 0 0 .75rem;
+            color: #677973;
+            font-size: .88rem;
+            line-height: 1.45;
+        }
+
+        .map-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            align-items: center;
+            margin-bottom: .65rem;
+        }
+
+        .map-btn {
+            border: 1px solid #27c56f;
+            background: #fff;
+            color: #1d9f57;
+            border-radius: 10px;
+            padding: .55rem .85rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .map-btn:hover {
+            background: #f0faf4;
+        }
+
+        #register_map {
+            height: 240px;
+            width: 100%;
+            border: 1px solid #d5dfd9;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #register_map_status {
+            margin-top: .55rem;
+            font-size: .84rem;
+            color: #6c8077;
         }
 
         .submit-btn {
@@ -470,6 +527,18 @@
                     <div class="form-help">
                         Select Province, then City, then Barangay. Country is set to Philippines.
                     </div>
+
+                    <div class="map-panel">
+                        <h4>Pin Delivery Location</h4>
+                        <p>This location will be used automatically when you choose <strong>Use My Address</strong> during checkout.</p>
+                        <div class="map-toolbar">
+                            <button type="button" class="map-btn" id="register_use_location_btn">Use Current Location</button>
+                            <span id="register_map_status">Tap the map or use your current location to set your delivery pin.</span>
+                        </div>
+                        <div id="register_map"></div>
+                        <input type="hidden" name="delivery_latitude" id="delivery_latitude" value="<?= esc(old('delivery_latitude')) ?>">
+                        <input type="hidden" name="delivery_longitude" id="delivery_longitude" value="<?= esc(old('delivery_longitude')) ?>">
+                    </div>
                 </section>
 
                 <button type="submit" class="submit-btn">Create Account</button>
@@ -729,6 +798,91 @@
                         barangaySelect.focus();
                     }
                 });
+            }
+        })();
+
+        (function initRegistrationMap() {
+            const defaultLat = 6.1164;
+            const defaultLng = 125.1716;
+            const latInput = document.getElementById('delivery_latitude');
+            const lngInput = document.getElementById('delivery_longitude');
+            const statusEl = document.getElementById('register_map_status');
+            const form = document.querySelector('form[action*="auth/register"]');
+            let registerMap = null;
+            let registerMarker = null;
+
+            function setRegisterPin(lat, lng, message) {
+                if (!latInput || !lngInput) {
+                    return;
+                }
+                latInput.value = String(lat);
+                lngInput.value = String(lng);
+                if (!registerMap || typeof L === 'undefined') {
+                    return;
+                }
+                if (!registerMarker) {
+                    registerMarker = L.marker([lat, lng]).addTo(registerMap);
+                } else {
+                    registerMarker.setLatLng([lat, lng]);
+                }
+                registerMap.setView([lat, lng], Math.max(registerMap.getZoom(), 15));
+                if (message && statusEl) {
+                    statusEl.textContent = message;
+                }
+            }
+
+            function initMap() {
+                if (typeof L === 'undefined' || registerMap) {
+                    return;
+                }
+                const initialLat = parseFloat(latInput?.value || '') || defaultLat;
+                const initialLng = parseFloat(lngInput?.value || '') || defaultLng;
+                registerMap = L.map('register_map').setView([initialLat, initialLng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(registerMap);
+                setRegisterPin(initialLat, initialLng);
+                registerMap.on('click', (event) => {
+                    setRegisterPin(event.latlng.lat, event.latlng.lng, 'Delivery pin updated.');
+                });
+                setTimeout(() => registerMap.invalidateSize(), 250);
+            }
+
+            document.getElementById('register_use_location_btn')?.addEventListener('click', () => {
+                if (!navigator.geolocation) {
+                    if (statusEl) {
+                        statusEl.textContent = 'Geolocation is not supported on this device.';
+                    }
+                    return;
+                }
+                if (statusEl) {
+                    statusEl.textContent = 'Getting your current location...';
+                }
+                navigator.geolocation.getCurrentPosition((position) => {
+                    setRegisterPin(
+                        position.coords.latitude,
+                        position.coords.longitude,
+                        'Current location saved as your delivery pin.'
+                    );
+                }, () => {
+                    if (statusEl) {
+                        statusEl.textContent = 'Unable to get location. Please tap the map to set your pin.';
+                    }
+                }, { enableHighAccuracy: true, timeout: 10000 });
+            });
+
+            form?.addEventListener('submit', (event) => {
+                if (!latInput?.value || !lngInput?.value) {
+                    event.preventDefault();
+                    alert('Please pin your delivery location on the map before creating your account.');
+                    if (statusEl) {
+                        statusEl.textContent = 'Delivery location is required.';
+                    }
+                }
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initMap);
+            } else {
+                initMap();
             }
         })();
     </script>

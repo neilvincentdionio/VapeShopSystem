@@ -17,6 +17,8 @@ require_fields($input, [
     'postal_code',
     'province',
     'country',
+    'delivery_latitude',
+    'delivery_longitude',
 ]);
 
 $fullName = trim((string) $input['full_name']);
@@ -29,6 +31,8 @@ $barangay = trim((string) $input['barangay']);
 $postalCode = trim((string) $input['postal_code']);
 $province = trim((string) $input['province']);
 $country = trim((string) $input['country']);
+$deliveryLatitude = is_numeric($input['delivery_latitude'] ?? null) ? (float) $input['delivery_latitude'] : null;
+$deliveryLongitude = is_numeric($input['delivery_longitude'] ?? null) ? (float) $input['delivery_longitude'] : null;
 
 if (strlen($fullName) < 3) {
     json_response(false, 'Full name must be at least 3 characters.', null, 400);
@@ -36,6 +40,12 @@ if (strlen($fullName) < 3) {
 
 if (strlen($password) < 8) {
     json_response(false, 'Password must be at least 8 characters.', null, 400);
+}
+
+if ($deliveryLatitude === null || $deliveryLongitude === null
+    || $deliveryLatitude < -90 || $deliveryLatitude > 90
+    || $deliveryLongitude < -180 || $deliveryLongitude > 180) {
+    json_response(false, 'Valid delivery map coordinates are required.', null, 400);
 }
 
 try {
@@ -79,8 +89,8 @@ try {
     ]);
 
     $insertAddress = $db->prepare(
-        'INSERT INTO user_addresses (user_id, address_line, city, barangay, province, postal_code, country, is_primary, created_at, updated_at)
-         VALUES (:user_id, :address_line, :city, :barangay, :province, :postal_code, :country, :is_primary, :created_at, :updated_at)'
+        'INSERT INTO user_addresses (user_id, address_line, city, barangay, province, postal_code, country, delivery_latitude, delivery_longitude, is_primary, created_at, updated_at)
+         VALUES (:user_id, :address_line, :city, :barangay, :province, :postal_code, :country, :delivery_latitude, :delivery_longitude, :is_primary, :created_at, :updated_at)'
     );
     $insertAddress->execute([
         ':user_id' => $userId,
@@ -90,12 +100,22 @@ try {
         ':province' => $province,
         ':postal_code' => $postalCode,
         ':country' => $country,
+        ':delivery_latitude' => $deliveryLatitude,
+        ':delivery_longitude' => $deliveryLongitude,
         ':is_primary' => 1,
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
 
     $db->commit();
+
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        $userId,
+        'Account created for ' . $email . ' (mobile)',
+        'ACCOUNT_CREATED',
+        ['email' => $email, 'source' => 'mobile_api']
+    );
 
     json_response(true, 'Registration successful.', [
         'full_name' => $fullName,

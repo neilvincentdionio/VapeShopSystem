@@ -132,7 +132,12 @@ if (! function_exists('delivery_notes_for_display')) {
 if (! function_exists('shipment_notes_for_display')) {
     function shipment_notes_for_display(?string $notes): string
     {
-        return strip_return_meta_from_notes($notes);
+        $notes = strip_return_meta_from_notes($notes);
+        if (function_exists('strip_reschedule_meta_from_notes')) {
+            $notes = strip_reschedule_meta_from_notes($notes);
+        }
+
+        return trim($notes);
     }
 }
 

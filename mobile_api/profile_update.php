@@ -45,6 +45,14 @@ try {
         ':id' => $userId,
     ]);
 
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        $userId,
+        'User ' . $newEmail . ' updated profile (mobile)',
+        'PROFILE_UPDATE',
+        ['email' => $newEmail, 'full_name' => $newFullName, 'source' => 'mobile_api']
+    );
+
     json_response(true, 'Profile updated successfully.', [
         'full_name' => $newFullName,
         'email' => $newEmail,

@@ -26,7 +26,8 @@ class CreateActivityLogsTable extends Migration
                 'comment'    => 'Encrypted action description',
             ],
             'action_type' => [
-                'type'       => "ENUM('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'PROFILE_UPDATE', 'PASSWORD_CHANGE', 'MFA_ENABLED', 'MFA_DISABLED', 'ACCOUNT_CREATED', 'ACCOUNT_DELETED')",
+                'type'       => 'VARCHAR',
+                'constraint' => 64,
                 'null'       => false,
             ],
             'ip_address' => [

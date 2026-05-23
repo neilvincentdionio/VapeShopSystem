@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\UserSessionModel;
 use App\Models\ActivityLogModel;
 use App\Libraries\ActivityLogger;
+use Config\ActivityLogTypes;
 use App\Libraries\SecurityAuditService;
 
 class AdminController extends BaseController
@@ -122,7 +123,7 @@ class AdminController extends BaseController
         $data = [
             'title' => 'Activity Logs',
             'activityStats' => $activityStats,
-            'recentLogs' => $this->activityModel->getRecentActivities(50),
+            'recentLogs' => $this->enrichActivityLogs($this->activityModel->getRecentActivities(50)),
             'failedLoginCount' => $this->getFailedLoginCount($activityStats),
             'successRate' => $this->getSuccessRate($activityStats),
             'securitySummary' => $securitySummary,
@@ -469,15 +470,16 @@ class AdminController extends BaseController
             ]);
         }
 
-        // Get user information
-        if ($log['user_id']) {
-            $userModel = new \App\Models\UserModel();
-            $user = $userModel->find($log['user_id']);
-            if ($user) {
-                $log['user_name'] = $user['name'];
-                $log['user_email'] = $user['email'];
-            }
+        $log = $this->enrichActivityLogRow($log);
+
+        $parsedDetails = [];
+        if (! empty($log['details'])) {
+            $decoded = json_decode((string) $log['details'], true);
+            $parsedDetails = is_array($decoded) ? $decoded : ['raw' => (string) $log['details']];
         }
+
+        $log['parsed_details'] = $parsedDetails;
+        $log['has_details'] = $parsedDetails !== [];
 
         return $this->response->setJSON([
             'success' => true,
@@ -485,6 +487,64 @@ class AdminController extends BaseController
             'log' => $log,
             'csrfHash' => csrf_hash(),
         ]);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $logs
+     * @return list<array<string, mixed>>
+     */
+    private function enrichActivityLogs(array $logs): array
+    {
+        if ($logs === []) {
+            return [];
+        }
+
+        $userModel = new \App\Models\UserModel();
+        $usersById = [];
+
+        foreach ($logs as $log) {
+            $userId = (int) ($log['user_id'] ?? 0);
+            if ($userId > 0 && ! isset($usersById[$userId])) {
+                $user = $userModel->find($userId);
+                $usersById[$userId] = is_array($user) ? $user : null;
+            }
+        }
+
+        $enriched = [];
+        foreach ($logs as $log) {
+            $enriched[] = $this->enrichActivityLogRow($log, $usersById);
+        }
+
+        return $enriched;
+    }
+
+    /**
+     * @param array<string, mixed> $log
+     * @param array<int, array<string, mixed>|null> $usersById
+     * @return array<string, mixed>
+     */
+    private function enrichActivityLogRow(array $log, array $usersById = []): array
+    {
+        $userId = (int) ($log['user_id'] ?? 0);
+        if ($userId > 0) {
+            if ($usersById === [] || ! array_key_exists($userId, $usersById)) {
+                $userModel = new \App\Models\UserModel();
+                $usersById[$userId] = $userModel->find($userId);
+            }
+
+            $user = $usersById[$userId] ?? null;
+            if (is_array($user)) {
+                $log['user_name'] = (string) ($user['name'] ?? '');
+                $log['user_email'] = (string) ($user['email'] ?? '');
+                $log['user_role'] = (string) ($user['role'] ?? '');
+            }
+        }
+
+        $actionType = (string) ($log['action_type'] ?? '');
+        $log['action_type_label'] = ActivityLogTypes::label($actionType);
+        $log['action_badge'] = ActivityLogTypes::badgeColors()[$actionType] ?? 'secondary';
+
+        return $log;
     }
 
     /**

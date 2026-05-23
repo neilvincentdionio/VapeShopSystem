@@ -91,9 +91,13 @@ class Auth extends BaseController
             'role' => 'customer',
             'phone_number' => $this->sanitizePhoneNumber((string) ($input['phone_number'] ?? '')),
             'address_line' => $this->sanitizeAddressField((string) ($input['address_line'] ?? '')),
+            'barangay' => $this->sanitizeAddressField((string) ($input['barangay'] ?? '')),
             'city' => $this->sanitizeAddressField((string) ($input['city'] ?? '')),
             'province' => $this->sanitizeAddressField((string) ($input['province'] ?? '')),
             'postal_code' => $this->sanitizePostalCode((string) ($input['postal_code'] ?? '')),
+            'country' => $this->sanitizeAddressField((string) ($input['country'] ?? 'Philippines')),
+            'delivery_latitude' => $this->parseRegistrationCoordinate($input['delivery_latitude'] ?? null),
+            'delivery_longitude' => $this->parseRegistrationCoordinate($input['delivery_longitude'] ?? null),
             'legal_age_confirmed' => 1,
             'approval_status' => 'pending',
             'verification_id_path' => $verificationIdPath,
@@ -630,6 +634,9 @@ class Auth extends BaseController
         $city = $this->sanitizeAddressField((string) ($input['city'] ?? ''));
         $province = $this->sanitizeAddressField((string) ($input['province'] ?? ''));
         $postalCode = $this->sanitizePostalCode((string) ($input['postal_code'] ?? ''));
+        $barangay = $this->sanitizeAddressField((string) ($input['barangay'] ?? ''));
+        $deliveryLatitude = $this->parseRegistrationCoordinate($input['delivery_latitude'] ?? null);
+        $deliveryLongitude = $this->parseRegistrationCoordinate($input['delivery_longitude'] ?? null);
 
         if ($name === '') {
             $errors['name'] = 'Full name is required.';
@@ -703,6 +710,22 @@ class Auth extends BaseController
             $errors['postal_code'] = 'Postal code can only contain letters, numbers, spaces, and hyphens.';
         }
 
+        if ($barangay === '') {
+            $errors['barangay'] = 'Barangay is required.';
+        } elseif (strlen($barangay) < 2) {
+            $errors['barangay'] = 'Barangay must be at least 2 characters long.';
+        } elseif (strlen($barangay) > 120) {
+            $errors['barangay'] = 'Barangay must not exceed 120 characters long.';
+        }
+
+        if ($deliveryLatitude === null || $deliveryLongitude === null) {
+            $errors['delivery_location'] = 'Please pin your delivery location on the map.';
+        } elseif ($deliveryLatitude < -90 || $deliveryLatitude > 90) {
+            $errors['delivery_location'] = 'Invalid delivery latitude.';
+        } elseif ($deliveryLongitude < -180 || $deliveryLongitude > 180) {
+            $errors['delivery_location'] = 'Invalid delivery longitude.';
+        }
+
         $errors = array_merge($errors, $this->validateVerificationIdUpload($verificationIdFile));
 
         return $errors;
@@ -730,6 +753,19 @@ class Auth extends BaseController
         $cleanPostalCode = preg_replace('/[^a-zA-Z0-9\s\-]/', '', $postalCode);
 
         return strtoupper(trim((string) preg_replace('/\s+/', ' ', $cleanPostalCode ?? '')));
+    }
+
+    private function parseRegistrationCoordinate($value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return (float) $value;
     }
 
     /**

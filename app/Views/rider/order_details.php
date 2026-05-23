@@ -3,75 +3,76 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-.order-details-wrap{max-width:980px;margin:0 auto;display:grid;gap:1rem}
-.details-card{background:#fff;border:1px solid #e0e0e0;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.06);padding:1.1rem}
-.details-card h2{margin:0 0 .4rem;color:#223}
-.meta{color:#666;font-size:.92rem}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.info-line{margin:.35rem 0}
-.label{font-weight:700;color:#333}
-.item-row{display:flex;justify-content:space-between;gap:1rem;border:1px solid #eef1f4;border-radius:10px;padding:.7rem;margin:.55rem 0}
-.back-link{display:inline-flex;align-items:center;gap:.45rem;color:#2a7a4b;text-decoration:none;font-weight:600}
-@media (max-width:780px){.grid{grid-template-columns:1fr}}
-</style>
+<?php
+$isReturnFlow = ! empty($order) && function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? ''));
+$backUrl = ! empty($is_return_pickup) ? site_url('rider/returns') : site_url('rider/deliveries');
+$backLabel = ! empty($is_return_pickup) ? 'Return Pickups' : 'Deliveries';
+?>
 
-<section class="order-details-wrap">
-    <a class="back-link" href="<?= site_url(! empty($is_return_pickup) ? 'rider/returns' : 'rider/deliveries') ?>"><i class="fas fa-arrow-left"></i> Back to <?= ! empty($is_return_pickup) ? 'Return Pickups' : 'Deliveries' ?></a>
+<div class="order-details-shell">
+    <?= view('partials/order_details_styles') ?>
 
-    <article class="details-card">
-        <h2><?= esc($order['reference_number'] ?? ('Order #' . ($order['id'] ?? ''))) ?></h2>
-        <div class="meta">Status: <?= esc(function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? '')) ? return_refund_status_label((string) $order['delivery_status']) : ucwords(str_replace('_', ' ', (string) ($order['delivery_status'] ?? 'to_pay')))) ?></div>
-    </article>
+    <div class="orders-header">
+        <a href="<?= $backUrl ?>" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to <?= esc($backLabel) ?>
+        </a>
+        <h1><?= $isReturnFlow ? 'Return / Refund Details' : 'Order Details' ?></h1>
+        <p>Review order information and delivery progress.</p>
+    </div>
 
-    <?php if (! empty($return_meta)): ?>
-        <?= view('partials/return_refund_details', ['returnMeta' => $return_meta, 'order' => $order, 'audience' => 'rider']) ?>
-    <?php endif; ?>
-
-    <article class="details-card grid">
-        <div>
-            <div class="info-line"><span class="label">Customer:</span> <?= esc($order['customer']['name'] ?? 'Customer') ?></div>
-            <div class="info-line"><span class="label">Email:</span> <?= esc($order['customer']['email'] ?? 'N/A') ?></div>
-            <div class="info-line"><span class="label">Contact:</span> <?= esc($order['contact_number'] ?? ($order['customer']['phone'] ?? 'Not provided')) ?></div>
+    <?php if (! empty($order)): ?>
+        <?= view('partials/order_details_card', [
+            'audience' => 'rider',
+            'order' => $order,
+            'items' => $items ?? [],
+            'return_meta' => $return_meta ?? [],
+            'is_return_pickup' => $is_return_pickup ?? false,
+            'map_element_id' => 'rider_delivery_map',
+        ]) ?>
+    <?php else: ?>
+        <div class="empty-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Order Not Found</h3>
+            <p>This order is not available.</p>
+            <a href="<?= $backUrl ?>" class="btn-checkout btn-action">Back to <?= esc($backLabel) ?></a>
         </div>
-        <div>
-            <div class="info-line"><span class="label">Shipping Address:</span></div>
-            <div class="meta"><?= esc($order['shipping_address'] ?? 'No address provided') ?></div>
-            <?php if (!empty($order['shipment_notes'])): ?>
-                <div class="info-line"><span class="label">Delivery Notes:</span> <?= esc($order['shipment_notes']) ?></div>
-            <?php endif; ?>
-        </div>
-    </article>
-
-    <article class="details-card">
-        <h2>Order Items</h2>
-        <?php if (!empty($items)): ?>
-            <?php foreach ($items as $item): ?>
-                <div class="item-row">
-                    <div>
-                        <div><?= esc($item['name'] ?? 'Product') ?></div>
-                        <div class="meta">Qty: <?= (int) ($item['qty'] ?? 0) ?></div>
-                    </div>
-                    <div><strong>&#8369;<?= number_format((float) ($item['subtotal'] ?? 0) > 0 ? (float) $item['subtotal'] : \App\Models\OrderModel::resolveItemSellingPrice($item) * (int) ($item['qty'] ?? 0), 2) ?></strong></div>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="meta">No items found.</div>
-        <?php endif; ?>
-    </article>
-    <?php if ((!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])) || (!empty($order['store_latitude']) && !empty($order['store_longitude']))): ?>
-    <article class="details-card">
-        <h2>Delivery Map</h2>
-        <div class="meta" id="destination_label" style="margin-bottom:.5rem;"></div>
-        <div id="rider_delivery_map" style="height:320px;border:1px solid #e0e0e0;border-radius:10px;"></div>
-        <div class="meta" id="route_meta" style="margin-top:.6rem;"></div>
-        <div id="route_steps" class="meta" style="margin-top:.6rem; border:1px solid #e0e0e0; border-radius:8px; padding:.55rem .65rem; max-height:180px; overflow:auto;"></div>
-    </article>
     <?php endif; ?>
-</section>
+</div>
+
+<?php if (! empty($order)): ?>
+<script>
+function customerCancelledAtDelivery(orderId) {
+    const notes = prompt(
+        'The customer cancelled or refused the order in person at delivery.\n\nAdd notes (optional):',
+        'Customer cancelled at delivery location.'
+    );
+    if (notes === null) return;
+    if (!confirm('Mark this order as CANCELLED because the customer refused it face-to-face? Stock will be restored.')) return;
+
+    const params = new URLSearchParams();
+    params.set('order_id', String(orderId));
+    params.set('status', 'customer_cancelled_at_delivery');
+    const trimmed = (notes || '').trim();
+    if (trimmed !== '') params.set('cancel_reason', trimmed);
+
+    fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Order cancelled.');
+            window.location.href = '<?= site_url('rider/deliveries') ?>';
+        } else {
+            alert(data.message || 'Failed to cancel order');
+        }
+    })
+    .catch(() => alert('An error occurred while cancelling the order'));
+}
 
 <?php if ((!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])) || (!empty($order['store_latitude']) && !empty($order['store_longitude']))): ?>
-<script>
 const status = <?= json_encode((string) ($order['delivery_status'] ?? '')) ?>;
 const customerLat = <?= json_encode(!empty($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null) ?>;
 const customerLng = <?= json_encode(!empty($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null) ?>;
@@ -82,90 +83,92 @@ const customerAddress = <?= json_encode((string) ($order['delivery_address'] ?? 
 const toStore = ['ready_for_pickup', 'accepted_by_rider'].includes(status);
 const destLat = toStore ? storeLat : customerLat;
 const destLng = toStore ? storeLng : customerLng;
-const destinationLabel = toStore ? `Pickup Location: ${storeAddress}` : `Delivery Location: ${customerAddress}`;
-document.getElementById('destination_label').textContent = destinationLabel;
-const map = L.map('rider_delivery_map').setView([destLat, destLng], 14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-L.marker([destLat, destLng]).addTo(map).bindPopup(destinationLabel);
-let routeLine = null;
-if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const rLat = pos.coords.latitude;
-        const rLng = pos.coords.longitude;
-        L.marker([rLat, rLng]).addTo(map).bindPopup('Your location');
-        drawRouteGuide(rLat, rLng, destLat, destLng);
-        const km = haversineKm(rLat, rLng, destLat, destLng);
-        const eta = Math.max(3, Math.round((km / 25) * 60));
-        document.getElementById('route_meta').textContent = `Estimated distance: ${km.toFixed(2)} km | ETA: ~${eta} min`;
-    });
-}
+const mapEl = document.getElementById('rider_delivery_map');
 
-function pushRiderLocation(lat, lng) {
-    const orderId = <?= (int) ($order['id'] ?? 0) ?>;
-    const body = `order_id=${orderId}&rider_latitude=${encodeURIComponent(lat)}&rider_longitude=${encodeURIComponent(lng)}`;
-    fetch('<?= site_url('dashboard/updateRiderLocation') ?>', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body
-    }).catch(() => {});
-}
+if (mapEl && destLat && destLng) {
+    const map = L.map('rider_delivery_map').setView([destLat, destLng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    L.marker([destLat, destLng]).addTo(map).bindPopup(toStore ? `Pickup: ${storeAddress}` : `Delivery: ${customerAddress}`);
+    let routeLine = null;
 
-if (status === 'to_receive' && navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition((pos) => {
-        pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
-    }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
-
-    navigator.geolocation.watchPosition((pos) => {
-        pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
-        drawRouteGuide(pos.coords.latitude, pos.coords.longitude, destLat, destLng);
-    }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
-}
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2-lat1) * Math.PI / 180;
-  const dLon = (lon2-lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function formatManeuver(step) {
-  const m = step?.maneuver || {};
-  const type = String(m.type || '').replaceAll('_', ' ').trim();
-  const mod = String(m.modifier || '').replaceAll('_', ' ').trim();
-  const name = String(step?.name || '').trim();
-  const base = type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Continue';
-  if (mod && name) return `${base} ${mod} to ${name}`;
-  if (name) return `${base} to ${name}`;
-  if (mod) return `${base} ${mod}`;
-  return base;
-}
-
-async function drawRouteGuide(fromLat, fromLng, toLat, toLng) {
-  const stepsEl = document.getElementById('route_steps');
-  if (stepsEl) stepsEl.textContent = 'Loading road guide...';
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data || data.code !== 'Ok' || !Array.isArray(data.routes) || data.routes.length === 0) throw new Error('No route');
-    const route = data.routes[0];
-    const coords = (route.geometry?.coordinates || []).map((c) => [c[1], c[0]]);
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.9 }).addTo(map);
-    const steps = (route.legs?.[0]?.steps || []).slice(0, 12);
-    if (stepsEl) {
-      stepsEl.innerHTML = steps.length
-        ? steps.map((s, i) => `${i + 1}. ${formatManeuver(s)} (${Math.max(1, Math.round((s.distance || 0)))}m)`).join('<br>')
-        : 'Road guide unavailable.';
+    function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
-  } catch (e) {
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.polyline([[fromLat, fromLng], [toLat, toLng]], { color: '#27c56f', dashArray: '8 8', weight: 4 }).addTo(map);
-    if (stepsEl) stepsEl.textContent = 'Road routing service unavailable. Showing direct guide line.';
-  }
+
+    function formatManeuver(step) {
+        const m = step?.maneuver || {};
+        const type = String(m.type || '').replaceAll('_', ' ').trim();
+        const mod = String(m.modifier || '').replaceAll('_', ' ').trim();
+        const name = String(step?.name || '').trim();
+        const base = type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Continue';
+        if (mod && name) return `${base} ${mod} to ${name}`;
+        if (name) return `${base} to ${name}`;
+        if (mod) return `${base} ${mod}`;
+        return base;
+    }
+
+    async function drawRouteGuide(fromLat, fromLng, toLat, toLng) {
+        const stepsEl = document.getElementById('route_steps');
+        const metaEl = document.getElementById('route_meta');
+        if (stepsEl) stepsEl.textContent = 'Loading road guide...';
+        try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!data?.routes?.length) throw new Error('No route');
+            const route = data.routes[0];
+            const coords = (route.geometry?.coordinates || []).map(c => [c[1], c[0]]);
+            if (routeLine) map.removeLayer(routeLine);
+            routeLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.9 }).addTo(map);
+            const steps = (route.legs?.[0]?.steps || []).slice(0, 12);
+            if (stepsEl) {
+                stepsEl.innerHTML = steps.length
+                    ? steps.map((s, i) => `${i + 1}. ${formatManeuver(s)} (${Math.max(1, Math.round(s.distance || 0))}m)`).join('<br>')
+                    : 'Road guide unavailable.';
+            }
+            if (metaEl) {
+                const km = haversineKm(fromLat, fromLng, toLat, toLng);
+                metaEl.textContent = `Estimated distance: ${km.toFixed(2)} km | ETA: ~${Math.max(3, Math.round((km / 25) * 60))} min`;
+            }
+        } catch (e) {
+            if (routeLine) map.removeLayer(routeLine);
+            routeLine = L.polyline([[fromLat, fromLng], [toLat, toLng]], { color: '#27c56f', dashArray: '8 8', weight: 4 }).addTo(map);
+            if (stepsEl) stepsEl.textContent = 'Road routing unavailable. Showing direct line.';
+        }
+    }
+
+    function pushRiderLocation(lat, lng) {
+        const body = `order_id=<?= (int) ($order['id'] ?? 0) ?>&rider_latitude=${encodeURIComponent(lat)}&rider_longitude=${encodeURIComponent(lng)}`;
+        fetch('<?= site_url('dashboard/updateRiderLocation') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        }).catch(() => {});
+    }
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+            const rLat = pos.coords.latitude;
+            const rLng = pos.coords.longitude;
+            L.marker([rLat, rLng]).addTo(map).bindPopup('Your location');
+            drawRouteGuide(rLat, rLng, destLat, destLng);
+            pushRiderLocation(rLat, rLng);
+        });
+
+        if (status === 'to_receive') {
+            navigator.geolocation.watchPosition((pos) => {
+                pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
+                drawRouteGuide(pos.coords.latitude, pos.coords.longitude, destLat, destLng);
+            }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+        }
+    }
 }
+<?php endif; ?>
 </script>
 <?php endif; ?>
 
 <?= $this->include('rider/partials/footer') ?>
-

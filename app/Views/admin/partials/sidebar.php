@@ -2,6 +2,7 @@
 $seg1 = service('uri')->getSegment(1);
 $seg2 = service('uri')->getSegment(2);
 
+$isProfile = $seg1 === 'dashboard' && $seg2 === 'profile';
 $isDashboard = $seg1 === 'dashboard' && !in_array($seg2, ['profile', 'settings'], true);
 $isProducts = $seg1 === 'products';
 $isRecords = $seg1 === 'records';
@@ -43,7 +44,7 @@ $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
             <div class="user-info admin-user-actions">
                 <div class="admin-user-main">
                     <div class="user-avatar"><?= strtoupper(substr(session()->get('user_name') ?? 'A', 0, 1)) ?></div>
-                    <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link">
+                    <a href="<?= site_url('dashboard/profile') ?>" class="user-name user-profile-link <?= $isProfile ? 'active' : '' ?>">
                         <?= esc(session()->get('user_name') ?? 'Administrator') ?>
                     </a>
                 </div>

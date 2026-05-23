@@ -5,6 +5,7 @@ namespace App\Libraries;
 use App\Models\ActivityLogModel;
 use App\Models\UserSessionModel;
 use App\Libraries\SecurityNotificationService;
+use Config\ActivityLogTypes;
 
 class ActivityLogger
 {
@@ -19,6 +20,55 @@ class ActivityLogger
         $this->userSessionModel = new UserSessionModel();
         $this->request = \Config\Services::request();
         $this->securityNotificationService = new SecurityNotificationService();
+    }
+
+    /**
+     * Log any user or system action (customer orders, cart, returns, etc.).
+     *
+     * @param array<string, mixed>|null $details
+     */
+    public function logUserAction(
+        ?int $userId,
+        string $action,
+        string $actionType,
+        ?array $details = null,
+        string $status = 'success'
+    ): bool {
+        $ipAddress = $this->request->getIPAddress();
+        $userAgent = method_exists($this->request, 'getUserAgent')
+            ? $this->request->getUserAgent()->getAgentString()
+            : 'CLI';
+        $detailsJson = $details !== null
+            ? json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : null;
+
+        return $this->runSafeBool(static function () use (
+            $userId,
+            $action,
+            $actionType,
+            $ipAddress,
+            $userAgent,
+            $detailsJson,
+            $status
+        ): bool {
+            return (new ActivityLogModel())->logActivity(
+                $userId,
+                $action,
+                $actionType,
+                $ipAddress,
+                $userAgent,
+                $detailsJson,
+                $status
+            );
+        }, 'logUserAction');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getActionTypeOptions(): array
+    {
+        return ActivityLogTypes::filterOptions();
     }
 
     /**
@@ -75,7 +125,7 @@ class ActivityLogger
             return (new ActivityLogModel())->logActivity(
                 $userId,
                 $message,
-                'LOGIN_FAILED',
+                ActivityLogTypes::SECURITY_ALERT,
                 $ipAddress,
                 $userAgent,
                 $details,

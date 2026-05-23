@@ -30,6 +30,14 @@ try {
         json_response(false, 'Invalid email or password.', null, 401);
     }
 
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        (int) $user['id'],
+        'User ' . $email . ' logged in successfully (mobile)',
+        'LOGIN_SUCCESS',
+        ['email' => $email, 'source' => 'mobile_api']
+    );
+
     json_response(true, 'Login successful.', [
         'full_name' => (string) ($user['name'] ?? ''),
         'email' => (string) ($user['email'] ?? ''),

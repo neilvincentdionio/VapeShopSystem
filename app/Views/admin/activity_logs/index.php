@@ -61,15 +61,25 @@
                         <div class="col-md-3">
                             <select class="form-control" id="actionFilter">
                                 <option value="">All Actions</option>
-                                <option value="LOGIN_SUCCESS" <?= selected($actionFilter, 'LOGIN_SUCCESS') ?>>Login Success</option>
-                                <option value="LOGIN_FAILED" <?= selected($actionFilter, 'LOGIN_FAILED') ?>>Login Failed</option>
-                                <option value="LOGOUT" <?= selected($actionFilter, 'LOGOUT') ?>>Logout</option>
-                                <option value="PROFILE_UPDATE" <?= selected($actionFilter, 'PROFILE_UPDATE') ?>>Profile Update</option>
-                                <option value="PASSWORD_CHANGE" <?= selected($actionFilter, 'PASSWORD_CHANGE') ?>>Password Change</option>
-                                <option value="MFA_ENABLED" <?= selected($actionFilter, 'MFA_ENABLED') ?>>MFA Enabled</option>
-                                <option value="MFA_DISABLED" <?= selected($actionFilter, 'MFA_DISABLED') ?>>MFA Disabled</option>
-                                <option value="ACCOUNT_CREATED" <?= selected($actionFilter, 'ACCOUNT_CREATED') ?>>Account Created</option>
-                                <option value="ACCOUNT_DELETED" <?= selected($actionFilter, 'ACCOUNT_DELETED') ?>>Account Deleted</option>
+                                <?php
+                                $actionTypeOptions = \Config\ActivityLogTypes::filterOptions();
+                                $inGroup = false;
+                                foreach ($actionTypeOptions as $typeKey => $typeLabel):
+                                    if ($typeLabel === ''):
+                                        if ($inGroup) {
+                                            echo '</optgroup>';
+                                        }
+                                        echo '<optgroup label="' . esc($typeKey) . '">';
+                                        $inGroup = true;
+                                        continue;
+                                    endif;
+                                ?>
+                                <option value="<?= esc($typeKey) ?>" <?= selected($actionFilter, $typeKey) ?>><?= esc($typeLabel) ?></option>
+                                <?php endforeach;
+                                if ($inGroup) {
+                                    echo '</optgroup>';
+                                }
+                                ?>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -125,20 +135,10 @@
                                             <td><?= esc($log['action']) ?></td>
                                             <td>
                                                 <?php
-                                                $actionColors = [
-                                                    'LOGIN_SUCCESS' => 'success',
-                                                    'LOGIN_FAILED' => 'danger',
-                                                    'LOGOUT' => 'info',
-                                                    'PROFILE_UPDATE' => 'primary',
-                                                    'PASSWORD_CHANGE' => 'warning',
-                                                    'MFA_ENABLED' => 'success',
-                                                    'MFA_DISABLED' => 'warning',
-                                                    'ACCOUNT_CREATED' => 'success',
-                                                    'ACCOUNT_DELETED' => 'danger'
-                                                ];
+                                                $actionColors = \Config\ActivityLogTypes::badgeColors();
                                                 ?>
                                                 <span class="badge badge-<?= $actionColors[$log['action_type']] ?? 'secondary' ?>">
-                                                    <?= str_replace('_', ' ', $log['action_type']) ?>
+                                                    <?= esc($log['action_type_label'] ?? \Config\ActivityLogTypes::label($log['action_type'])) ?>
                                                 </span>
                                             </td>
                                             <td><?= esc($log['ip_address'] ?? 'N/A') ?></td>
@@ -148,13 +148,9 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                <?php if ($log['details']): ?>
-                                                    <button type="button" class="btn btn-sm btn-info" onclick="viewDetails('<?= $log['id'] ?>')">
-                                                        <i class="fas fa-eye"></i> View
-                                                    </button>
-                                                <?php else: ?>
-                                                    <span class="text-muted">-</span>
-                                                <?php endif; ?>
+                                                <button type="button" class="btn btn-sm btn-info" onclick="viewDetails(<?= (int) $log['id'] ?>)">
+                                                    <i class="fas fa-eye"></i> View
+                                                </button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -210,47 +206,79 @@ function clearFilters() {
     window.location.href = '<?= site_url('/admin/activity-logs') ?>';
 }
 
+const ACTION_TYPE_LABELS = <?= json_encode(\Config\ActivityLogTypes::labelsMap(), JSON_UNESCAPED_UNICODE) ?>;
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function formatDetailLabel(key) {
+    return String(key).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function renderParsedDetails(parsedDetails) {
+    if (!parsedDetails || Object.keys(parsedDetails).length === 0) {
+        return '<p class="text-muted mb-0">No extra event data for this action.</p>';
+    }
+    let rows = '';
+    for (const [key, value] of Object.entries(parsedDetails)) {
+        const display = (value === null || value === '') ? '—' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+        rows += `<tr><th style="width:38%">${escapeHtml(formatDetailLabel(key))}</th><td>${escapeHtml(display)}</td></tr>`;
+    }
+    return `<table class="table table-sm table-bordered mb-0"><tbody>${rows}</tbody></table>`;
+}
+
 function viewDetails(logId) {
+    document.getElementById('logDetailsContent').innerHTML = '<div class="text-center py-4 text-muted">Loading...</div>';
+    $('#logDetailsModal').modal('show');
+
     fetch('<?= site_url('/admin/activity-logs/details/') ?>' + logId)
         .then(response => response.json())
-        .then(data => {
-            let detailsHtml = '';
-            if (data.details) {
-                try {
-                    const details = JSON.parse(data.details);
-                    detailsHtml = '<pre>' + JSON.stringify(details, null, 2) + '</pre>';
-                } catch (e) {
-                    detailsHtml = '<pre>' + data.details + '</pre>';
-                }
-            } else {
-                detailsHtml = '<p class="text-muted">No additional details available</p>';
+        .then(payload => {
+            const log = payload.log || payload.data;
+            if (!payload.success || !log) {
+                document.getElementById('logDetailsContent').innerHTML =
+                    `<div class="alert alert-danger mb-0">${escapeHtml(payload.message || 'Unable to load log.')}</div>`;
+                return;
             }
-            
-            const content = `
+
+            const typeLabel = log.action_type_label || ACTION_TYPE_LABELS[log.action_type] || log.action_type;
+            const statusClass = log.status === 'success' ? 'success' : (log.status === 'failed' ? 'danger' : 'warning');
+            const userHtml = log.user_id
+                ? `${escapeHtml(log.user_name || ('User #' + log.user_id))}<br><small class="text-muted">${escapeHtml(log.user_email || '')}</small>`
+                : '<span class="text-muted">System</span>';
+
+            document.getElementById('logDetailsContent').innerHTML = `
+                <div class="mb-3">
+                    <span class="badge badge-info mr-1">${escapeHtml(typeLabel)}</span>
+                    <span class="badge badge-${statusClass}">${escapeHtml(log.status)}</span>
+                    <span class="badge badge-secondary">#${escapeHtml(log.id)}</span>
+                    <h6 class="mt-2 mb-1">${escapeHtml(log.action)}</h6>
+                    <small class="text-muted">${escapeHtml(new Date(log.created_at).toLocaleString())}</small>
+                </div>
                 <div class="row">
                     <div class="col-md-6">
-                        <strong>Timestamp:</strong> ${new Date(data.created_at).toLocaleString()}<br>
-                        <strong>User:</strong> ${data.user_name || 'N/A'} (${data.user_email || 'N/A'})<br>
-                        <strong>Action:</strong> ${data.action}<br>
-                        <strong>Action Type:</strong> ${data.action_type}<br>
-                        <strong>Status:</strong> <span class="badge badge-${data.status === 'success' ? 'success' : (data.status === 'failed' ? 'danger' : 'warning')}">${data.status}</span>
+                        <h6 class="text-uppercase text-muted small">User</h6>
+                        <p class="mb-3">${userHtml}</p>
+                        <p class="mb-0"><strong>User ID:</strong> ${escapeHtml(log.user_id || '—')}</p>
                     </div>
                     <div class="col-md-6">
-                        <strong>IP Address:</strong> ${data.ip_address || 'N/A'}<br>
-                        <strong>User Agent:</strong> <small>${data.user_agent || 'N/A'}</small><br>
-                        <strong>User ID:</strong> ${data.user_id || 'N/A'}<br>
+                        <h6 class="text-uppercase text-muted small">Network</h6>
+                        <p class="mb-1"><strong>IP:</strong> ${escapeHtml(log.ip_address || '—')}</p>
+                        <p class="mb-0 small text-break"><strong>User Agent:</strong><br>${escapeHtml(log.user_agent || '—')}</p>
                     </div>
                 </div>
                 <hr>
-                <h6>Additional Details:</h6>
-                ${detailsHtml}
+                <h6 class="text-uppercase text-muted small">Event Data</h6>
+                ${renderParsedDetails(log.parsed_details || {})}
             `;
-            document.getElementById('logDetailsContent').innerHTML = content;
-            $('#logDetailsModal').modal('show');
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error loading log details');
+        .catch(() => {
+            document.getElementById('logDetailsContent').innerHTML =
+                '<div class="alert alert-danger mb-0">Error loading log details.</div>';
         });
 }
 

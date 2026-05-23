@@ -38,6 +38,14 @@ try {
         ':id' => (int) $user['id'],
     ]);
 
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        (int) $user['id'],
+        'User ' . $email . ' changed password (mobile)',
+        'PASSWORD_CHANGE',
+        ['email' => $email, 'source' => 'mobile_api']
+    );
+
     json_response(true, 'Password updated successfully.', null, 200);
 } catch (Throwable $e) {
     json_response(false, 'Server error while updating password.', null, 500);

@@ -6,10 +6,11 @@
     <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+<?php helper('order'); ?>
 <?php
 // Helper function to get delivery status labels
 if (!function_exists('getDeliveryStatusLabel')) {
-    function getDeliveryStatusLabel($status) {
+    function getDeliveryStatusLabel($status, $shipmentNotes = null) {
         $labels = [
             'to_pay' => 'To Pay',
             'to_ship' => 'Order Placed',
@@ -27,6 +28,10 @@ if (!function_exists('getDeliveryStatusLabel')) {
             'delivered_to_rider' => 'Picked Up'
         ];
         
+        if (function_exists('delivery_status_display_label')) {
+            return delivery_status_display_label((string) $status, $shipmentNotes, $labels);
+        }
+
         return $labels[$status] ?? ucfirst($status);
     }
 }
@@ -787,6 +792,11 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
             background: #d1ecf1;
             color: #0c5460;
         }
+
+        .status-rescheduled {
+            background: #fff7ed;
+            color: #c2410c;
+        }
         
         .status-completed {
             background: #e8f5e8;
@@ -1462,9 +1472,14 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                             <td>
                                 <?php
                                 $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
+                                $orderShipmentNotes = (string) ($order['shipment_notes'] ?? '');
+                                $deliveryStatusClass = $deliveryStatus;
+                                if ($deliveryStatusClass === 'delivered_to_rider' && delivery_is_rescheduled($orderShipmentNotes)) {
+                                    $deliveryStatusClass = 'rescheduled';
+                                }
                                 ?>
-                                <div class="order-status status-<?= esc($deliveryStatus) ?>">
-                                    <?= getDeliveryStatusLabel($deliveryStatus) ?>
+                                <div class="order-status status-<?= esc($deliveryStatusClass) ?>">
+                                    <?= getDeliveryStatusLabel($deliveryStatus, $orderShipmentNotes) ?>
                                 </div>
                             </td>
                             <td class="delivery-info-cell">
@@ -1492,6 +1507,10 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                         · <?= esc($addressDescription) ?>
                                     <?php endif; ?>
                                 </div>
+                                <?= view('partials/delivery_reschedule_notice', [
+                                    'shipmentNotes' => $orderShipmentNotes,
+                                    'compact' => true,
+                                ]) ?>
                             </td>
                             <td>
                                 <div class="action-cell">

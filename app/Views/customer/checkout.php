@@ -225,14 +225,19 @@
                     </div>
                     <div id="saved_fields" style="display:none; color:#666; font-size:.9rem;">
                         <?= !empty($customer_delivery_address) ? 'Saved address: ' . esc($customer_delivery_address) : 'No saved address found.' ?>
+                        <?php if (! empty($customer_delivery_latitude) && ! empty($customer_delivery_longitude)): ?>
+                            <div style="margin-top:.45rem;">Your registered delivery location will be sent to the rider and admin automatically.</div>
+                        <?php endif; ?>
                     </div>
-                    <div style="display:flex; gap:.5rem; margin:.7rem 0;">
-                        <button type="button" class="btn" style="margin:0; width:auto; padding:.55rem .8rem;" onclick="useCurrentLocation()">Use Current Location</button>
-                        <span id="geo_status" style="font-size:.85rem; color:#666;"></span>
-                    </div>
-                    <div id="checkout_map" style="height:260px; border-radius:12px; border:1px solid #e0e0e0;"></div>
                     <input type="hidden" name="delivery_latitude" id="delivery_latitude">
                     <input type="hidden" name="delivery_longitude" id="delivery_longitude">
+                    <div id="checkout_pin_section">
+                        <div style="display:flex; gap:.5rem; margin:.7rem 0;">
+                            <button type="button" class="btn" style="margin:0; width:auto; padding:.55rem .8rem;" onclick="useCurrentLocation()">Use Current Location</button>
+                            <span id="geo_status" style="font-size:.85rem; color:#666;"></span>
+                        </div>
+                        <div id="checkout_map" style="height:260px; border-radius:12px; border:1px solid #e0e0e0;"></div>
+                    </div>
                 </div>
 
                 <button class="btn" type="submit" id="submit_btn" disabled>
@@ -249,9 +254,12 @@
     const gcashFields = document.getElementById('gcash_fields');
     const submitBtn = document.getElementById('submit_btn');
     const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
+    const savedDeliveryLatitude = <?= json_encode(isset($customer_delivery_latitude) ? (float) $customer_delivery_latitude : null) ?>;
+    const savedDeliveryLongitude = <?= json_encode(isset($customer_delivery_longitude) ? (float) $customer_delivery_longitude : null) ?>;
     let map;
     let marker;
     let geocodeDebounceTimer = null;
+    let mapLocked = false;
 
     function togglePaymentFields() {
         const selectedMethod = paymentMethodSelect.value;
@@ -294,8 +302,14 @@
         }
         const lat = document.getElementById('delivery_latitude').value;
         const lng = document.getElementById('delivery_longitude').value;
+        const addressMode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        if (addressMode === 'saved_address') {
+            applySavedDeliveryLocation();
+        }
         if (!lat || !lng) {
-            alert('Please pin your delivery location on the map.');
+            alert(addressMode === 'saved_address'
+                ? 'Your saved delivery location is missing. Please enter your address manually and pin the map.'
+                : 'Please pin your delivery location on the map.');
             return false;
         }
         const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
@@ -303,23 +317,82 @@
             alert('No saved address found. Please enter your address manually.');
             return false;
         }
+        if (mode === 'saved_address' && (savedDeliveryLatitude === null || savedDeliveryLongitude === null)) {
+            alert('Your account has no saved map location yet. Please enter your address manually and pin the map.');
+            return false;
+        }
+        return true;
+    }
+
+    function bindMapClick() {
+        if (!map) {
+            return;
+        }
+        map.off('click');
+        if (!mapLocked) {
+            map.on('click', (e) => setPinnedLocation(e.latlng.lat, e.latlng.lng));
+        }
+    }
+
+    function setDeliveryCoordinates(lat, lng) {
+        document.getElementById('delivery_latitude').value = String(lat);
+        document.getElementById('delivery_longitude').value = String(lng);
+    }
+
+    function applySavedDeliveryLocation() {
+        if (savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
+            return false;
+        }
+        setDeliveryCoordinates(savedDeliveryLatitude, savedDeliveryLongitude);
         return true;
     }
 
     function toggleAddressMode() {
         const mode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+        const pinSection = document.getElementById('checkout_pin_section');
+        const useSavedWithPin = mode === 'saved_address'
+            && savedDeliveryLatitude !== null
+            && savedDeliveryLongitude !== null;
+
         document.getElementById('manual_fields').style.display = mode === 'manual' ? 'block' : 'none';
         document.getElementById('saved_fields').style.display = mode === 'saved_address' ? 'block' : 'none';
-        if (mode === 'saved_address' && savedDeliveryAddress.trim()) {
-            geocodeAddressAndPin(savedDeliveryAddress);
-        } else if (mode === 'manual') {
+        if (pinSection) {
+            pinSection.style.display = useSavedWithPin ? 'none' : 'block';
+        }
+
+        if (useSavedWithPin) {
+            mapLocked = true;
+            applySavedDeliveryLocation();
+        } else if (mode === 'saved_address') {
+            mapLocked = false;
+            if (savedDeliveryAddress.trim()) {
+                if (!map) {
+                    map = L.map('checkout_map').setView([6.1164, 125.1716], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                    bindMapClick();
+                }
+                geocodeAddressAndPin(savedDeliveryAddress);
+            }
+        } else {
+            mapLocked = false;
+            document.getElementById('geo_status').textContent = '';
+            if (!map) {
+                map = L.map('checkout_map').setView([6.1164, 125.1716], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                bindMapClick();
+            } else {
+                map.invalidateSize();
+            }
             geocodeManualAddressDebounced();
+            bindMapClick();
         }
     }
 
     function setPinnedLocation(lat, lng) {
-        document.getElementById('delivery_latitude').value = String(lat);
-        document.getElementById('delivery_longitude').value = String(lng);
+        setDeliveryCoordinates(lat, lng);
+        if (!map) {
+            return;
+        }
         if (!marker) {
             marker = L.marker([lat, lng]).addTo(map);
         } else {
@@ -420,10 +493,22 @@
 
     // Event listeners
     paymentMethodSelect.addEventListener('change', togglePaymentFields);
-    map = L.map('checkout_map').setView([6.1164, 125.1716], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    map.on('click', (e) => setPinnedLocation(e.latlng.lat, e.latlng.lng));
-    setPinnedLocation(6.1164, 125.1716);
+    if (savedDeliveryLatitude !== null && savedDeliveryLongitude !== null) {
+        const savedRadio = document.querySelector('input[name="delivery_address_mode"][value="saved_address"]');
+        if (savedRadio) {
+            savedRadio.checked = true;
+        }
+    }
+    toggleAddressMode();
+    const initialMode = document.querySelector('input[name="delivery_address_mode"]:checked')?.value || 'manual';
+    if (initialMode === 'manual' || savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
+        if (!map) {
+            map = L.map('checkout_map').setView([6.1164, 125.1716], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+            bindMapClick();
+            setPinnedLocation(6.1164, 125.1716);
+        }
+    }
     ['delivery_address_line', 'delivery_barangay', 'delivery_city', 'delivery_province', 'delivery_postal_code', 'delivery_country']
         .forEach((id) => {
             const el = document.getElementById(id);
@@ -431,7 +516,6 @@
             el.addEventListener('change', geocodeManualAddressDebounced);
             el.addEventListener('input', geocodeManualAddressDebounced);
         });
-    toggleAddressMode();
     // Initialize
     togglePaymentFields();
 </script>

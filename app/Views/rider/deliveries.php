@@ -119,9 +119,22 @@
         box-shadow: inset 4px 0 0 #f59e0b;
     }
 
-    .deliveries-table td:last-child {
+    .deliveries-table td.delivery-status-cell,
+    .deliveries-table td.delivery-actions-cell {
         vertical-align: middle;
-        width: 180px;
+    }
+
+    .deliveries-table td.delivery-actions-cell {
+        width: 1%;
+        white-space: normal;
+        padding: 0.65rem 0.75rem;
+        min-width: 130px;
+    }
+
+    .delivery-status-cell__inner {
+        display: flex;
+        align-items: center;
+        min-height: 36px;
     }
 
     .muted {
@@ -155,25 +168,56 @@
     }
 
     .action-btn {
-        padding: 0.5rem 1rem;
+        width: 32px;
+        height: 32px;
+        padding: 0;
         border: none;
         border-radius: 8px;
         cursor: pointer;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 600;
         font-family: var(--main-font, 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
         text-decoration: none;
-        transition: all 0.2s ease;
+        transition: background 0.15s ease, box-shadow 0.15s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 0.5rem;
-        margin-bottom: 0.25rem;
-        min-width: 145px;
+        gap: 0;
+        margin: 0;
+        flex: 0 0 32px;
+        line-height: 1;
+        white-space: nowrap;
+        box-sizing: border-box;
     }
-    
+
+    .action-btn--labeled {
+        width: 100%;
+        height: auto;
+        min-height: 34px;
+        flex: 0 0 auto;
+        flex-direction: row;
+        padding: 0.42rem 0.55rem;
+        gap: 0.4rem;
+        min-width: 0;
+        justify-content: center;
+    }
+
+    .action-btn--labeled i {
+        font-size: 0.82rem;
+        flex-shrink: 0;
+    }
+
+    .action-btn--labeled .action-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: 0.01em;
+    }
+
     .action-btn i {
-        font-size: 0.8rem;
+        font-size: 0.82rem;
+        line-height: 1;
+        pointer-events: none;
     }
     
     .btn-complete {
@@ -190,8 +234,6 @@
     }
     .btn-retry:hover {
         background: #f57c00;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
     }
     
     .btn-pickup {
@@ -201,8 +243,6 @@
     }
     .btn-pickup:hover {
         background: #1976d2;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
     }
     
     .btn-delivered {
@@ -213,10 +253,34 @@
 
     .btn-delivered:hover {
         background: #388e3c;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
     }
-    
+
+    .btn-customer-cancel {
+        background: #c62828;
+        color: white;
+        border: none;
+    }
+
+    .btn-customer-cancel:hover {
+        background: #b71c1c;
+    }
+
+    .btn-reschedule {
+        background: #f59e0b;
+        color: #fff;
+        border: none;
+    }
+
+    .btn-reschedule:hover {
+        background: #d97706;
+    }
+
+    .status-badge.rescheduled {
+        background: #fff7ed;
+        color: #c2410c;
+        border: 1px solid #fdba74;
+    }
+
     .btn-start {
         background: #27c56f;
         color: white;
@@ -224,8 +288,6 @@
     }
     .btn-start:hover {
         background: #219653;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(39, 197, 111, 0.3);
     }
 
     .empty-state {
@@ -238,15 +300,44 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 0.35rem;
-        width: 145px;
+        justify-content: flex-start;
+        gap: 0.38rem;
+        width: 100%;
+        max-width: 140px;
     }
 
-    .action-stack .status-badge,
-    .action-stack .action-btn {
+    .action-stack .status-badge {
+        font-size: 0.72rem;
+        padding: 0.35rem 0.6rem;
+        min-height: 34px;
+        white-space: nowrap;
+        line-height: 1;
         width: 100%;
-        min-width: 0;
         justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .action-stack a.action-btn {
+        text-decoration: none;
+    }
+
+    .action-stack .action-btn:hover {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    .action-divider {
+        width: 100%;
+        height: 0;
+        border: none;
+        border-top: 1px solid #e2e8f0;
+        margin: 0.12rem 0 0.04rem;
+        flex: 0 0 auto;
+    }
+
+    .delivery-status-cell .status-badge {
+        min-height: 36px;
+        box-sizing: border-box;
+        padding: .5rem .85rem;
     }
 
     .delivery-empty-row td {
@@ -288,6 +379,8 @@
         'accepted_by_rider' => 'Accepted by Rider',
         'delivered_to_rider' => 'Picked Up',
         'delivered' => 'Delivered',
+        'cancelled' => 'Cancelled',
+        'rescheduled' => 'Rescheduled',
     ];
 ?>
 
@@ -323,6 +416,7 @@
                 <option value="filter-ready_for_pickup">Rider Assigned</option>
                 <option value="filter-accepted_by_rider">Accepted by Rider</option>
                 <option value="filter-delivered_to_rider">Picked Up</option>
+                <option value="filter-cancelled">Cancelled</option>
             </select>
         </div>
         <table class="deliveries-table">
@@ -342,6 +436,11 @@
                     <?php
                         $deliveryOrderId = (int) ($delivery['id'] ?? 0);
                         $status = (string) ($delivery['delivery_status'] ?? 'to_ship');
+                        if (strtolower((string) ($delivery['status'] ?? '')) === 'cancelled') {
+                            $status = 'cancelled';
+                        }
+                        $shipmentNotesRaw = (string) ($delivery['shipment_notes'] ?? '');
+                        $isRescheduledPickup = $status === 'delivered_to_rider' && delivery_is_rescheduled($shipmentNotesRaw);
                     ?>
                     <tr id="delivery-<?= $deliveryOrderId ?>" class="<?= $highlightOrderId === $deliveryOrderId ? 'is-highlighted' : '' ?>" data-delivery-status="<?= esc($status) ?>" data-order-id="<?= $deliveryOrderId ?>">
                         <td>
@@ -355,44 +454,80 @@
                         <td class="muted"><?= esc($delivery['shipping_address'] ?? 'No delivery address provided') ?></td>
                         <td class="muted"><?= esc($delivery['contact_number'] ?? ($delivery['customer']['phone'] ?? 'Not provided')) ?></td>
                         <td class="muted"><?= esc(shipment_notes_for_display($delivery['shipment_notes'] ?? '') ?: 'None') ?></td>
-                        <td><span class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></span></td>
-                        <td>
-                            <div class="action-stack">
-                            <?php if (in_array($status, ['completed', 'delivered'], true)): ?>
-                                <span class="status-badge" style="background: #e8f5e8; color: #2e7d2e; border: 1px solid #4caf50;">
-                                    <i class="fas fa-check-circle"></i> Order Completed
+                        <td class="delivery-status-cell">
+                            <div class="delivery-status-cell__inner">
+                            <?php if ($status === 'cancelled'): ?>
+                                <span class="status-badge" style="background: #ffebee; color: #c62828; border: 1px solid #ef9a9a;">
+                                    <?= esc($statusLabels[$status]) ?>
                                 </span>
+                            <?php elseif ($isRescheduledPickup): ?>
+                                <span class="status-badge rescheduled"><?= esc($statusLabels['rescheduled']) ?></span>
                             <?php else: ?>
-                                <a class="action-btn btn-pickup" href="<?= site_url('rider/order-details/' . (int) $delivery['id']) ?>">
-                                    <i class="fas fa-eye"></i> View Details
+                                <span class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></span>
+                            <?php endif; ?>
+                            </div>
+                        </td>
+                        <td class="delivery-actions-cell">
+                            <div class="action-stack">
+                            <?php if ($status === 'cancelled'): ?>
+                                <span class="status-badge" style="background: #ffebee; color: #c62828; border: 1px solid #ef9a9a;">
+                                    <i class="fas fa-times-circle"></i> Cancelled
+                                </span>
+                            <?php elseif (in_array($status, ['completed', 'delivered'], true)): ?>
+                                <span class="status-badge" style="background: #e8f5e8; color: #2e7d2e; border: 1px solid #4caf50;">
+                                    <i class="fas fa-check-circle"></i> Completed
+                                </span>
+                            <?php elseif (! in_array($status, ['to_ship', 'for_pickup'], true)): ?>
+                                <a class="action-btn action-btn--labeled btn-pickup" href="<?= site_url('rider/order-details/' . (int) $delivery['id']) ?>" title="View order details">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                    <span class="action-label">View</span>
                                 </a>
-                                <button type="button" class="action-btn btn-pickup" onclick="openRouteMap(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-map"></i> View Map
+                                <button type="button" class="action-btn action-btn--labeled btn-pickup" onclick="openRouteMap(<?= (int) $delivery['id'] ?>)" title="View delivery route on map">
+                                    <i class="fas fa-map" aria-hidden="true"></i>
+                                    <span class="action-label">Map</span>
                                 </button>
                             <?php endif; ?>
                             <?php if ($status === 'ready_for_pickup'): ?>
-                                <button type="button" class="action-btn btn-start" onclick="acceptDelivery(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-check"></i> Accept Delivery
+                                <span class="action-divider" aria-hidden="true"></span>
+                                <button type="button" class="action-btn action-btn--labeled btn-start" onclick="acceptDelivery(<?= (int) $delivery['id'] ?>)" title="Accept this delivery">
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <span class="action-label">Accept</span>
                                 </button>
                             <?php elseif ($status === 'accepted_by_rider'): ?>
-                                <button type="button" class="action-btn btn-pickup" onclick="markPickedUp(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-box"></i> Mark Picked Up
+                                <span class="action-divider" aria-hidden="true"></span>
+                                <button type="button" class="action-btn action-btn--labeled btn-pickup" onclick="markPickedUp(<?= (int) $delivery['id'] ?>)" title="Mark order as picked up">
+                                    <i class="fas fa-box" aria-hidden="true"></i>
+                                    <span class="action-label">Pickup</span>
                                 </button>
                             <?php elseif ($status === 'delivered_to_rider'): ?>
-                                <button type="button" class="action-btn btn-start" onclick="startDelivery(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-play"></i> Start Delivery
+                                <span class="action-divider" aria-hidden="true"></span>
+                                <button type="button" class="action-btn action-btn--labeled btn-start" onclick="startDelivery(<?= (int) $delivery['id'] ?>)" title="Start delivery to customer">
+                                    <i class="fas fa-play" aria-hidden="true"></i>
+                                    <span class="action-label">Start</span>
                                 </button>
                             <?php elseif ($status === 'failed_delivery' || $status === 'failed'): ?>
-                                <button type="button" class="action-btn btn-retry" onclick="retryDelivery(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-redo"></i> Retry Deliver
+                                <span class="action-divider" aria-hidden="true"></span>
+                                <button type="button" class="action-btn action-btn--labeled btn-retry" onclick="retryDelivery(<?= (int) $delivery['id'] ?>)" title="Retry this delivery">
+                                    <i class="fas fa-redo" aria-hidden="true"></i>
+                                    <span class="action-label">Retry</span>
                                 </button>
                             <?php elseif ($status === 'to_receive'): ?>
-                                <button type="button" class="action-btn btn-delivered" onclick="showDeliveryProofForm(<?= (int) $delivery['id'] ?>)">
-                                    <i class="fas fa-check-circle"></i> Order Delivered
+                                <span class="action-divider" aria-hidden="true"></span>
+                                <button type="button" class="action-btn action-btn--labeled btn-delivered" onclick="confirmMarkDelivered(<?= (int) $delivery['id'] ?>)" title="Mark order as delivered and submit proof">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                    <span class="action-label">Delivered</span>
+                                </button>
+                                <button type="button" class="action-btn action-btn--labeled btn-reschedule" onclick="openDeliveryRescheduleModal(<?= (int) $delivery['id'] ?>)" title="Reschedule this delivery for another date">
+                                    <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                                    <span class="action-label">Reschedule</span>
+                                </button>
+                                <button type="button" class="action-btn action-btn--labeled btn-customer-cancel" onclick="confirmCustomerCancelled(<?= (int) $delivery['id'] ?>)" title="Customer refused or cancelled at door">
+                                    <i class="fas fa-user-times" aria-hidden="true"></i>
+                                    <span class="action-label">Cancel</span>
                                 </button>
                             <?php elseif ($status === 'to_ship' || $status === 'for_pickup'): ?>
                                 <span class="status-badge" style="background: #fff3cd; color: #856404; border: 1px solid #ffc107;">
-                                    <i class="fas fa-clock"></i> Waiting for Rider Assignment
+                                    <i class="fas fa-clock"></i> Waiting
                                 </span>
                             <?php endif; ?>
                             </div>
@@ -495,13 +630,145 @@ function hasOtherActiveDelivery(orderId) {
 }
 
 let pendingCancelOrderId = null;
+let pendingRescheduleOrderId = null;
+
+function formatDateInputValue(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function defaultRescheduleDateValue() {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + 1);
+    return formatDateInputValue(dt);
+}
+
+function minRescheduleDateValue() {
+    return formatDateInputValue(new Date());
+}
+
+function openDeliveryRescheduleModal(orderId) {
+    pendingRescheduleOrderId = parseInt(orderId || '0', 10);
+    const modal = document.getElementById('deliveryRescheduleModal');
+    const orderInput = document.getElementById('rescheduleOrderId');
+    const atInput = document.getElementById('rescheduleAt');
+    const reasonInput = document.getElementById('rescheduleReason');
+    if (orderInput) {
+        orderInput.value = pendingRescheduleOrderId > 0 ? String(pendingRescheduleOrderId) : '';
+    }
+    if (atInput) {
+        atInput.value = defaultRescheduleDateValue();
+        atInput.min = minRescheduleDateValue();
+    }
+    if (reasonInput) {
+        reasonInput.value = '';
+    }
+    if (modal) {
+        modal.style.display = 'block';
+    }
+}
+
+function closeDeliveryRescheduleModal() {
+    const modal = document.getElementById('deliveryRescheduleModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    pendingRescheduleOrderId = null;
+}
+
+function submitRescheduleDelivery(event) {
+    if (event) {
+        event.preventDefault();
+    }
+
+    const orderId = parseInt(document.getElementById('rescheduleOrderId')?.value || '0', 10);
+    const rescheduleAt = (document.getElementById('rescheduleAt')?.value || '').trim();
+    const rescheduleReason = (document.getElementById('rescheduleReason')?.value || '').trim();
+    const submitBtn = document.getElementById('rescheduleSubmitBtn');
+
+    if (orderId <= 0) {
+        alert('Order ID is missing.');
+        return;
+    }
+    if (!rescheduleAt) {
+        alert('Please select a new delivery date.');
+        return;
+    }
+
+    const doSubmit = (lat = '', lng = '') => {
+        const params = new URLSearchParams();
+        params.set('order_id', String(orderId));
+        params.set('status', 'reschedule_delivery');
+        params.set('reschedule_at', rescheduleAt);
+        if (rescheduleReason) {
+            params.set('reschedule_reason', rescheduleReason);
+        }
+        if (lat !== '' && lng !== '') {
+            params.set('rider_latitude', String(lat));
+            params.set('rider_longitude', String(lng));
+        }
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+        }
+
+        fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then((response) => response.json())
+        .then((data) => {
+            if (data.success) {
+                closeDeliveryRescheduleModal();
+                closeDeliveryProofForm();
+                closeDeliveryCancelPrompt();
+                alert(data.message || 'Delivery rescheduled.');
+                reloadDeliveriesPage();
+            } else {
+                alert(data.message || 'Failed to reschedule delivery');
+            }
+        })
+        .catch(() => {
+            alert('An error occurred while rescheduling the delivery');
+        })
+        .finally(() => {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save Reschedule';
+            }
+        });
+    };
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => doSubmit(position.coords.latitude, position.coords.longitude),
+            () => doSubmit(),
+            { enableHighAccuracy: true, timeout: 4000, maximumAge: 15000 }
+        );
+    } else {
+        doSubmit();
+    }
+}
+
 function openDeliveryCancelPrompt(orderId, message) {
     pendingCancelOrderId = parseInt(orderId || '0', 10);
     const modal = document.getElementById('deliveryCancelPromptModal');
     const messageEl = document.getElementById('deliveryCancelPromptMessage');
     const confirmBtn = document.getElementById('deliveryCancelPromptConfirmBtn');
+    const rescheduleBtn = document.getElementById('deliveryRescheduleFromPromptBtn');
     if (messageEl) {
-        messageEl.textContent = message || 'Do you want to cancel this delivery?';
+        messageEl.textContent = message || 'You can reschedule this delivery for later or cancel it now.';
+    }
+    if (rescheduleBtn) {
+        rescheduleBtn.onclick = function() {
+            const id = pendingCancelOrderId;
+            closeDeliveryCancelPrompt();
+            if (id > 0) {
+                openDeliveryRescheduleModal(id);
+            }
+        };
     }
     if (confirmBtn) {
         confirmBtn.onclick = function() {
@@ -580,6 +847,75 @@ function markPickedUp(orderId) {
 
 function acceptDelivery(orderId) {
     updateRiderDeliveryStatus(orderId, 'accepted_by_rider', 'Delivery accepted.');
+}
+
+function confirmMarkDelivered(orderId) {
+    if (confirm('Mark this order as delivered?\n\nYou will upload a delivery proof photo in the next step.')) {
+        showDeliveryProofForm(orderId);
+    }
+}
+
+function confirmCustomerCancelled(orderId) {
+    if (!confirm('Did the customer refuse or cancel this order face-to-face?\n\nThe order will be fully cancelled and stock will be restored.')) {
+        return;
+    }
+    customerCancelledAtDelivery(orderId, true);
+}
+
+function customerCancelledAtDelivery(orderId, skipGateConfirm = false) {
+    const notes = prompt(
+        'The customer cancelled or refused the order in person at delivery.\n\nAdd notes (optional):',
+        'Customer cancelled at delivery location.'
+    );
+    if (notes === null) {
+        return;
+    }
+
+    if (!skipGateConfirm && !confirm('Mark this order as CANCELLED because the customer refused it face-to-face? Stock will be restored.')) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('order_id', String(orderId));
+    params.set('status', 'customer_cancelled_at_delivery');
+    const trimmed = (notes || '').trim();
+    if (trimmed !== '') {
+        params.set('cancel_reason', trimmed);
+    }
+
+    const submit = (lat = '', lng = '') => {
+        if (lat !== '' && lng !== '') {
+            params.set('rider_latitude', String(lat));
+            params.set('rider_longitude', String(lng));
+        }
+
+        fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Order cancelled.');
+                reloadDeliveriesPage();
+            } else {
+                alert(data.message || 'Failed to cancel order');
+            }
+        })
+        .catch(() => {
+            alert('An error occurred while cancelling the order');
+        });
+    };
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => submit(position.coords.latitude, position.coords.longitude),
+            () => submit()
+        );
+    } else {
+        submit();
+    }
 }
 
 function cancelDelivery(orderId) {
@@ -817,10 +1153,41 @@ function sortDeliveries() {
         </div>
         <div class="modal-body">
             <p id="deliveryCancelPromptMessage" style="margin-top:0;">Do you want to cancel this delivery?</p>
-            <div class="form-actions">
+            <div class="form-actions delivery-action-buttons">
                 <button type="button" class="btn-cancel" onclick="closeDeliveryCancelPrompt()">Keep Order</button>
-                <button type="button" class="btn-submit" id="deliveryCancelPromptConfirmBtn">Cancel Delivery</button>
+                <button type="button" class="btn-reschedule-action" id="deliveryRescheduleFromPromptBtn">Reschedule</button>
+                <button type="button" class="btn-submit btn-danger-action" id="deliveryCancelPromptConfirmBtn">Cancel Delivery</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="deliveryRescheduleModal" class="modal" style="display:none;">
+    <div class="modal-content delivery-action-modal reschedule-modal-card">
+        <div class="modal-header">
+            <h3>Reschedule Delivery</h3>
+            <span class="close" onclick="closeDeliveryRescheduleModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="reschedule-modal-note">
+                <i class="fas fa-info-circle"></i>
+                <span>Choose a new <strong>delivery date only</strong>. The customer and admin will be notified automatically.</span>
+            </div>
+            <form id="deliveryRescheduleForm" class="reschedule-modal-form" onsubmit="submitRescheduleDelivery(event)">
+                <input type="hidden" id="rescheduleOrderId" name="order_id" value="">
+                <div class="form-group">
+                    <label for="rescheduleAt">New delivery date</label>
+                    <input type="date" id="rescheduleAt" name="reschedule_at" class="reschedule-date-input" required>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="rescheduleReason">Reason <span class="reschedule-optional">(optional)</span></label>
+                    <textarea id="rescheduleReason" name="reschedule_reason" rows="3" maxlength="255" placeholder="e.g. Customer not available, weather delay, area not accessible..."></textarea>
+                </div>
+                <div class="form-actions reschedule-modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeDeliveryRescheduleModal()">Cancel</button>
+                    <button type="submit" class="btn-submit" id="rescheduleSubmitBtn">Save Reschedule</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -956,11 +1323,116 @@ function sortDeliveries() {
     gap: 12px;
 }
 
+.delivery-action-modal .delivery-action-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .delivery-action-modal .btn-cancel,
-.delivery-action-modal .btn-submit {
-    min-width: 130px;
-    padding: 11px 18px;
+.delivery-action-modal .btn-submit,
+.delivery-action-modal .btn-reschedule-action {
+    min-width: 120px;
+    padding: 11px 16px;
+    font-size: 0.92rem;
+}
+
+.delivery-action-modal .btn-reschedule-action {
+    background: #f59e0b;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.delivery-action-modal .btn-reschedule-action:hover {
+    background: #d97706;
+}
+
+.delivery-action-modal .btn-danger-action {
+    background: #c62828;
+}
+
+.delivery-action-modal .btn-danger-action:hover {
+    background: #b71c1c;
+}
+
+.reschedule-modal-card {
+    width: min(92vw, 440px);
+    max-width: 440px;
+}
+
+.reschedule-modal-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin: 0 0 1rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.reschedule-modal-note i {
+    margin-top: 0.12rem;
+    flex-shrink: 0;
+}
+
+.reschedule-modal-form .form-group label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.reschedule-optional {
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.reschedule-date-input {
+    width: 100%;
+    max-width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
     font-size: 0.95rem;
+    font-family: inherit;
+    color: #1e293b;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.reschedule-date-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.reschedule-modal-form textarea {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    box-sizing: border-box;
+}
+
+.reschedule-modal-form textarea:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.reschedule-modal-actions {
+    margin-top: 1.1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #eef2f7;
 }
 </style>
 
@@ -1009,7 +1481,7 @@ document.getElementById('deliveryProofForm').addEventListener('submit', function
                     if (orderToCancel > 0) {
                         openDeliveryCancelPrompt(
                             orderToCancel,
-                            'You are still too far from the customer location. Do you want to cancel this delivery now?'
+                            'You are still too far from the customer location. Reschedule for later or cancel this delivery.'
                         );
                     }
                 }
@@ -1053,12 +1525,15 @@ window.onclick = function(event) {
     const modal = document.getElementById('deliveryProofModal');
     const detailsModal = document.getElementById('orderDetailsModal');
     const cancelPromptModal = document.getElementById('deliveryCancelPromptModal');
+    const rescheduleModal = document.getElementById('deliveryRescheduleModal');
     if (event.target == modal) {
         closeDeliveryProofForm();
     } else if (event.target == detailsModal) {
         closeOrderDetailsModal();
     } else if (event.target == cancelPromptModal) {
         closeDeliveryCancelPrompt();
+    } else if (event.target == rescheduleModal) {
+        closeDeliveryRescheduleModal();
     }
 }
 
@@ -1249,7 +1724,7 @@ function restoreRiderDeliveriesUiState() {
 
 window.__beforeLiveReload = persistRiderDeliveriesUiState;
 window.__suspendLiveReload = function() {
-    const modals = ['deliveryProofModal', 'orderDetailsModal', 'routeMapModal', 'deliveryCancelPromptModal'];
+    const modals = ['deliveryProofModal', 'orderDetailsModal', 'routeMapModal', 'deliveryCancelPromptModal', 'deliveryRescheduleModal'];
     return modals.some((id) => {
         const el = document.getElementById(id);
         return el && el.style.display === 'block';

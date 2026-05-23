@@ -7,6 +7,8 @@ use App\Models\MessageConversationModel;
 use App\Models\OrderModel;
 use App\Models\UserModel;
 use App\Libraries\NotificationService;
+use App\Libraries\ActivityLogger;
+use Config\ActivityLogTypes;
 
 class Messages extends BaseController
 {
@@ -16,6 +18,7 @@ class Messages extends BaseController
     protected NotificationService $bellNotifications;
     protected OrderModel $orderModel;
     protected UserModel $userModel;
+    protected ActivityLogger $activityLogger;
 
     public function __construct()
     {
@@ -25,6 +28,7 @@ class Messages extends BaseController
         $this->bellNotifications = new NotificationService();
         $this->orderModel = new OrderModel();
         $this->userModel = new UserModel();
+        $this->activityLogger = new ActivityLogger();
         helper(['form', 'text']);
     }
 
@@ -80,6 +84,19 @@ class Messages extends BaseController
         }
 
         $this->addMessage((int) $conversation['id'], $customerId, 'customer', $message);
+
+        $this->activityLogger->logUserAction(
+            $customerId,
+            'Sent support message',
+            ActivityLogTypes::MESSAGE_SENT,
+            [
+                'actor_role' => 'customer',
+                'conversation_id' => (int) $conversation['id'],
+                'order_id' => $orderId > 0 ? $orderId : null,
+                'support_target' => $supportTarget !== '' ? $supportTarget : 'default',
+                'preview' => mb_substr($message, 0, 120),
+            ]
+        );
 
         $humanRequested = $supportTarget === 'human' || $this->shouldEscalate($message);
         $botRequested = $supportTarget === 'bot';
@@ -227,6 +244,17 @@ class Messages extends BaseController
             'related_id' => $conversationId,
         ]);
 
+        $this->activityLogger->logUserAction(
+            $adminId,
+            'Admin replied to support chat',
+            ActivityLogTypes::MESSAGE_SENT,
+            [
+                'actor_role' => 'admin',
+                'conversation_id' => $conversationId,
+                'preview' => mb_substr($message, 0, 120),
+            ]
+        );
+
         return $this->respondBack('Reply sent.');
     }
 
@@ -249,6 +277,13 @@ class Messages extends BaseController
         $this->conversationModel->update($conversationId, ['status' => $status]);
         $this->addMessage($conversationId, (int) $this->session->get('user_id'), 'admin', 'Chat status changed to ' . ucfirst($status) . '.', 'system', true);
         $this->conversationModel->update($conversationId, ['status' => $status]);
+
+        $this->activityLogger->logUserAction(
+            (int) $this->session->get('user_id'),
+            'Updated support chat status to ' . $status,
+            ActivityLogTypes::CHAT_STATUS_UPDATED,
+            ['conversation_id' => $conversationId, 'status' => $status, 'actor_role' => 'admin']
+        );
 
         return redirect()->to('/admin/messages/' . $conversationId)->with('success', 'Chat status updated.');
     }
@@ -359,6 +394,17 @@ class Messages extends BaseController
             'related_type' => 'conversation',
             'related_id' => $conversationId,
         ]);
+
+        $this->activityLogger->logUserAction(
+            (int) $this->session->get('user_id'),
+            'Rider replied to delivery support chat',
+            ActivityLogTypes::MESSAGE_SENT,
+            [
+                'actor_role' => 'rider',
+                'conversation_id' => $conversationId,
+                'preview' => mb_substr($message, 0, 120),
+            ]
+        );
 
         return $this->respondBack('Reply sent.');
     }

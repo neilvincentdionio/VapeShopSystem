@@ -200,6 +200,20 @@ try {
 
     $db->commit();
 
+    require_once __DIR__ . '/log_activity.php';
+    mobile_log_activity(
+        $userId,
+        'Placed order ' . $reference . ' (mobile)',
+        'ORDER_PLACED',
+        [
+            'order_id' => $orderId,
+            'reference_number' => $reference,
+            'total_amount' => $computedTotal,
+            'item_count' => $itemCount,
+            'source' => 'mobile_api',
+        ]
+    );
+
     json_response(true, 'Checkout successful.', [
         'order_id' => $orderId,
         'reference_number' => $reference,

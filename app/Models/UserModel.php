@@ -73,6 +73,11 @@ class UserModel extends Model
         'province',
         'postal_code',
     ];
+
+    private array $addressCoordinateFields = [
+        'delivery_latitude',
+        'delivery_longitude',
+    ];
     private ?bool $usersRoleIdColumnExists = null;
     private EncryptionService $encryptionService;
 
@@ -153,7 +158,7 @@ class UserModel extends Model
     {
         $coreData = $this->extractCoreData($data);
         $profileData = $this->extractProfileData($data);
-        $addressData = $this->extractAddressData($data);
+        $addressData = $this->buildAddressPayload($data);
         $coreData = $this->normalizeRoleAssignments($coreData);
 
         if (! isset($coreData['password'])) {
@@ -200,7 +205,7 @@ class UserModel extends Model
 
         $coreData = $this->extractCoreData($data);
         $profileData = $this->extractProfileData($data);
-        $addressData = $this->extractAddressData($data);
+        $addressData = $this->buildAddressPayload($data);
         $coreData = $this->normalizeRoleAssignments($coreData);
 
         if (array_key_exists('password', $coreData) && $coreData['password'] !== null && $coreData['password'] !== '') {
@@ -321,6 +326,8 @@ class UserModel extends Model
             'barangay' => null,
             'province' => null,
             'postal_code' => null,
+            'delivery_latitude' => null,
+            'delivery_longitude' => null,
         ], $row);
 
         foreach ($this->profileFields as $field) {
@@ -332,6 +339,12 @@ class UserModel extends Model
         foreach ($this->addressFields as $field) {
             if (array_key_exists($field, $address)) {
                 $row[$field] = $address[$field];
+            }
+        }
+
+        foreach ($this->addressCoordinateFields as $field) {
+            if (array_key_exists($field, $address) && $address[$field] !== null && $address[$field] !== '') {
+                $row[$field] = (float) $address[$field];
             }
         }
 
@@ -402,6 +415,22 @@ class UserModel extends Model
         return array_intersect_key($data, array_flip($this->addressFields));
     }
 
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function buildAddressPayload(array $data): array
+    {
+        $payload = $this->extractAddressData($data);
+        foreach ($this->addressCoordinateFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $payload[$field] = $data[$field];
+            }
+        }
+
+        return $payload;
+    }
+
     private function upsertUserProfile(int $userId, array $profileData): void
     {
         $timestamp = date('Y-m-d H:i:s');
@@ -446,6 +475,7 @@ class UserModel extends Model
 
         $timestamp = date('Y-m-d H:i:s');
         $existing = is_array($existing) ? $this->decryptAddressRow($existing) : [];
+        $coordinateData = $this->extractAddressCoordinateData($addressData);
         $addressData = $this->encryptAddressData($addressData);
 
         $payload = array_merge([
@@ -455,7 +485,9 @@ class UserModel extends Model
             'barangay' => $existing['barangay'] ?? null,
             'province' => $existing['province'] ?? null,
             'postal_code' => $existing['postal_code'] ?? null,
-        ], $addressData, [
+            'delivery_latitude' => $existing['delivery_latitude'] ?? null,
+            'delivery_longitude' => $existing['delivery_longitude'] ?? null,
+        ], $addressData, $coordinateData, [
             'updated_at' => $timestamp,
         ]);
 
@@ -488,7 +520,52 @@ class UserModel extends Model
             }
         }
 
+        foreach ($this->addressCoordinateFields as $field) {
+            if (isset($addressData[$field]) && $addressData[$field] !== null && $addressData[$field] !== '') {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, float|null>
+     */
+    private function extractAddressCoordinateData(array &$data): array
+    {
+        $coordinates = [];
+        foreach ($this->addressCoordinateFields as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+            $coordinates[$field] = $this->normalizeCoordinateValue($data[$field], $field);
+            unset($data[$field]);
+        }
+
+        return $coordinates;
+    }
+
+    private function normalizeCoordinateValue($value, string $field = 'delivery_longitude'): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $float = (float) $value;
+        if ($field === 'delivery_latitude' && ($float < -90 || $float > 90)) {
+            return null;
+        }
+        if ($field === 'delivery_longitude' && ($float < -180 || $float > 180)) {
+            return null;
+        }
+
+        return $float;
     }
 
     /**
@@ -525,15 +602,8 @@ class UserModel extends Model
             return $coreData;
         }
 
-        if ($roleId <= 0) {
-            $coreData['role'] = $coreData['role'] ?? 'customer';
-            if ($supportsRoleId) {
-                $resolvedRoleId = $this->getRoleIdByName((string) $coreData['role']);
-                if ($resolvedRoleId !== null) {
-                    $coreData['role_id'] = $resolvedRoleId;
-                }
-            }
-        }
+        // Profile updates without role must not overwrite the existing role.
+        unset($coreData['role'], $coreData['role_id']);
 
         return $coreData;
     }

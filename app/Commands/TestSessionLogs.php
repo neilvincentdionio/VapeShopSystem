@@ -96,7 +96,7 @@ class TestSessionLogs extends BaseCommand
                             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                             user_id TEXT NULL COMMENT 'Encrypted user ID',
                             action TEXT NOT NULL COMMENT 'Encrypted action description',
-                            action_type ENUM('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'PROFILE_UPDATE', 'PASSWORD_CHANGE', 'MFA_ENABLED', 'MFA_DISABLED', 'ACCOUNT_CREATED', 'ACCOUNT_DELETED') NOT NULL,
+                            action_type VARCHAR(64) NOT NULL,
                             ip_address TEXT NULL COMMENT 'Encrypted IP address',
                             user_agent TEXT NULL COMMENT 'Encrypted user agent',
                             details TEXT NULL COMMENT 'Encrypted additional details',

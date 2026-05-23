@@ -189,6 +189,71 @@ class UpgradeRbacSchema extends Migration
                 ],
             ]);
         }
+
+        if (!$this->db->tableExists('shop_settings')) {
+            $this->forge->addField([
+                'id' => [
+                    'type'       => 'INT',
+                    'constraint' => 11,
+                    'unsigned'   => true,
+                ],
+                'shop_name' => [
+                    'type'       => 'VARCHAR',
+                    'constraint' => 150,
+                    'null'       => false,
+                ],
+                'shop_address' => [
+                    'type' => 'TEXT',
+                    'null' => true,
+                ],
+                'shop_latitude' => [
+                    'type'       => 'DECIMAL',
+                    'constraint' => '10,7',
+                    'null'       => true,
+                ],
+                'shop_longitude' => [
+                    'type'       => 'DECIMAL',
+                    'constraint' => '10,7',
+                    'null'       => true,
+                ],
+                'shop_phone' => [
+                    'type'       => 'VARCHAR',
+                    'constraint' => 30,
+                    'null'       => true,
+                ],
+                'updated_by' => [
+                    'type'       => 'INT',
+                    'constraint' => 11,
+                    'unsigned'   => true,
+                    'null'       => true,
+                ],
+                'created_at' => [
+                    'type' => 'DATETIME',
+                    'null' => false,
+                ],
+                'updated_at' => [
+                    'type' => 'DATETIME',
+                    'null' => false,
+                ],
+            ]);
+
+            $this->forge->addKey('id', true);
+            $this->forge->addForeignKey('updated_by', 'users', 'id', 'SET NULL', 'CASCADE');
+            $this->forge->createTable('shop_settings', true);
+
+            $now = date('Y-m-d H:i:s');
+            $this->db->table('shop_settings')->insert([
+                'id'             => 1,
+                'shop_name'      => 'Quick Puff Vape Shop',
+                'shop_address'   => 'Bula, General Santos City, South Cotabato, Philippines',
+                'shop_latitude'  => 6.1352000,
+                'shop_longitude' => 125.2179000,
+                'shop_phone'     => null,
+                'updated_by'     => null,
+                'created_at'     => $now,
+                'updated_at'     => $now,
+            ]);
+        }
     }
 
     public function down()

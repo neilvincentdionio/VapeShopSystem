@@ -150,6 +150,48 @@ class RbacService
             }
             $db->table('roles')->where('name', $roleName)->update($payload);
         }
+
+        if ($db->tableExists('activity_logs')) {
+            $db->query('ALTER TABLE activity_logs MODIFY action_type VARCHAR(64) NOT NULL');
+        }
+
+        if ($db->tableExists('user_addresses')) {
+            if (!$db->fieldExists('delivery_latitude', 'user_addresses')) {
+                $db->query('ALTER TABLE user_addresses ADD COLUMN delivery_latitude DECIMAL(10,7) NULL AFTER postal_code');
+            }
+            if (!$db->fieldExists('delivery_longitude', 'user_addresses')) {
+                $db->query('ALTER TABLE user_addresses ADD COLUMN delivery_longitude DECIMAL(10,7) NULL AFTER delivery_latitude');
+            }
+        }
+
+        if (!$db->tableExists('shop_settings')) {
+            $db->query("CREATE TABLE shop_settings (
+                id INT UNSIGNED NOT NULL,
+                shop_name VARCHAR(150) NOT NULL,
+                shop_address TEXT NULL,
+                shop_latitude DECIMAL(10,7) NULL,
+                shop_longitude DECIMAL(10,7) NULL,
+                shop_phone VARCHAR(30) NULL,
+                updated_by INT UNSIGNED NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                CONSTRAINT fk_shop_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            $now = date('Y-m-d H:i:s');
+            $db->table('shop_settings')->insert([
+                'id'             => 1,
+                'shop_name'      => 'Quick Puff Vape Shop',
+                'shop_address'   => 'Bula, General Santos City, South Cotabato, Philippines',
+                'shop_latitude'  => 6.1352000,
+                'shop_longitude' => 125.2179000,
+                'shop_phone'     => null,
+                'updated_by'     => null,
+                'created_at'     => $now,
+                'updated_at'     => $now,
+            ]);
+        }
     }
 
     /**

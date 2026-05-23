@@ -1,9 +1,10 @@
 <?= $this->include('customer/partials/header') ?>
+<?php helper('order'); ?>
 
 <?php
 // Helper function to get delivery status labels
 if (!function_exists('getDeliveryStatusLabel')) {
-    function getDeliveryStatusLabel($status) {
+    function getDeliveryStatusLabel($status, $shipmentNotes = null) {
         $labels = [
             'all' => 'All Orders',
             'to_pay' => 'To Pay',
@@ -25,6 +26,10 @@ if (!function_exists('getDeliveryStatusLabel')) {
         
         if (function_exists('is_return_refund_status') && is_return_refund_status((string) $status)) {
             return return_refund_status_label((string) $status);
+        }
+
+        if (function_exists('delivery_status_display_label')) {
+            return delivery_status_display_label((string) $status, $shipmentNotes, $labels);
         }
 
         return $labels[$status] ?? ucfirst(str_replace('_', ' ', (string) $status));
@@ -244,6 +249,12 @@ if (!function_exists('extractGcashReference')) {
         background: rgba(23, 162, 184, 0.1);
         color: #0c5460;
         border: 1px solid rgba(23, 162, 184, 0.3);
+    }
+
+    .status-rescheduled {
+        background: #fff7ed;
+        color: #c2410c;
+        border: 1px solid #fdba74;
     }
     
     .status-completed {
@@ -878,8 +889,15 @@ window.addEventListener('beforeunload', function() {
                             </button>
                             <div class="order-date"><?= date('M j, Y', strtotime($order['date'])) ?></div>
                         </div>
-                        <div class="order-status status-<?= esc($order['delivery_status']) ?>">
-                            <?= getDeliveryStatusLabel($order['delivery_status']) ?>
+                        <?php
+                            $orderShipmentNotes = (string) ($order['shipment_notes'] ?? '');
+                            $orderStatusClass = $order['delivery_status'];
+                            if ($orderStatusClass === 'delivered_to_rider' && delivery_is_rescheduled($orderShipmentNotes)) {
+                                $orderStatusClass = 'rescheduled';
+                            }
+                        ?>
+                        <div class="order-status status-<?= esc($orderStatusClass) ?>">
+                            <?= getDeliveryStatusLabel($order['delivery_status'], $orderShipmentNotes) ?>
                         </div>
                     </div>
                     
@@ -983,6 +1001,15 @@ window.addEventListener('beforeunload', function() {
                             <?php endif; ?>
                         </div>
                     <?php endif; ?>
+
+                    <?php if (! $isReturnOrder && delivery_is_rescheduled($orderShipmentNotes)): ?>
+                        <div class="tracking-info">
+                            <?= view('partials/delivery_reschedule_notice', [
+                                'shipmentNotes' => $orderShipmentNotes,
+                                'compact' => true,
+                            ]) ?>
+                        </div>
+                    <?php endif; ?>
                     
                     <div class="action-buttons">
                         <a href="<?= site_url('customer/messages?order_id=' . (int) $order['id']) ?>" class="btn">
@@ -993,14 +1020,11 @@ window.addEventListener('beforeunload', function() {
                             <a href="<?= site_url('customer/orders/' . $order['id'] . '/pay') ?>" class="btn">
                                 <?= ($order['payment_method'] ?? 'cash') === 'cash' ? 'Confirm Payment' : 'Pay Now' ?>
                             </a>
-                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel</a>
                         <?php endif; ?>
                         
-                        <?php if (! $isReturnOrder && in_array($order['delivery_status'], ['to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'], true)): ?>
-                            <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn">Track Order</a>
-                            <?php if ($order['delivery_status'] === 'to_ship'): ?>
-                                <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary">Cancel</a>
-                            <?php endif; ?>
+                        <?php if (! $isReturnOrder && in_array($order['delivery_status'], ['to_ship', 'ready_for_pickup', 'accepted_by_rider', 'delivered_to_rider'], true) && ! empty($order['can_cancel'])): ?>
+                            <a href="<?= site_url('customer/orders/' . $order['id'] . '/cancel') ?>" class="btn btn-secondary" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel</a>
                         <?php endif; ?>
                         
                         <?php if (! $isReturnOrder && $order['delivery_status'] === 'to_receive'): ?>
@@ -1033,7 +1057,7 @@ window.addEventListener('beforeunload', function() {
                             <?php endif; ?>
                         <?php endif; ?>
                         
-                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_ship', 'to_receive', 'delivered'], true)): ?>
+                        <?php if (!in_array($order['delivery_status'], ['to_pay', 'to_receive', 'delivered'], true)): ?>
                             <a href="<?= site_url('customer/order-details/' . $order['id']) ?>" class="btn btn-secondary">View Details</a>
                         <?php endif; ?>
                     </div>
