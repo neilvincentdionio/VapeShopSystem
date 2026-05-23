@@ -164,6 +164,7 @@ $routes->get('/customer/product/(:num)', 'Dashboard::productDetails/$1', ['filte
 // Customer cart actions
 $routes->post('/customer/cart/add', 'Dashboard::customerCartAdd', ['filter' => 'auth']);
 $routes->post('/customer/cart/update', 'Dashboard::customerCartUpdate', ['filter' => 'auth']);
+$routes->post('/customer/cart/update-all', 'Dashboard::customerCartUpdateAll', ['filter' => 'auth']);
 $routes->post('/customer/cart/remove', 'Dashboard::customerCartRemove', ['filter' => 'auth']);
 
 // Customer direct order processing

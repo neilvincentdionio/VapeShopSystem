@@ -740,10 +740,16 @@ class Dashboard extends BaseController
         $cart = $this->getCustomerCart();
         $cartItems = $cart['items'];
         $estimatedTotal = $cart['total'];
+        $customer = $this->userModel->find((int) $this->session->get('user_id'));
 
         return view('customer/cart', $this->getCustomerPageData('Cart', 'cart', [
             'cart_items' => $cartItems,
             'estimated_total' => $estimatedTotal,
+            'cart_total' => $estimatedTotal,
+            'age_allowed' => $this->canCustomerPurchase(),
+            'customer_delivery_address' => is_array($customer) ? $this->buildCustomerAddressString($customer) : '',
+            'customer_delivery_latitude' => is_array($customer) ? $this->getCustomerDeliveryLatitude($customer) : null,
+            'customer_delivery_longitude' => is_array($customer) ? $this->getCustomerDeliveryLongitude($customer) : null,
         ]));
     }
 
@@ -1860,7 +1866,81 @@ class Dashboard extends BaseController
             ]
         );
 
+        if ($this->request->isAJAX()) {
+            $cart = $this->getCustomerCart();
+            $lineAmount = 0.0;
+            foreach ($cart['items'] as $item) {
+                if ((string) ($item['cart_key'] ?? '') === $cartKey) {
+                    $lineAmount = (float) ($item['amount'] ?? 0);
+                    break;
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'removed' => $quantity <= 0,
+                'cart_key' => $cartKey,
+                'line_amount' => $lineAmount,
+                'cart_total' => $cart['total'],
+                'empty' => $cart['items'] === [],
+                'csrf_hash' => csrf_hash(),
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Cart updated successfully.');
+    }
+
+    /**
+     * Customer: Update all cart line quantities from the cart page form.
+     */
+    public function customerCartUpdateAll()
+    {
+        $accessCheck = $this->checkCustomerAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $quantities = $this->request->getPost('quantities');
+        if (! is_array($quantities) || $quantities === []) {
+            return redirect()->to('/customer/cart')->with('error', 'No cart items to update.');
+        }
+
+        $items = $this->getCustomerCart()['raw_items'];
+        $updated = false;
+
+        foreach ($quantities as $cartKey => $quantity) {
+            $cartKey = (string) $cartKey;
+            if (! array_key_exists($cartKey, $items)) {
+                continue;
+            }
+
+            $quantity = (int) $quantity;
+            $cartProduct = $this->resolveCartProduct($cartKey);
+            if (! $cartProduct) {
+                unset($items[$cartKey]);
+                $updated = true;
+                continue;
+            }
+
+            if ($quantity <= 0) {
+                unset($items[$cartKey]);
+                $updated = true;
+                continue;
+            }
+
+            $maxStock = (int) ($cartProduct['stock'] ?? 0);
+            $items[$cartKey] = min($quantity, max(1, $maxStock));
+            $updated = true;
+        }
+
+        if (! $updated) {
+            return redirect()->to('/customer/cart')->with('error', 'No valid cart items to update.');
+        }
+
+        $this->setCustomerCartRawItems($items);
+        $this->logUserActivity('Updated shopping cart quantities', ActivityLogTypes::CART_UPDATE);
+
+        return redirect()->to('/customer/cart')->with('success', 'Cart updated successfully.');
     }
 
     /**
@@ -2091,7 +2171,7 @@ class Dashboard extends BaseController
 
         $paymentMethod = $this->request->getPost('payment_method');
         if (! $paymentMethod || ! in_array($paymentMethod, ['cash_on_delivery', 'gcash'])) {
-            return redirect()->to('/customer/checkout')->with('error', 'Please select a valid payment method.');
+            return redirect()->back()->with('error', 'Please select a valid payment method.');
         }
 
         $cart = $this->getCustomerCart();
@@ -2105,7 +2185,7 @@ class Dashboard extends BaseController
         $customer = $this->userModel->find((int) $this->session->get('user_id'));
         $customerId = (int) ($customer['id'] ?? 0);
         if ($customerId <= 0) {
-            return redirect()->to('/customer/checkout')->with('error', 'Customer account not found.');
+            return redirect()->back()->with('error', 'Customer account not found.');
         }
 
         $deliveryData = $this->getCheckoutDeliveryData($customer);
@@ -2113,7 +2193,7 @@ class Dashboard extends BaseController
             return redirect()->to('/customer/products')->with('error', 'Please enter a delivery address or use your saved address.');
         }
         if (!isset($deliveryData['delivery_latitude'], $deliveryData['delivery_longitude'])) {
-            return redirect()->to('/customer/checkout')->with('error', 'Please confirm your exact delivery location on the map.');
+            return redirect()->back()->with('error', 'Please confirm your exact delivery location on the map.');
         }
         $deliveryDescription = trim(strip_tags((string) ($this->request->getPost('delivery_description') ?? '')));
 
@@ -2265,7 +2345,7 @@ class Dashboard extends BaseController
                 ->with('success', $successMessage);
         } catch (\Throwable $e) {
             $db->transRollback();
-            return redirect()->to('/customer/checkout')->with('error', $e->getMessage());
+            return redirect()->back()->with('error', $e->getMessage());
         }
     }
 

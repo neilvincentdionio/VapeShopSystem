@@ -1,6 +1,12 @@
 <?php
     $shipmentNotes = (string) ($shipmentNotes ?? '');
+    $deliveryStatus = (string) ($deliveryStatus ?? '');
     $compact = ! empty($compact);
+
+    if (function_exists('delivery_show_reschedule_notice') && ! delivery_show_reschedule_notice($deliveryStatus, $shipmentNotes)) {
+        return;
+    }
+
     $rescheduleMeta = function_exists('delivery_reschedule_meta') ? delivery_reschedule_meta($shipmentNotes) : null;
     if ($rescheduleMeta === null) {
         return;

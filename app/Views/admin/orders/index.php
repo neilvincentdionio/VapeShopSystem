@@ -1474,7 +1474,7 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
                                 $orderShipmentNotes = (string) ($order['shipment_notes'] ?? '');
                                 $deliveryStatusClass = $deliveryStatus;
-                                if ($deliveryStatusClass === 'delivered_to_rider' && delivery_is_rescheduled($orderShipmentNotes)) {
+                                if ($deliveryStatusClass === 'delivered_to_rider' && delivery_show_reschedule_notice($deliveryStatus, $orderShipmentNotes)) {
                                     $deliveryStatusClass = 'rescheduled';
                                 }
                                 ?>
@@ -1507,10 +1507,13 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                         · <?= esc($addressDescription) ?>
                                     <?php endif; ?>
                                 </div>
+                                <?php if (delivery_show_reschedule_notice($deliveryStatus, $orderShipmentNotes)): ?>
                                 <?= view('partials/delivery_reschedule_notice', [
                                     'shipmentNotes' => $orderShipmentNotes,
+                                    'deliveryStatus' => $deliveryStatus,
                                     'compact' => true,
                                 ]) ?>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <div class="action-cell">

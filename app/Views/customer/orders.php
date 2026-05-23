@@ -892,7 +892,7 @@ window.addEventListener('beforeunload', function() {
                         <?php
                             $orderShipmentNotes = (string) ($order['shipment_notes'] ?? '');
                             $orderStatusClass = $order['delivery_status'];
-                            if ($orderStatusClass === 'delivered_to_rider' && delivery_is_rescheduled($orderShipmentNotes)) {
+                            if ($orderStatusClass === 'delivered_to_rider' && delivery_show_reschedule_notice($order['delivery_status'] ?? '', $orderShipmentNotes)) {
                                 $orderStatusClass = 'rescheduled';
                             }
                         ?>
@@ -1002,10 +1002,11 @@ window.addEventListener('beforeunload', function() {
                         </div>
                     <?php endif; ?>
 
-                    <?php if (! $isReturnOrder && delivery_is_rescheduled($orderShipmentNotes)): ?>
+                    <?php if (! $isReturnOrder && delivery_show_reschedule_notice($order['delivery_status'] ?? '', $orderShipmentNotes)): ?>
                         <div class="tracking-info">
                             <?= view('partials/delivery_reschedule_notice', [
                                 'shipmentNotes' => $orderShipmentNotes,
+                                'deliveryStatus' => (string) ($order['delivery_status'] ?? ''),
                                 'compact' => true,
                             ]) ?>
                         </div>

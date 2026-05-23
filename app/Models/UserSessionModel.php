@@ -51,6 +51,15 @@ class UserSessionModel extends Model
      */
     public function createSession(int $userId, string $sessionId, string $ipAddress = null, string $userAgent = null): int
     {
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        $db = \Config\Database::connect();
+        if ($db->table('users')->where('id', $userId)->countAllResults() === 0) {
+            return 0;
+        }
+
         $data = [
             'session_id'    => $sessionId,
             'user_id'       => $userId,

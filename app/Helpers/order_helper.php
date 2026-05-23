@@ -118,6 +118,33 @@ if (! function_exists('delivery_reschedule_meta')) {
     }
 }
 
+if (! function_exists('is_system_shipment_meta_line')) {
+    /**
+     * Rider/customer system lines appended to shipment notes (not customer delivery instructions).
+     */
+    function is_system_shipment_meta_line(string $line): bool
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return false;
+        }
+
+        $prefixes = [
+            'RIDER_RESCHEDULED:',
+            'RIDER_CANCELLED:',
+            'CUSTOMER_CANCELLED_AT_DOOR:',
+        ];
+
+        foreach ($prefixes as $prefix) {
+            if (stripos($line, $prefix) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 if (! function_exists('strip_reschedule_meta_from_notes')) {
     function strip_reschedule_meta_from_notes(?string $notes): string
     {
@@ -129,7 +156,7 @@ if (! function_exists('strip_reschedule_meta_from_notes')) {
         $lines = preg_split('/\R/', $notes) ?: [];
         $kept = [];
         foreach ($lines as $line) {
-            if (stripos($line, 'RIDER_RESCHEDULED:') === 0) {
+            if (is_system_shipment_meta_line($line)) {
                 continue;
             }
             $kept[] = $line;
@@ -179,11 +206,31 @@ if (! function_exists('delivery_reschedule_reason')) {
     }
 }
 
+if (! function_exists('delivery_is_terminal_status')) {
+    function delivery_is_terminal_status(?string $deliveryStatus): bool
+    {
+        $status = strtolower(trim((string) $deliveryStatus));
+
+        return in_array($status, ['cancelled', 'completed', 'delivered'], true);
+    }
+}
+
+if (! function_exists('delivery_show_reschedule_notice')) {
+    function delivery_show_reschedule_notice(?string $deliveryStatus, ?string $shipmentNotes): bool
+    {
+        if (delivery_is_terminal_status($deliveryStatus)) {
+            return false;
+        }
+
+        return delivery_is_rescheduled($shipmentNotes);
+    }
+}
+
 if (! function_exists('delivery_status_display_label')) {
     function delivery_status_display_label(?string $status, ?string $shipmentNotes = null, array $labels = []): string
     {
         $status = strtolower(trim((string) $status));
-        if ($status === 'delivered_to_rider' && delivery_is_rescheduled($shipmentNotes)) {
+        if ($status === 'delivered_to_rider' && delivery_show_reschedule_notice($status, $shipmentNotes)) {
             return 'Rescheduled';
         }
 

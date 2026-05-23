@@ -181,8 +181,13 @@
                     </div>
                     <div>
                         <div class="delivery-address"><?= esc($delivery['shipping_address'] ?? 'No delivery address provided') ?></div>
-                        <?php if (!empty($delivery['shipment_notes'])): ?>
-                            <div class="delivery-meta">Note: <?= esc($delivery['shipment_notes']) ?></div>
+                        <?php
+                            $deliveryNote = function_exists('shipment_notes_for_display')
+                                ? shipment_notes_for_display($delivery['shipment_notes'] ?? '')
+                                : trim((string) ($delivery['shipment_notes'] ?? ''));
+                        ?>
+                        <?php if ($deliveryNote !== ''): ?>
+                            <div class="delivery-meta">Note: <?= esc($deliveryNote) ?></div>
                         <?php endif; ?>
                     </div>
                     <div class="status-badge"><?= esc($statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status))) ?></div>

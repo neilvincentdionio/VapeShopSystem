@@ -209,6 +209,7 @@ $mapId = (string) ($map_element_id ?? 'order_details_map');
                 <?php endif; ?>
                 <?= view('partials/delivery_reschedule_notice', [
                     'shipmentNotes' => (string) ($order['shipment_notes'] ?? ''),
+                    'deliveryStatus' => (string) ($order['delivery_status'] ?? ''),
                     'compact' => false,
                 ]) ?>
                 <?php if ($audience === 'rider' && ! empty($order['shipment_notes'])): ?>

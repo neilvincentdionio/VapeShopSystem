@@ -26,41 +26,56 @@ class SessionFilter implements FilterInterface
     {
         $session = session();
         $userSessionModel = new \App\Models\UserSessionModel();
-        
-        // Check if user is logged in
+
         if ($session->has('user_id')) {
-            $userId = $session->get('user_id');
+            $userId = (int) $session->get('user_id');
             $sessionId = session_id();
-            
-            // Try to get existing session
-            $existingSession = $userSessionModel->getSessionBySessionId($sessionId);
-            
-            if ($existingSession && $existingSession['status'] === 'active') {
-                // Update last activity
-                $userSessionModel->updateActivity($sessionId);
-            } else if ($existingSession && $existingSession['status'] !== 'active') {
-                // Session exists but not active, force logout
+
+            if ($userId <= 0 || ! $this->userExists($userId)) {
                 $session->destroy();
+
+                return redirect()->to('/login')->with('error', 'Your session is no longer valid. Please login again.');
+            }
+
+            $existingSession = $userSessionModel->getSessionBySessionId($sessionId);
+
+            if ($existingSession && $existingSession['status'] === 'active') {
+                $userSessionModel->updateActivity($sessionId);
+            } elseif ($existingSession && $existingSession['status'] !== 'active') {
+                $session->destroy();
+
                 return redirect()->to('/login')->with('error', 'Your session has expired. Please login again.');
             } else {
-                // No session record found, create one
-                $ipAddress = $request->getIPAddress();
-                $userAgent = $request->getUserAgent();
-                
-                $userSessionModel->createSession(
-                    $userId,
-                    $sessionId,
-                    $ipAddress,
-                    $userAgent->getAgentString()
-                );
+                try {
+                    $userSessionModel->createSession(
+                        $userId,
+                        $sessionId,
+                        $request->getIPAddress(),
+                        $request->getUserAgent()->getAgentString()
+                    );
+                } catch (\Throwable $e) {
+                    log_message('error', 'Failed to create user session record: {message}', [
+                        'message' => $e->getMessage(),
+                    ]);
+                }
             }
         }
-        
-        // Clean up expired sessions periodically (1 in 20 chance)
+
         if (rand(1, 20) === 1) {
             $timeoutMinutes = config('App')->sessionTimeout ?? 15;
             $userSessionModel->expireInactiveSessions($timeoutMinutes);
         }
+    }
+
+    private function userExists(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $db = \Config\Database::connect();
+
+        return $db->table('users')->where('id', $userId)->countAllResults() > 0;
     }
 
     /**
