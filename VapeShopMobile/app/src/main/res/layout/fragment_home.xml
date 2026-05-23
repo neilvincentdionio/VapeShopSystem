@@ -1,0 +1,1271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5"
+    tools:context=".MainActivity">
+
+    <!-- Main Content -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:background="#FFFFFF"
+                android:elevation="4dp">
+
+                <ImageView
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:adjustViewBounds="true"
+                    android:contentDescription="QuickPuff logo"
+                    android:scaleType="fitStart"
+                    android:src="@drawable/quickpuff_logo3" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/action_login"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#22C06A"
+                        android:backgroundTint="#22C06A"
+                        android:minWidth="0dp"
+                        android:paddingHorizontal="12dp"
+                        android:text="Login"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="6dp">
+
+                        <ImageView
+                            android:id="@+id/action_search"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_search_black"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Search" />
+                    </FrameLayout>
+
+                    <!-- Message Icon with Badge -->
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="6dp">
+
+                        <ImageView
+                            android:id="@+id/action_messages"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_message_black"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Messages" />
+
+                    </FrameLayout>
+
+                    <!-- Bell Icon with Badge -->
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp">
+
+                        <ImageView
+                            android:id="@+id/action_notifications"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_notification_black"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Notifications" />
+
+                    </FrameLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Recommendation Section -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="20dp"
+                android:background="#FFFFFF"
+                android:layout_marginBottom="10dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Products"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Product Grid -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:padding="15dp">
+
+                <!-- BLACK ELITE V2 -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_black_elite_v2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFE4E1">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/black_elite_v2"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="BLACK ELITE V2"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱400.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 12,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.5"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_black_elite_v2"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- BLACK ELITE V1 -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_black_elite_v1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0FFF0">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/black_elite_v1"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="BLACK ELITE V1"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱400.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 8,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.3"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_black_elite_v1"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- BLACK? V2 -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_black_question_v2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0F8FF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/black_question_v2"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="BLACK? V2"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱500.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 25,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.7"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_black_question_v2"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- CRYSM ELITE -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_crsm_elite"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFF8DC">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/crysm_elite"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="CRYSM ELITE"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱500.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 30,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.8"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_crysm_elite"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- VAPOR ZERO -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_vapor_zero"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFE4E1">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/vapor_zero"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="VAPOR ZERO"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱500.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 25,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.6"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_vapor_zero"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- UOTOFO -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_uotofo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0FFF0">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/uotofo"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="UOTOFO"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱500.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 20,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.4"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_uotofo"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- XVAPE SLIMBAR -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_xvape_slimbar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0F8FF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/xvape_slimbar"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="XVAPE SLIMBAR"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱395.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 15,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.2"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_xvape_slimbar"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- KALO V2 -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_kalo_v2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFF8DC">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/kalo_v2"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="KALO V2"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱270.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Pods • 20,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.1"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_kalo_v2"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- MINICAN -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_minican"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFE4E1">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/minican"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="MINICAN"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱800.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Device • Stock: 35"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.9"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_minican"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- BLACK V1 BATTERY -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_black_v1_battery"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0FFF0">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/black_v1_battery"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="BLACK V1 BATTERY"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱300.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Device • Stock: 75"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.0"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_black_v1_battery"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- X-VAPE SLIMBAR DEVICE -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_xvape_slimbar_device"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0F8FF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/xvape_slimbar_device"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="X-VAPE SLIMBAR DEVICE"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱395.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Device • Stock: 60"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.3"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_xvape_slimbar_device"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- POD FORMULA -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_pod_formula"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFF8DC">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/pod_formula"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="POD FORMULA"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱180.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="E-liquid • 5 Flavors"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.6"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_pod_formula"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- STORM -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_storm"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#FFE4E1">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/storm"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="STORM"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱450.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Disposable • 15,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.7"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_storm"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- BL?CK -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_bl_ck"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0FFF0">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/bl_ck"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="BL?CK"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱380.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Disposable • 30,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.5"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_bl_ck"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- VI BAR -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/product_vi_bar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="7dp"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="4dp"
+                    android:backgroundTint="#F0F8FF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="120dp"
+                            android:src="@drawable/vi_bar"
+                            android:background="#F0F0F0"
+                            android:scaleType="centerCrop"
+                            android:importantForAccessibility="no"
+                            android:layout_marginBottom="10dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="VI BAR"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#333333"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="₱380.00"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Disposable • 30,000 Puffs"
+                            android:textSize="12sp"
+                            android:textColor="#666666"
+                            android:layout_marginBottom="5dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="⭐ 4.4"
+                            android:textSize="12sp"
+                            android:textColor="#FFA500" />
+
+                        <Button
+                            android:id="@+id/btn_add_cart_vi_bar"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:backgroundTint="#22C06A"
+                            android:text="Add to Cart"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+            </GridLayout>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

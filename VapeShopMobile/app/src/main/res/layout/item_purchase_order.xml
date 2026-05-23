@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="#FFFFFF"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/purchase_reference"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="RCPT-0000"
+                android:textColor="#111827"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/purchase_total"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="₱0.00"
+                android:textColor="#111827"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/purchase_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="May 15, 2026"
+            android:textColor="#6B7280"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/purchase_items_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="VAPOR ZERO - Fresh Red x1"
+            android:textColor="#111827"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/purchase_shipping_address"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Shipping Address: Sample address"
+            android:textColor="#4B5563"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/purchase_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_order_status_pending"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="6dp"
+            android:text="ORDER PLACED"
+            android:textColor="#92400E"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_message_seller"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_purchase_action_primary"
+                android:backgroundTint="@null"
+                android:ellipsize="end"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:singleLine="true"
+                android:text="Message Seller"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/btn_order_details"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_purchase_action_primary"
+                android:backgroundTint="@null"
+                android:ellipsize="end"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:singleLine="true"
+                android:text="Order Details"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/purchase_post_delivery_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btn_review_order"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_purchase_action_outline"
+                android:backgroundTint="@null"
+                android:ellipsize="end"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:singleLine="true"
+                android:text="Review"
+                android:textAllCaps="false"
+                android:textColor="#166534"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/btn_return_refund"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_purchase_action_primary"
+                android:backgroundTint="@null"
+                android:ellipsize="end"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:singleLine="true"
+                android:text="Return/Refund"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/purchase_refund_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="#ECFDF5"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/purchase_refund_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Return request submitted. Wait for rider pickup."
+                android:textColor="#065F46"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/purchase_refund_to"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Refund to: GCash - 09XXXXXXXXX"
+                android:textColor="#065F46"
+                android:textSize="12sp" />
+
+            <ImageView
+                android:id="@+id/purchase_return_qr"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:contentDescription="Return pickup QR code" />
+
+            <TextView
+                android:id="@+id/purchase_return_code"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="RET-XXXX-XXXX"
+                android:textColor="#111827"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

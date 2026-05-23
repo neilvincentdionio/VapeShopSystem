@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/review_order_reference"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Order: RCPT-000000"
+        android:textColor="#4B5563"
+        android:textSize="11sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Rating"
+        android:textColor="#111827"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <RatingBar
+        android:id="@+id/review_rating_bar"
+        style="?android:attr/ratingBarStyleSmall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:numStars="5"
+        android:rating="5"
+        android:stepSize="1.0" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Review"
+        android:textColor="#111827"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/review_comment_input"
+        android:layout_width="match_parent"
+        android:layout_height="90dp"
+        android:layout_marginTop="6dp"
+        android:background="@android:drawable/edit_text"
+        android:gravity="top|start"
+        android:hint="Write your review..."
+        android:inputType="textMultiLine"
+        android:padding="10dp" />
+</LinearLayout>

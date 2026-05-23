@@ -1,0 +1,40 @@
+<resources>
+    <string name="app_name">Vape Shop</string>
+    <string-array name="register_country_options">
+        <item>Philippines</item>
+    </string-array>
+    <string-array name="register_province_options">
+        <item>South Cotabato</item>
+    </string-array>
+    <string-array name="register_city_options">
+        <item>General Santos City</item>
+    </string-array>
+    <string-array name="register_barangay_options">
+        <item>Apopong</item>
+        <item>Baluan</item>
+        <item>Batomelong</item>
+        <item>Buayan</item>
+        <item>Bula</item>
+        <item>Calumpang</item>
+        <item>City Heights</item>
+        <item>Conel</item>
+        <item>Dadiangas East</item>
+        <item>Dadiangas North</item>
+        <item>Dadiangas South</item>
+        <item>Dadiangas West</item>
+        <item>Fatima</item>
+        <item>Katangawan</item>
+        <item>Labangal</item>
+        <item>Lagao</item>
+        <item>Ligaya</item>
+        <item>Mabuhay</item>
+        <item>Olympog</item>
+        <item>San Isidro</item>
+        <item>San Jose</item>
+        <item>Siguel</item>
+        <item>Sinawal</item>
+        <item>Tambler</item>
+        <item>Tinagacan</item>
+        <item>Upper Labay</item>
+    </string-array>
+</resources>
