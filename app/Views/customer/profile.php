@@ -214,7 +214,7 @@
             <span class="profile-label">Name</span>
             <div class="profile-row-main">
                 <span class="profile-value"><?= esc($user_name ?? '') ?></span>
-                <input class="profile-input profile-value-input" type="text" name="name" value="<?= esc(old('name', $customerAccount['name'] ?? ($user_name ?? ''))) ?>" required>
+                <input class="profile-input profile-value-input" type="text" name="name" data-safe-input="person_name" value="<?= esc(old('name', $customerAccount['name'] ?? ($user_name ?? ''))) ?>" required>
                 <button type="button" class="profile-edit-btn" data-edit-target="name">Edit</button>
             </div>
         </div>
@@ -256,7 +256,7 @@
                 <div class="profile-grid-2">
                     <div class="profile-field-group">
                         <label class="profile-field-label" for="address-line-input">Street</label>
-                        <input class="profile-input" type="text" id="address-line-input" name="address_line" value="<?= esc(old('address_line', $customerAccount['address_line'] ?? '')) ?>" placeholder="Street / House No.">
+                        <input class="profile-input" type="text" id="address-line-input" name="address_line" data-safe-input="address" value="<?= esc(old('address_line', $customerAccount['address_line'] ?? '')) ?>" placeholder="Street / House No.">
                     </div>
                     <div class="profile-field-group">
                         <label class="profile-field-label" for="country-input">Country</label>
@@ -571,5 +571,6 @@
         });
     })();
 </script>
+<script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
 
 <?= $this->include('customer/partials/footer') ?>

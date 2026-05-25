@@ -136,7 +136,7 @@
             <span class="profile-label">Name</span>
             <div class="profile-row-main">
                 <span class="profile-value"><?= esc($user_name ?? '') ?></span>
-                <input class="profile-input profile-value-input" type="text" name="name" value="<?= esc(old('name', $riderAccount['name'] ?? ($user_name ?? ''))) ?>" required>
+                <input class="profile-input profile-value-input" type="text" name="name" data-safe-input="person_name" value="<?= esc(old('name', $riderAccount['name'] ?? ($user_name ?? ''))) ?>" required>
                 <button type="button" class="profile-edit-btn" data-edit-target="name">Edit</button>
             </div>
         </div>
@@ -216,5 +216,6 @@
         });
     })();
 </script>
+<script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
 
 <?= $this->include('rider/partials/footer') ?>

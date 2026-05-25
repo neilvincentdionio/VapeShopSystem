@@ -4188,15 +4188,15 @@ class Dashboard extends BaseController
         ];
 
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+            'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
             'email' => 'required|valid_email|is_unique[users.email,id,' . $userId . ']',
             'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
-            'address_line' => 'permit_empty|max_length[255]|regex_match[/^[a-zA-Z0-9\s\-\.\'#,\/]+$/]',
-            'city' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
-            'country' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
-            'barangay' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
-            'province' => 'permit_empty|max_length[120]|regex_match[/^[a-zA-Z0-9\s\-\.\']+$/]',
-            'postal_code' => 'permit_empty|max_length[20]|regex_match[/^[a-zA-Z0-9\s\-]+$/]',
+            'address_line' => 'permit_empty|max_length[255]|safe_address',
+            'city' => 'permit_empty|max_length[120]|safe_location',
+            'country' => 'permit_empty|max_length[120]|safe_location',
+            'barangay' => 'permit_empty|max_length[120]|safe_location',
+            'province' => 'permit_empty|max_length[120]|safe_location',
+            'postal_code' => 'permit_empty|max_length[20]|safe_postal_code',
             'new_password' => 'permit_empty|min_length[8]',
             'confirm_password' => 'permit_empty|matches[new_password]',
         ];
@@ -4292,11 +4292,11 @@ class Dashboard extends BaseController
         ];
 
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+            'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
             'email' => 'required|valid_email|is_unique[users.email,id,' . $userId . ']',
             'phone_number' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
-            'shop_name' => 'required|min_length[2]|max_length[150]',
-            'shop_address' => 'required|min_length[5]|max_length[500]',
+            'shop_name' => 'required|min_length[2]|max_length[150]|safe_text',
+            'shop_address' => 'required|min_length[5]|max_length[500]|safe_address',
             'shop_phone' => 'permit_empty|max_length[30]|regex_match[/^[0-9+\-\s\(\)]+$/]',
             'shop_latitude' => 'required|decimal',
             'shop_longitude' => 'required|decimal',

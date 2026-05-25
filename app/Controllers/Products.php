@@ -130,27 +130,19 @@ class Products extends BaseController
             return $guard;
         }
 
-        $validation = $this->validate([
-            'name' => 'required|min_length[3]|max_length[255]',
+        helper('input_validation');
+        $validation = $this->validate(array_merge(product_text_validation_rules(), [
             'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
-            'brand' => 'required|max_length[100]',
-            'flavor' => 'permit_empty|max_length[100]',
             'unit_price' => 'required|numeric|greater_than_equal_to[0]',
             'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
-            'nicotine_level' => 'permit_empty|max_length[20]',
             'expires_at' => 'permit_empty|valid_date[Y-m-d]',
             'battery_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
             'eliquid_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
-            'device_type' => 'permit_empty|max_length[50]',
-            'wattage_range' => 'permit_empty|max_length[50]',
-            'charging_port' => 'permit_empty|max_length[30]',
-            'compatibility' => 'permit_empty|max_length[255]',
-            'description' => 'permit_empty|max_length[5000]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
             'is_active' => 'required|in_list[0,1]',
-            'image' => 'permit_empty|max_size[image,4096]|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png,image/webp,image/gif]'
-        ]);
+            'image' => 'permit_empty|max_size[image,4096]|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png,image/webp,image/gif]',
+        ]));
 
         if (!$validation) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
@@ -162,10 +154,10 @@ class Products extends BaseController
         $category = normalize_product_category((string) $this->request->getPost('category'));
 
         $productData = [
-            'name' => $this->request->getPost('name'),
+            'name' => $this->sanitizeProductField('name', 'text'),
             'category' => $category,
-            'brand' => $this->request->getPost('brand'),
-            'flavor' => $this->request->getPost('flavor'),
+            'brand' => $this->sanitizeProductField('brand', 'text'),
+            'flavor' => $this->sanitizeProductField('flavor', 'text') ?: null,
             'unit_price' => $pricing['unit_price'],
             'selling_price' => $pricing['selling_price'],
             'price' => $pricing['price'],
@@ -280,26 +272,18 @@ class Products extends BaseController
             return redirect()->to('/products')->with('error', 'Product not found.');
         }
 
-        $validationRules = [
-            'name' => 'required|min_length[3]|max_length[255]',
+        helper('input_validation');
+        $validationRules = array_merge(product_text_validation_rules(), [
             'category' => 'required|in_list[Device,Pods,E-Liquid,Disposable]',
-            'brand' => 'required|max_length[100]',
-            'flavor' => 'permit_empty|max_length[100]',
             'unit_price' => 'required|numeric|greater_than_equal_to[0]',
             'selling_price' => 'required|numeric|greater_than_equal_to[0]',
             'puffs' => 'permit_empty|integer|greater_than_equal_to[0]',
-            'nicotine_level' => 'permit_empty|max_length[20]',
             'expires_at' => 'permit_empty|valid_date[Y-m-d]',
             'battery_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
             'eliquid_capacity' => 'permit_empty|integer|greater_than_equal_to[0]',
-            'device_type' => 'permit_empty|max_length[50]',
-            'wattage_range' => 'permit_empty|max_length[50]',
-            'charging_port' => 'permit_empty|max_length[30]',
-            'compatibility' => 'permit_empty|max_length[255]',
-            'description' => 'permit_empty|max_length[5000]',
             'stock_qty' => 'required|integer|greater_than_equal_to[0]',
-            'is_active' => 'required|in_list[0,1]'
-        ];
+            'is_active' => 'required|in_list[0,1]',
+        ]);
 
         // Only validate image if a new one is uploaded
         if ($this->request->getFile('image')->getSize() > 0) {
@@ -323,10 +307,10 @@ class Products extends BaseController
         $category = normalize_product_category((string) $this->request->getPost('category'));
 
         $productData = [
-            'name' => $this->request->getPost('name'),
+            'name' => $this->sanitizeProductField('name', 'text'),
             'category' => $category,
-            'brand' => $this->request->getPost('brand'),
-            'flavor' => $this->request->getPost('flavor'),
+            'brand' => $this->sanitizeProductField('brand', 'text'),
+            'flavor' => $this->sanitizeProductField('flavor', 'text') ?: null,
             'unit_price' => $pricing['unit_price'],
             'selling_price' => $pricing['selling_price'],
             'price' => $pricing['price'],
@@ -569,6 +553,7 @@ class Products extends BaseController
             return [];
         }
 
+        helper('input_validation');
         $normalized = [];
 
         foreach ($flavors as $flavor) {
@@ -576,8 +561,8 @@ class Products extends BaseController
                 continue;
             }
 
-            $name = trim((string) ($flavor['name'] ?? ''));
-            if ($name === '') {
+            $name = sanitize_safe_text(trim((string) ($flavor['name'] ?? '')), 'text');
+            if ($name === '' || ! matches_safe_input($name, 'text')) {
                 continue;
             }
 
@@ -637,7 +622,8 @@ class Products extends BaseController
             return null;
         }
 
-        $level = trim((string) $this->request->getPost('nicotine_level'));
+        helper('input_validation');
+        $level = sanitize_safe_text(trim((string) $this->request->getPost('nicotine_level')), 'nicotine');
 
         return $level !== '' ? $level : null;
     }
@@ -653,7 +639,8 @@ class Products extends BaseController
 
     private function resolveProductDescription(): ?string
     {
-        $description = trim(strip_tags((string) $this->request->getPost('description')));
+        helper('input_validation');
+        $description = sanitize_safe_text(trim(strip_tags((string) $this->request->getPost('description'))), 'description');
 
         return $description !== '' ? $description : null;
     }
@@ -699,6 +686,13 @@ class Products extends BaseController
     /**
      * @return array{device_type: ?string, wattage_range: ?string, charging_port: ?string, compatibility: ?string}
      */
+    private function sanitizeProductField(string $field, string $type = 'text'): string
+    {
+        helper('input_validation');
+
+        return sanitize_safe_text(trim((string) $this->request->getPost($field)), $type);
+    }
+
     private function resolveDeviceSpecFields(string $category): array
     {
         $empty = [
@@ -719,9 +713,10 @@ class Products extends BaseController
 
         $visibility = device_type_field_visibility($deviceType);
 
-        $wattageRange = trim((string) $this->request->getPost('wattage_range'));
-        $chargingPort = trim((string) $this->request->getPost('charging_port'));
-        $compatibility = trim((string) $this->request->getPost('compatibility'));
+        helper('input_validation');
+        $wattageRange = sanitize_safe_text(trim((string) $this->request->getPost('wattage_range')), 'spec');
+        $chargingPort = sanitize_safe_text(trim((string) $this->request->getPost('charging_port')), 'spec');
+        $compatibility = sanitize_safe_text(trim((string) $this->request->getPost('compatibility')), 'spec');
 
         return [
             'device_type' => $deviceType,

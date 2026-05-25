@@ -34,9 +34,27 @@ $country = trim((string) $input['country']);
 $deliveryLatitude = is_numeric($input['delivery_latitude'] ?? null) ? (float) $input['delivery_latitude'] : null;
 $deliveryLongitude = is_numeric($input['delivery_longitude'] ?? null) ? (float) $input['delivery_longitude'] : null;
 
+$fullName = sanitize_safe_text($fullName, 'person_name');
+$street = sanitize_safe_text($street, 'address');
+$city = sanitize_safe_text($city, 'location');
+$barangay = sanitize_safe_text($barangay, 'location');
+$province = sanitize_safe_text($province, 'location');
+$country = sanitize_safe_text($country, 'location');
+$postalCode = sanitize_safe_text($postalCode, 'postal_code');
+
 if (strlen($fullName) < 3) {
     json_response(false, 'Full name must be at least 3 characters.', null, 400);
 }
+
+assert_safe_text_fields([
+    $fullName => 'person_name',
+    $street => 'address',
+    $city => 'location',
+    $barangay => 'location',
+    $province => 'location',
+    $country => 'location',
+    $postalCode => 'postal_code',
+]);
 
 if (strlen($password) < 8) {
     json_response(false, 'Password must be at least 8 characters.', null, 400);

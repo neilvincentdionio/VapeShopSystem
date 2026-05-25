@@ -34,7 +34,7 @@ class UserModel extends Model
     protected $afterFind = ['hydrateUserRelations'];
 
     protected $validationRules = [
-        'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+        'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
         'email' => 'required|valid_email',
         'password' => 'permit_empty|min_length[8]',
         'role' => 'permit_empty|max_length[100]',
@@ -53,7 +53,7 @@ class UserModel extends Model
             'min_length' => 'Password must be at least 8 characters long.',
         ],
         'name' => [
-            'regex_match' => 'Name can only contain letters (including ñ), numbers, spaces, hyphens, apostrophes, and periods.',
+            'safe_person_name' => 'Name can only contain letters (including ñ/Ñ), numbers, spaces, hyphens, apostrophes, and periods.',
         ],
     ];
 

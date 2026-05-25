@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once dirname(__DIR__) . '/app/Helpers/input_validation_helper.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -83,6 +84,24 @@ function normalize_email(string $email): string
     }
 
     return $normalized;
+}
+
+/**
+ * Reject registration/profile text that contains unsupported special characters.
+ *
+ * @param array<string, string> $fields Map of input key => validation type.
+ */
+function assert_safe_text_fields(array $fields): void
+{
+    $messages = safe_input_messages();
+
+    foreach ($fields as $value => $type) {
+        if ($value === '' || matches_safe_input($value, $type)) {
+            continue;
+        }
+
+        json_response(false, $messages[$type] ?? 'One or more fields contain unsupported characters.', null, 400);
+    }
 }
 
 /**

@@ -474,6 +474,7 @@
                         type="text" 
                         id="name" 
                         name="name" 
+                        data-safe-input="person_name"
                         value="<?= old('name', $user['name']) ?>" 
                         required 
                         autocomplete="name"
@@ -551,6 +552,7 @@
         </div>
     </div>
 
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
     <script>
         // Auto-hide success messages after 5 seconds
         setTimeout(function() {

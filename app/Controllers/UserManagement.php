@@ -258,7 +258,7 @@ class UserManagement extends BaseController
 
         // Validate input data
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+            'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
             'email' => 'required|valid_email|is_unique[users.email]',
             'password' => 'required|min_length[8]',
             'role' => 'required'
@@ -422,7 +422,7 @@ class UserManagement extends BaseController
 
         // Validate input data
         $rules = [
-            'name' => 'required|min_length[3]|max_length[255]|regex_match[/^[\p{L}\p{M}\p{N}\s\-\.\'’]+$/u]',
+            'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
         ];
 
         // Only validate role if not editing self

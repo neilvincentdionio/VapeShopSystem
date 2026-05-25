@@ -90,7 +90,7 @@ class Auth extends BaseController
             'password' => (string) ($input['password'] ?? ''),
             'role' => 'customer',
             'phone_number' => $this->sanitizePhoneNumber((string) ($input['phone_number'] ?? '')),
-            'address_line' => $this->sanitizeAddressField((string) ($input['address_line'] ?? '')),
+            'address_line' => $this->sanitizeAddressField((string) ($input['address_line'] ?? ''), 'address'),
             'barangay' => $this->sanitizeAddressField((string) ($input['barangay'] ?? '')),
             'city' => $this->sanitizeAddressField((string) ($input['city'] ?? '')),
             'province' => $this->sanitizeAddressField((string) ($input['province'] ?? '')),
@@ -623,6 +623,7 @@ class Auth extends BaseController
      */
     private function validateRegistrationData(array $input, ?\CodeIgniter\HTTP\Files\UploadedFile $verificationIdFile = null): array
     {
+        helper('input_validation');
         $errors = [];
 
         $name = $this->sanitizeName((string) ($input['name'] ?? ''));
@@ -630,7 +631,7 @@ class Auth extends BaseController
         $password = (string) ($input['password'] ?? '');
         $confirmPassword = (string) ($input['confirm_password'] ?? '');
         $phoneNumber = $this->sanitizePhoneNumber((string) ($input['phone_number'] ?? ''));
-        $addressLine = $this->sanitizeAddressField((string) ($input['address_line'] ?? ''));
+        $addressLine = $this->sanitizeAddressField((string) ($input['address_line'] ?? ''), 'address');
         $city = $this->sanitizeAddressField((string) ($input['city'] ?? ''));
         $province = $this->sanitizeAddressField((string) ($input['province'] ?? ''));
         $postalCode = $this->sanitizePostalCode((string) ($input['postal_code'] ?? ''));
@@ -644,8 +645,8 @@ class Auth extends BaseController
             $errors['name'] = 'Full name must be at least 3 characters long.';
         } elseif (strlen($name) > 255) {
             $errors['name'] = 'Full name must not exceed 255 characters.';
-        } elseif (!preg_match("/^[\\p{L}\\p{M}\\p{N}\\s\\-\\.'’]+$/u", $name)) {
-            $errors['name'] = 'Full name can only contain letters (including ñ), numbers, spaces, hyphens, apostrophes, and periods.';
+        } elseif (! matches_safe_input($name, 'person_name')) {
+            $errors['name'] = safe_input_messages()['person_name'];
         }
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -678,8 +679,8 @@ class Auth extends BaseController
             $errors['address_line'] = 'Street address must be at least 5 characters long.';
         } elseif (strlen($addressLine) > 255) {
             $errors['address_line'] = 'Street address must not exceed 255 characters.';
-        } elseif (!preg_match("/^[a-zA-Z0-9\\s\\-\\.\\'#,\\/]+$/", $addressLine)) {
-            $errors['address_line'] = 'Street address contains unsupported characters.';
+        } elseif (! matches_safe_input($addressLine, 'address')) {
+            $errors['address_line'] = safe_input_messages()['address'];
         }
 
         if ($city === '') {
@@ -688,8 +689,8 @@ class Auth extends BaseController
             $errors['city'] = 'City must be at least 2 characters long.';
         } elseif (strlen($city) > 120) {
             $errors['city'] = 'City must not exceed 120 characters.';
-        } elseif (!preg_match("/^[a-zA-Z0-9\\s\\-\\.\\']+$/", $city)) {
-            $errors['city'] = 'City contains unsupported characters.';
+        } elseif (! matches_safe_input($city, 'location')) {
+            $errors['city'] = safe_input_messages()['location'];
         }
 
         if ($province === '') {
@@ -698,16 +699,16 @@ class Auth extends BaseController
             $errors['province'] = 'Province must be at least 2 characters long.';
         } elseif (strlen($province) > 120) {
             $errors['province'] = 'Province must not exceed 120 characters.';
-        } elseif (!preg_match("/^[a-zA-Z0-9\\s\\-\\.\\']+$/", $province)) {
-            $errors['province'] = 'Province contains unsupported characters.';
+        } elseif (! matches_safe_input($province, 'location')) {
+            $errors['province'] = safe_input_messages()['location'];
         }
 
         if ($postalCode === '') {
             $errors['postal_code'] = 'Postal code is required.';
         } elseif (strlen($postalCode) < 4 || strlen($postalCode) > 20) {
             $errors['postal_code'] = 'Postal code must be between 4 and 20 characters long.';
-        } elseif (!preg_match('/^[a-zA-Z0-9\s\-]+$/', $postalCode)) {
-            $errors['postal_code'] = 'Postal code can only contain letters, numbers, spaces, and hyphens.';
+        } elseif (! matches_safe_input($postalCode, 'postal_code')) {
+            $errors['postal_code'] = safe_input_messages()['postal_code'];
         }
 
         if ($barangay === '') {
@@ -716,6 +717,8 @@ class Auth extends BaseController
             $errors['barangay'] = 'Barangay must be at least 2 characters long.';
         } elseif (strlen($barangay) > 120) {
             $errors['barangay'] = 'Barangay must not exceed 120 characters long.';
+        } elseif (! matches_safe_input($barangay, 'location')) {
+            $errors['barangay'] = safe_input_messages()['location'];
         }
 
         if ($deliveryLatitude === null || $deliveryLongitude === null) {
@@ -733,7 +736,9 @@ class Auth extends BaseController
 
     private function sanitizeName(string $name): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', strip_tags($name)));
+        helper('input_validation');
+
+        return sanitize_safe_text($name, 'person_name');
     }
 
     private function sanitizePhoneNumber(string $phoneNumber): string
@@ -743,16 +748,18 @@ class Auth extends BaseController
         return trim((string) preg_replace('/\s+/', ' ', $cleanPhoneNumber ?? ''));
     }
 
-    private function sanitizeAddressField(string $value): string
+    private function sanitizeAddressField(string $value, string $type = 'location'): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', strip_tags($value)));
+        helper('input_validation');
+
+        return sanitize_safe_text($value, $type);
     }
 
     private function sanitizePostalCode(string $postalCode): string
     {
-        $cleanPostalCode = preg_replace('/[^a-zA-Z0-9\s\-]/', '', $postalCode);
+        helper('input_validation');
 
-        return strtoupper(trim((string) preg_replace('/\s+/', ' ', $cleanPostalCode ?? '')));
+        return strtoupper(sanitize_safe_text($postalCode, 'postal_code'));
     }
 
     private function parseRegistrationCoordinate($value): ?float

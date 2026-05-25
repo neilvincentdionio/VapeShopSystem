@@ -8,12 +8,16 @@ $input = get_request_data();
 require_fields($input, ['current_email', 'full_name', 'email']);
 
 $currentEmail = normalize_email((string) $input['current_email']);
-$newFullName = trim((string) $input['full_name']);
+$newFullName = sanitize_safe_text(trim((string) $input['full_name']), 'person_name');
 $newEmail = normalize_email((string) $input['email']);
 
 if (strlen($newFullName) < 3) {
     json_response(false, 'Full name must be at least 3 characters.', null, 400);
 }
+
+assert_safe_text_fields([
+    $newFullName => 'person_name',
+]);
 
 try {
     $db = mobile_db();

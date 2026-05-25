@@ -616,7 +616,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="name">Product Name *</label>
-                                <input type="text" name="name" id="name" class="form-control" 
+                                <input type="text" name="name" id="name" class="form-control" data-safe-input="text"
                                        value="<?= old('name', $product['name']) ?>" required>
                                 <?php if (isset($validation) && $validation->hasError('name')): ?>
                                     <div class="invalid-feedback"><?= $validation->getError('name') ?></div>
@@ -646,6 +646,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                                     name="brand"
                                     id="brand"
                                     class="form-control"
+                                    data-safe-input="text"
                                     list="brandSuggestions"
                                     value="<?= esc(old('brand', $product['brand'] ?? '')) ?>"
                                     placeholder="e.g. ASPIRE, BLACK, X-VAPE"
@@ -803,7 +804,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                                     <div class="flavor-row" data-flavor-row="<?= $flavorIndex ?>">
                                         <div class="col-flavor">
                                             <input type="hidden" name="flavors[<?= $flavorIndex ?>][id]" value="<?= (int) ($flavor['id'] ?? 0) ?>">
-                                            <input type="text" name="flavors[<?= $flavorIndex ?>][name]" value="<?= esc($flavor['name'] ?? $flavor['flavor'] ?? $flavor['flavor_name'] ?? '') ?>" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                                            <input type="text" name="flavors[<?= $flavorIndex ?>][name]" value="<?= esc($flavor['name'] ?? $flavor['flavor'] ?? $flavor['flavor_name'] ?? '') ?>" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                                         </div>
                                         <div class="col-stock">
                                             <input type="number" name="flavors[<?= $flavorIndex ?>][stock]" value="<?= (int) ($flavor['stock'] ?? $flavor['stock_qty'] ?? $flavor['flavor_stock'] ?? 0) ?>" min="0" class="form-control flavor-stock-input">
@@ -822,7 +823,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                                     <div class="flavor-row" data-flavor-row="1">
                                         <div class="col-flavor">
                                             <input type="hidden" name="flavors[1][id]" value="0">
-                                            <input type="text" name="flavors[1][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                                            <input type="text" name="flavors[1][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                                         </div>
                                         <div class="col-stock">
                                             <input type="number" name="flavors[1][stock]" value="0" min="0" class="form-control flavor-stock-input">
@@ -861,7 +862,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                     <div class="form-section">
                         <h4 class="section-title"><i class="fas fa-align-left"></i> Description</h4>
                         <div class="form-group">
-                            <textarea name="description" id="description" class="form-control" rows="4" placeholder="Enter product description..."><?= old('description', $product['description']) ?></textarea>
+                            <textarea name="description" id="description" class="form-control" data-safe-input="description" rows="4" placeholder="Enter product description..."><?= old('description', $product['description']) ?></textarea>
                             <?php if (isset($validation) && $validation->hasError('description')): ?>
                                 <div class="invalid-feedback"><?= $validation->getError('description') ?></div>
                             <?php endif; ?>
@@ -882,6 +883,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
         </div>
     </div>
     </div>
+<script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
 <script>
         const categorySelect = document.getElementById('category');
         const specField = document.querySelector('.spec-field');
@@ -1039,7 +1041,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             newRow.innerHTML = `
                 <div class="col-flavor">
                     <input type="hidden" name="flavors[${flavorRowCount}][id]" value="0">
-                    <input type="text" name="flavors[${flavorRowCount}][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                    <input type="text" name="flavors[${flavorRowCount}][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                 </div>
                 <div class="col-stock">
                     <input type="number" name="flavors[${flavorRowCount}][stock]" value="0" min="0" class="form-control flavor-stock-input">
@@ -1052,6 +1054,12 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
             `;
             
             flavorRows.appendChild(newRow);
+            if (window.SafeInput) {
+                const flavorInput = newRow.querySelector('.flavor-name-input');
+                if (flavorInput) {
+                    SafeInput.bindField(flavorInput, 'text');
+                }
+            }
             updateTotalStock();
             updateFlavorInventorySummary();
         }
@@ -1071,7 +1079,7 @@ $selectedCategory = $selectedCategoryAliases[$selectedCategoryKey] ?? $selectedC
                 <div class="flavor-row" data-flavor-row="1">
                     <div class="col-flavor">
                         <input type="hidden" name="flavors[1][id]" value="0">
-                        <input type="text" name="flavors[1][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                        <input type="text" name="flavors[1][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                     </div>
                     <div class="col-stock">
                         <input type="number" name="flavors[1][stock]" value="0" min="0" class="form-control flavor-stock-input">

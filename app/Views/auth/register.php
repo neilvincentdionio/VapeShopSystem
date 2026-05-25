@@ -366,6 +366,7 @@
                                 type="text"
                                 id="name"
                                 name="name"
+                                data-safe-input="person_name"
                                 value="<?= esc(old('name')) ?>"
                                 autocomplete="name"
                                 required
@@ -471,6 +472,7 @@
                                 type="text"
                                 id="address_line"
                                 name="address_line"
+                                data-safe-input="address"
                                 value="<?= esc(old('address_line')) ?>"
                                 autocomplete="street-address"
                                 required
@@ -550,6 +552,7 @@
         </main>
     </div>
 
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
     <script>
         setTimeout(function () {
             const successAlert = document.querySelector('.alert-success');

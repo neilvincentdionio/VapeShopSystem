@@ -381,6 +381,7 @@
                                 type="text"
                                 id="name"
                                 name="name"
+                                data-safe-input="person_name"
                                 value="<?= esc(old('name')) ?>"
                                 autocomplete="name"
                                 required
@@ -566,6 +567,7 @@
         </div>
     </div>
 
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
     <script>
         setTimeout(function () {
             const successAlert = document.querySelector('.alert-success');

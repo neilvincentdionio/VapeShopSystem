@@ -450,7 +450,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="name">Product Name *</label>
-                                    <input type="text" name="name" id="name" class="form-control" value="<?= esc(old('name') ?? '') ?>" placeholder="Enter product name" required>
+                                    <input type="text" name="name" id="name" class="form-control" data-safe-input="text" value="<?= esc(old('name') ?? '') ?>" placeholder="Enter product name" required>
                                 </div>
 
                                 <div class="form-group">
@@ -472,6 +472,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
                                         name="brand"
                                         id="brand"
                                         class="form-control"
+                                        data-safe-input="text"
                                         list="brandSuggestions"
                                         value="<?= esc(old('brand') ?? '') ?>"
                                         placeholder="e.g. ASPIRE, BLACK, X-VAPE"
@@ -597,7 +598,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
                                         <div class="flavor-row" data-flavor-row="<?= $flavorIndex ?>">
                                             <div class="col-flavor">
                                                 <input type="hidden" name="flavors[<?= $flavorIndex ?>][id]" value="0">
-                                                <input type="text" name="flavors[<?= $flavorIndex ?>][name]" value="<?= esc($flavor['name'] ?? $flavor['flavor'] ?? '') ?>" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                                                <input type="text" name="flavors[<?= $flavorIndex ?>][name]" value="<?= esc($flavor['name'] ?? $flavor['flavor'] ?? '') ?>" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                                             </div>
                                             <div class="col-stock">
                                                 <input type="number" name="flavors[<?= $flavorIndex ?>][stock]" value="<?= (int) ($flavor['stock'] ?? $flavor['stock_qty'] ?? 0) ?>" min="0" class="form-control flavor-stock-input">
@@ -630,7 +631,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
                         <div class="form-section">
                             <h4 class="section-title"><i class="fas fa-align-left"></i> Description</h4>
                             <div class="form-group">
-                                <textarea name="description" id="description" class="form-control" rows="4" placeholder="Enter product description..."><?= esc(old('description') ?? '') ?></textarea>
+                                <textarea name="description" id="description" class="form-control" data-safe-input="description" rows="4" placeholder="Enter product description..."><?= esc(old('description') ?? '') ?></textarea>
                             </div>
                         </div>
 
@@ -648,6 +649,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
         </div>
     </div>
 
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
     <script>
         const imageInput = document.getElementById('image');
         const imagePreview = document.getElementById('imagePreview');
@@ -824,7 +826,7 @@ $nicotineLevelOptions = product_nicotine_level_options();
             newRow.innerHTML = `
                 <div class="col-flavor">
                     <input type="hidden" name="flavors[${flavorRowCount}][id]" value="0">
-                    <input type="text" name="flavors[${flavorRowCount}][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input">
+                    <input type="text" name="flavors[${flavorRowCount}][name]" placeholder="e.g. Bacteria Monster" class="form-control flavor-name-input" data-safe-input="text">
                 </div>
                 <div class="col-stock">
                     <input type="number" name="flavors[${flavorRowCount}][stock]" value="0" min="0" class="form-control flavor-stock-input">
@@ -837,6 +839,12 @@ $nicotineLevelOptions = product_nicotine_level_options();
             `;
 
             flavorRows.appendChild(newRow);
+            if (window.SafeInput) {
+                const flavorInput = newRow.querySelector('.flavor-name-input');
+                if (flavorInput) {
+                    SafeInput.bindField(flavorInput, 'text');
+                }
+            }
             updateTotalStock();
             updateFlavorInventorySummary();
         }

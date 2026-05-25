@@ -36,15 +36,15 @@ class RecordModel extends Model
     protected $validationRules = [
         'record_type' => 'required|in_list[purchase,inventory,expense,sales]',
         'record_date' => 'required|valid_date[Y-m-d]',
-        'reference_number' => 'required|min_length[3]|max_length[100]',
-        'title' => 'required|min_length[3]|max_length[255]',
-        'description' => 'permit_empty|max_length[1000]',
+        'reference_number' => 'required|min_length[3]|max_length[100]|safe_reference',
+        'title' => 'required|min_length[3]|max_length[255]|safe_text',
+        'description' => 'permit_empty|max_length[1000]|safe_description',
         'quantity' => 'required|integer|greater_than_equal_to[0]',
         'unit_price' => 'required|decimal|greater_than_equal_to[0]',
         'payment_method' => 'permit_empty|in_list[cash,card,gcash,bank_transfer]',
         'payment_status' => 'permit_empty|in_list[paid,partial,unpaid]',
         'status' => 'required|in_list[pending,completed,cancelled,return_refund]',
-        'notes' => 'permit_empty|max_length[1000]',
+        'notes' => 'permit_empty|max_length[1000]|safe_description',
     ];
 
     protected function decorateRecords(array $data): array

@@ -189,15 +189,15 @@
                 </div>
                 <div class="field">
                     <label>Reference Number</label>
-                    <input type="text" name="reference_number" value="<?= old('reference_number', $record['reference_number'] ?? '') ?>" required>
+                    <input type="text" name="reference_number" data-safe-input="reference" value="<?= old('reference_number', $record['reference_number'] ?? '') ?>" required>
                 </div>
                 <div class="field">
                     <label>Title</label>
-                    <input type="text" name="title" value="<?= old('title', $record['title'] ?? '') ?>" required>
+                    <input type="text" name="title" data-safe-input="text" value="<?= old('title', $record['title'] ?? '') ?>" required>
                 </div>
                 <div class="field">
                     <label>Description</label>
-                    <input type="text" name="description" value="<?= old('description', $record['description'] ?? '') ?>">
+                    <input type="text" name="description" data-safe-input="description" value="<?= old('description', $record['description'] ?? '') ?>">
                 </div>
                 <div class="field">
                     <label>Quantity</label>
@@ -238,7 +238,7 @@
                 </div>
                 <div class="field">
                     <label>Notes</label>
-                    <input type="text" name="notes" value="<?= old('notes', $record['notes'] ?? '') ?>">
+                    <input type="text" name="notes" data-safe-input="description" value="<?= old('notes', $record['notes'] ?? '') ?>">
                 </div>
                 <div class="actions">
                     <button type="submit" class="btn btn-primary"><?= $is_edit ? 'Update Record' : 'Save Record' ?></button>
@@ -247,6 +247,7 @@
             </form>
         </div>
     </div>
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
 </body>
 </html>
 

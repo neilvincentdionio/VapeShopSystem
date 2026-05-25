@@ -817,6 +817,8 @@ class Records extends BaseController
 
     private function sanitizePayload(): array
     {
+        helper('input_validation');
+
         $recordDate = $this->normalizeRecordDate(trim(strip_tags((string) $this->request->getPost('date'))));
         $recordType = strtolower(trim(strip_tags((string) $this->request->getPost('record_type'))));
         if (! in_array($recordType, self::RECORD_TYPES, true)) {
@@ -857,15 +859,15 @@ class Records extends BaseController
         return [
             'record_type' => $recordType,
             'record_date' => $recordDate,
-            'reference_number' => trim(strip_tags((string) $this->request->getPost('reference_number'))),
-            'title' => trim(strip_tags((string) $this->request->getPost('title'))),
-            'description' => trim(strip_tags((string) $this->request->getPost('description'))),
+            'reference_number' => sanitize_safe_text(trim(strip_tags((string) $this->request->getPost('reference_number'))), 'reference'),
+            'title' => sanitize_safe_text(trim(strip_tags((string) $this->request->getPost('title'))), 'text'),
+            'description' => sanitize_safe_text(trim(strip_tags((string) $this->request->getPost('description'))), 'description'),
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'payment_method' => $paymentMethod,
             'payment_status' => $paymentStatus,
             'status' => $status,
-            'notes' => trim(strip_tags((string) $this->request->getPost('notes'))),
+            'notes' => sanitize_safe_text(trim(strip_tags((string) $this->request->getPost('notes'))), 'description'),
         ];
     }
 

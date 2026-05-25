@@ -121,7 +121,7 @@
                 <div class="form-grid">
                     <div class="field">
                         <label for="admin_name">Full Name</label>
-                        <input type="text" id="admin_name" name="name" required
+                        <input type="text" id="admin_name" name="name" data-safe-input="person_name" required
                                value="<?= esc(old('name', $admin['name'] ?? $user_name ?? '')) ?>">
                     </div>
                     <div class="field">
@@ -152,7 +152,7 @@
                 <div class="form-grid">
                     <div class="field full">
                         <label for="shop_name">Shop Name</label>
-                        <input type="text" id="shop_name" name="shop_name" required
+                        <input type="text" id="shop_name" name="shop_name" data-safe-input="text" required
                                value="<?= esc(old('shop_name', $shop['shop_name'] ?? $user_shop_name ?? '')) ?>">
                     </div>
                     <div class="field">
@@ -163,7 +163,7 @@
                     </div>
                     <div class="field full">
                         <label for="shop_address">Shop Address</label>
-                        <textarea id="shop_address" name="shop_address" required
+                        <textarea id="shop_address" name="shop_address" data-safe-input="address" required
                                   placeholder="Street, barangay, city, province"><?= esc(old('shop_address', $shop['shop_address'] ?? '')) ?></textarea>
                         <span class="field-hint">Used on rider pickup maps, order details, and delivery routing.</span>
                     </div>
@@ -259,5 +259,6 @@
     document.addEventListener('DOMContentLoaded', initShopMap);
 })();
 </script>
+    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
 </body>
 </html>
