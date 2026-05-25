@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
+        .rider-motor-icon { background: transparent; border: none; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+    let map = L.map('map').setView([6.1164, 125.1716], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    const riderIcon = L.divIcon({
+        className: 'rider-motor-icon',
+        html: '<div style="font-size:24px;line-height:24px;">🏍️</div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    let storeMarker = null;
+    let destMarker = null;
+    let riderMarker = null;
+    let animFrame = null;
+
+    function animateRider(toLat, toLng, durationMs) {
+        if (!riderMarker) {
+            riderMarker = L.marker([toLat, toLng], { icon: riderIcon }).addTo(map).bindPopup('Rider');
+            return;
+        }
+        const from = riderMarker.getLatLng();
+        const startLat = from.lat;
+        const startLng = from.lng;
+        const startTs = performance.now();
+        if (animFrame) cancelAnimationFrame(animFrame);
+        const step = (now) => {
+            const t = Math.min(1, (now - startTs) / durationMs);
+            riderMarker.setLatLng([
+                startLat + (toLat - startLat) * t,
+                startLng + (toLng - startLng) * t
+            ]);
+            if (t < 1) animFrame = requestAnimationFrame(step);
+        };
+        animFrame = requestAnimationFrame(step);
+    }
+
+    function hasCoord(lat, lng) {
+        return lat !== null && lat !== undefined && lng !== null && lng !== undefined
+            && !isNaN(Number(lat)) && !isNaN(Number(lng));
+    }
+
+    window.updateTracking = function (payload) {
+        if (!payload) return;
+        setTimeout(function () { map.invalidateSize(); }, 150);
+
+        const destIcon = L.divIcon({
+            className: 'dest-pin-icon',
+            html: '<div style="font-size:26px;line-height:26px;">📍</div>',
+            iconSize: [26, 26],
+            iconAnchor: [13, 26]
+        });
+        const storeIcon = L.divIcon({
+            className: 'store-pin-icon',
+            html: '<div style="font-size:22px;line-height:22px;">🏪</div>',
+            iconSize: [22, 22],
+            iconAnchor: [11, 22]
+        });
+
+        if (hasCoord(payload.store_latitude, payload.store_longitude)) {
+            const s = [payload.store_latitude, payload.store_longitude];
+            if (!storeMarker) {
+                storeMarker = L.marker(s, { icon: storeIcon }).addTo(map).bindPopup(payload.store_address || 'Store');
+            } else {
+                storeMarker.setLatLng(s);
+            }
+        }
+
+        if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
+            const d = [payload.delivery_latitude, payload.delivery_longitude];
+            if (!destMarker) {
+                destMarker = L.marker(d, { icon: destIcon }).addTo(map).bindPopup(payload.delivery_address || 'Your address');
+            } else {
+                destMarker.setLatLng(d);
+            }
+        }
+
+        const points = [];
+        if (hasCoord(payload.store_latitude, payload.store_longitude)) {
+            points.push([payload.store_latitude, payload.store_longitude]);
+        }
+        if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
+            points.push([payload.delivery_latitude, payload.delivery_longitude]);
+        }
+        if (hasCoord(payload.rider_latitude, payload.rider_longitude)) {
+            animateRider(Number(payload.rider_latitude), Number(payload.rider_longitude), 1000);
+            points.push([Number(payload.rider_latitude), Number(payload.rider_longitude)]);
+        }
+
+        if (points.length >= 2) {
+            map.fitBounds(L.latLngBounds(points).pad(0.22));
+        } else if (points.length === 1) {
+            map.setView(points[0], 15);
+        }
+    };
+</script>
+</body>
+</html>

@@ -84,10 +84,21 @@
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:layout_gravity="center"
-                            android:src="@drawable/ic_message_black"
+                            android:src="@drawable/ic_message_chat"
                             android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="Messages" />
 
+                        <TextView
+                            android:id="@+id/messages_unread_badge"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="top|end"
+                            android:background="@drawable/bg_unread_badge"
+                            android:gravity="center"
+                            android:textColor="#FFFFFF"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
                     </FrameLayout>
 
                     <!-- Bell Icon with Badge -->

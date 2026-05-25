@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="#F3F4F6"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,124 +12,145 @@
         android:elevation="4dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="12dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp">
 
         <Button
             android:id="@+id/btn_back_from_messages"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#E5E7EB"
+            android:layout_height="36dp"
+            android:backgroundTint="#F3F4F6"
+            android:minWidth="0dp"
+            android:paddingHorizontal="12dp"
             android:text="Back"
             android:textAllCaps="false"
-            android:textColor="#111827" />
+            android:textColor="#111827"
+            android:textSize="13sp" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="Messages"
-            android:textColor="#111827"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Messages"
+                android:textColor="#111827"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/messages_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Support chat"
+                android:textColor="#6B7280"
+                android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/messages_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:background="#F8FAFC"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="10dp">
+
+        <LinearLayout
+            android:id="@+id/messages_thread_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#F8FAFC"
+            android:orientation="vertical"
+            android:paddingBottom="8dp" />
+    </androidx.core.widget.NestedScrollView>
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:background="#FFFFFF"
+        android:elevation="8dp"
         android:orientation="vertical"
-        android:padding="14dp">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Inbox"
-            android:textColor="#111827"
-            android:textSize="18sp"
+            android:text="Related order (optional)"
+            android:textColor="#6B7280"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
-        <androidx.core.widget.NestedScrollView
-            android:id="@+id/messages_scroll"
+        <Spinner
+            android:id="@+id/messages_related_order_spinner"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_marginTop="10dp"
-            android:layout_weight="1"
-            android:background="#F9FAFB">
+            android:layout_height="44dp"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/bg_messages_input"
+            android:paddingHorizontal="8dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
 
             <LinearLayout
-                android:id="@+id/messages_thread_container"
-                android:layout_width="match_parent"
+                android:id="@+id/messages_quick_actions"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="10dp" />
-        </androidx.core.widget.NestedScrollView>
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:gravity="center_vertical"
+            android:gravity="bottom"
             android:orientation="horizontal">
-
-            <Spinner
-                android:id="@+id/messages_related_order_spinner"
-                android:layout_width="96dp"
-                android:layout_height="44dp"
-                android:layout_marginEnd="8dp"
-                android:background="@android:drawable/btn_dropdown"
-                android:spinnerMode="dropdown" />
 
             <EditText
                 android:id="@+id/messages_input"
                 android:layout_width="0dp"
-                android:layout_height="44dp"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:background="@android:drawable/edit_text"
+                android:background="@drawable/bg_messages_input"
                 android:hint="Type your message..."
-                android:inputType="textMultiLine"
-                android:maxLines="3"
-                android:paddingHorizontal="10dp"
+                android:imeOptions="actionSend"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="4"
+                android:minHeight="44dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="10dp"
                 android:textColor="#111827"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
 
             <Button
                 android:id="@+id/btn_send_message"
-                android:layout_width="wrap_content"
+                android:layout_width="52dp"
                 android:layout_height="44dp"
                 android:layout_marginStart="8dp"
-                android:backgroundTint="#22C06A"
-                android:minWidth="0dp"
-                android:paddingHorizontal="14dp"
-                android:text="Send"
+                android:backgroundTint="#16A34A"
+                android:text="➤"
                 android:textAllCaps="false"
                 android:textColor="#FFFFFF"
-                android:textStyle="bold" />
+                android:textSize="18sp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_mark_messages_read"
+        <TextView
+            android:id="@+id/messages_auto_refresh_hint"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#2563EB"
-            android:text="Mark all as read"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="Auto-updating every few seconds"
+            android:textColor="#9CA3AF"
+            android:textSize="11sp" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/messages_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:background="#ECFDF3"
-        android:padding="10dp"
-        android:text="You have active conversations with seller and support."
-        android:textColor="#166534"
-        android:textSize="12sp" />
-
 </LinearLayout>

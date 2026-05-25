@@ -2,33 +2,53 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/checkout_delivery.php';
 
 require_post();
 $input = get_request_data();
-require_fields($input, ['email', 'total_amount']);
+require_fields($input, ['email', 'total_amount', 'payment_method']);
 
 $email = normalize_email((string) $input['email']);
 $totalAmount = (float) $input['total_amount'];
+$paymentMethod = strtolower(trim((string) $input['payment_method']));
+if ($paymentMethod === 'cod') {
+    $paymentMethod = 'cash_on_delivery';
+}
 
 if ($totalAmount <= 0) {
     json_response(false, 'Total amount must be greater than zero.', null, 400);
+}
+
+if (! in_array($paymentMethod, ['cash_on_delivery', 'gcash'], true)) {
+    json_response(false, 'Please select a valid payment method (GCash or COD).', null, 400);
+}
+
+$gcashReference = trim((string) ($input['gcash_reference'] ?? ''));
+if ($paymentMethod === 'gcash' && ($gcashReference === '' || strlen($gcashReference) < 6)) {
+    json_response(false, 'Please enter a valid GCash reference number (at least 6 characters).', null, 400);
 }
 
 try {
     $db = mobile_db();
     $user = find_user_by_email($db, $email);
 
-    if (!$user) {
+    if (! $user) {
         json_response(false, 'User not found.', null, 404);
     }
 
     $userId = (int) $user['id'];
+    $deliveryData = mobile_resolve_checkout_delivery($db, $userId, $input);
+    if ($deliveryData === null) {
+        json_response(false, 'Please complete your delivery address and pin your location on the map.', null, 400);
+    }
+
+    $deliveryDescription = trim((string) ($input['delivery_description'] ?? ''));
 
     $cartStmt = $db->prepare('SELECT id FROM carts WHERE user_id = :user_id LIMIT 1');
     $cartStmt->execute([':user_id' => $userId]);
     $cart = $cartStmt->fetch();
 
-    if (!is_array($cart)) {
+    if (! is_array($cart)) {
         json_response(false, 'Cart is empty.', null, 400);
     }
 
@@ -45,7 +65,7 @@ try {
     $itemsStmt->execute([':cart_id' => $cartId]);
     $cartItems = $itemsStmt->fetchAll();
 
-    if (!is_array($cartItems) || $cartItems === []) {
+    if (! is_array($cartItems) || $cartItems === []) {
         json_response(false, 'Cart is empty.', null, 400);
     }
 
@@ -67,7 +87,7 @@ try {
             json_response(false, 'Invalid item quantity found in cart.', null, 400);
         }
 
-        if (!$active) {
+        if (! $active) {
             json_response(false, 'One or more cart products are inactive.', null, 400);
         }
 
@@ -91,6 +111,31 @@ try {
         ], 400);
     }
 
+    $shippingAddress = (string) $deliveryData['shipping_address'];
+    $deliveryLat = (float) $deliveryData['delivery_latitude'];
+    $deliveryLng = (float) $deliveryData['delivery_longitude'];
+    $store = mobile_store_shipment_defaults();
+
+    if ($paymentMethod === 'cash_on_delivery') {
+        $orderTitle = 'Cash on Delivery Order';
+        $orderDescription = 'Customer order with Cash on Delivery payment (mobile).';
+        $orderNotes = 'PAYMENT_METHOD:COD';
+        $payMethod = 'cash';
+        $payStatus = 'unpaid';
+        $amountReceived = null;
+        $changeAmount = null;
+        $paidAt = null;
+    } else {
+        $orderTitle = 'GCash Payment Order';
+        $orderDescription = 'Customer order with GCash payment (mobile).';
+        $orderNotes = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639365879409;GCASH_REF:' . $gcashReference;
+        $payMethod = 'gcash';
+        $payStatus = 'paid';
+        $amountReceived = $computedTotal;
+        $changeAmount = 0.0;
+        $paidAt = date('Y-m-d H:i:s');
+    }
+
     $db->beginTransaction();
     $now = date('Y-m-d H:i:s');
     $reference = 'ORD-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2)));
@@ -102,13 +147,13 @@ try {
     $orderInsert->execute([
         ':customer_id' => $userId,
         ':reference_number' => $reference,
-        ':title' => 'Mobile Checkout Order',
-        ':description' => 'Order submitted via mobile API checkout.',
+        ':title' => $orderTitle,
+        ':description' => $orderDescription,
         ':order_date' => date('Y-m-d'),
         ':status' => 'pending',
         ':total_amount' => $computedTotal,
         ':total_profit' => round($computedProfit, 2),
-        ':notes' => 'Created from mobile_api/checkout.php',
+        ':notes' => $orderNotes,
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
@@ -160,12 +205,12 @@ try {
     );
     $paymentInsert->execute([
         ':order_id' => $orderId,
-        ':method' => 'cash',
-        ':status' => 'unpaid',
+        ':method' => $payMethod,
+        ':status' => $payStatus,
         ':amount' => $computedTotal,
-        ':amount_received' => null,
-        ':change_amount' => null,
-        ':paid_at' => null,
+        ':amount_received' => $amountReceived,
+        ':change_amount' => $changeAmount,
+        ':paid_at' => $paidAt,
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
@@ -174,17 +219,35 @@ try {
     $profileStmt->execute([':user_id' => $userId]);
     $profile = $profileStmt->fetch();
     $contactNumber = is_array($profile) ? trim((string) ($profile['phone_number'] ?? '')) : '';
-    $shippingAddress = build_shipping_address($db, $userId);
+    if ($contactNumber === '') {
+        $contactNumber = trim((string) ($input['contact_number'] ?? $input['phone'] ?? ''));
+    }
 
     $shipmentInsert = $db->prepare(
-        'INSERT INTO order_shipments (order_id, status, shipping_address, contact_number, created_at, updated_at)
-         VALUES (:order_id, :status, :shipping_address, :contact_number, :created_at, :updated_at)'
+        'INSERT INTO order_shipments (
+            order_id, status, shipping_address, contact_number,
+            delivery_address, delivery_latitude, delivery_longitude,
+            store_latitude, store_longitude, store_address, notes,
+            created_at, updated_at
+         ) VALUES (
+            :order_id, :status, :shipping_address, :contact_number,
+            :delivery_address, :delivery_latitude, :delivery_longitude,
+            :store_latitude, :store_longitude, :store_address, :notes,
+            :created_at, :updated_at
+         )'
     );
     $shipmentInsert->execute([
         ':order_id' => $orderId,
-        ':status' => 'to_pay',
-        ':shipping_address' => $shippingAddress !== '' ? $shippingAddress : null,
+        ':status' => 'to_ship',
+        ':shipping_address' => $shippingAddress,
         ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
+        ':delivery_address' => $shippingAddress,
+        ':delivery_latitude' => $deliveryLat,
+        ':delivery_longitude' => $deliveryLng,
+        ':store_latitude' => $store['store_latitude'],
+        ':store_longitude' => $store['store_longitude'],
+        ':store_address' => $store['store_address'],
+        ':notes' => $deliveryDescription !== '' ? $deliveryDescription : null,
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
@@ -210,16 +273,23 @@ try {
             'reference_number' => $reference,
             'total_amount' => $computedTotal,
             'item_count' => $itemCount,
+            'payment_method' => $paymentMethod,
             'source' => 'mobile_api',
         ]
     );
 
-    json_response(true, 'Checkout successful.', [
+    $successMessage = $paymentMethod === 'cash_on_delivery'
+        ? 'Order placed successfully. COD payment is pending.'
+        : 'GCash payment recorded. Your order is marked as paid.';
+
+    json_response(true, $successMessage, [
         'order_id' => $orderId,
         'reference_number' => $reference,
         'total_amount' => $computedTotal,
         'item_count' => $itemCount,
         'status' => 'pending',
+        'shipment_status' => 'to_ship',
+        'payment_method' => $paymentMethod,
     ], 201);
 } catch (Throwable $e) {
     if (isset($db) && $db instanceof PDO && $db->inTransaction()) {
@@ -228,4 +298,3 @@ try {
 
     json_response(false, 'Server error during checkout.', null, 500);
 }
-

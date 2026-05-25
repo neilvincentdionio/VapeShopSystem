@@ -80,45 +80,43 @@
             android:textSize="11sp"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/btn_confirm_delivery"
+            style="@style/Widget.VapeShop.ActionButton.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="10dp"
+            android:text="Confirm Delivery"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btn_message_seller"
+                style="@style/Widget.VapeShop.ActionButton.Secondary"
                 android:layout_width="0dp"
-                android:layout_height="34dp"
-                android:layout_marginEnd="6dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_purchase_action_primary"
-                android:backgroundTint="@null"
                 android:ellipsize="end"
-                android:minWidth="0dp"
-                android:paddingHorizontal="10dp"
                 android:singleLine="true"
-                android:text="Message Seller"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp" />
+                android:text="Message Seller" />
 
             <Button
                 android:id="@+id/btn_order_details"
+                style="@style/Widget.VapeShop.ActionButton.Primary"
                 android:layout_width="0dp"
-                android:layout_height="34dp"
-                android:layout_marginStart="6dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_purchase_action_primary"
-                android:backgroundTint="@null"
                 android:ellipsize="end"
-                android:minWidth="0dp"
-                android:paddingHorizontal="10dp"
                 android:singleLine="true"
                 android:text="Order Details"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -126,44 +124,31 @@
             android:id="@+id/purchase_post_delivery_actions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal"
             android:visibility="gone">
 
             <Button
                 android:id="@+id/btn_review_order"
+                style="@style/Widget.VapeShop.ActionButton.Outline"
                 android:layout_width="0dp"
-                android:layout_height="34dp"
-                android:layout_marginEnd="6dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_purchase_action_outline"
-                android:backgroundTint="@null"
                 android:ellipsize="end"
-                android:minWidth="0dp"
-                android:paddingHorizontal="10dp"
                 android:singleLine="true"
-                android:text="Review"
-                android:textAllCaps="false"
-                android:textColor="#166534"
-                android:textSize="10sp" />
+                android:text="Review" />
 
             <Button
                 android:id="@+id/btn_return_refund"
+                style="@style/Widget.VapeShop.ActionButton.Secondary"
                 android:layout_width="0dp"
-                android:layout_height="34dp"
-                android:layout_marginStart="6dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_purchase_action_primary"
-                android:backgroundTint="@null"
                 android:ellipsize="end"
-                android:minWidth="0dp"
-                android:paddingHorizontal="10dp"
                 android:singleLine="true"
-                android:text="Return/Refund"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:text="Return/Refund" />
         </LinearLayout>
 
         <LinearLayout

@@ -10,13 +10,13 @@ $input = get_request_data();
 require_fields($input, ['email']);
 
 $email = normalize_email((string) $input['email']);
+$statusFilter = trim((string) ($input['status'] ?? ''));
 
 try {
     $db = mobile_db();
-    $user = mobile_require_customer($db, $email);
-    $userId = (int) $user['id'];
+    mobile_require_admin($db, $email);
 
-    $ordersStmt = $db->prepare(
+    $sql =
         'SELECT o.id, o.customer_id, o.reference_number, o.order_date, o.status AS order_status,
                 o.notes, o.total_amount, o.created_at, o.updated_at,
                 COALESCE(s.status, \'to_pay\') AS delivery_status,
@@ -29,41 +29,31 @@ try {
                 COALESCE(p.method, \'cash\') AS payment_method,
                 COALESCE(p.status, \'unpaid\') AS payment_status,
                 COALESCE(p.amount, 0) AS payment_amount,
+                u.name AS customer_name, u.email AS customer_email,
                 r.name AS rider_name
          FROM orders o
          LEFT JOIN order_shipments s ON s.order_id = o.id
          LEFT JOIN order_payments p ON p.order_id = o.id
-         LEFT JOIN users r ON r.id = s.assigned_rider_id
-         WHERE o.customer_id = :customer_id
-         ORDER BY o.id DESC'
-    );
-    $ordersStmt->execute([':customer_id' => $userId]);
+         LEFT JOIN users u ON u.id = o.customer_id
+         LEFT JOIN users r ON r.id = s.assigned_rider_id';
 
-    $result = [];
-    foreach ($ordersStmt->fetchAll() as $order) {
-        if (! is_array($order)) {
-            continue;
+    $params = [];
+    if ($statusFilter !== '') {
+        $sql .= ' WHERE COALESCE(s.status, \'to_pay\') = :status';
+        $params[':status'] = $statusFilter;
+    }
+    $sql .= ' ORDER BY o.id DESC LIMIT 200';
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $orders = [];
+    foreach ($stmt->fetchAll() as $row) {
+        if (is_array($row)) {
+            $orders[] = mobile_format_order_row($row, false, $db);
         }
-        $formatted = mobile_format_order_row($order, true, $db);
-        $addr = (string) ($formatted['shipment']['shipping_address'] ?? '');
-        if ($addr !== '') {
-            $parts = array_map('trim', explode(',', $addr));
-            $safe = [];
-            foreach ($parts as $part) {
-                if ($part !== '' && ! is_probably_encrypted_text($part)) {
-                    $safe[] = $part;
-                }
-            }
-            $formatted['shipment']['shipping_address'] = implode(', ', $safe);
-        }
-        $result[] = $formatted;
     }
 
-    json_response(true, 'Orders fetched successfully.', [
-        'orders' => $result,
-    ], 200);
+    json_response(true, 'Orders loaded.', ['orders' => $orders], 200);
 } catch (Throwable $e) {
-    error_log('orders_list.php: ' . $e->getMessage());
-    json_response(false, 'Server error while fetching orders.', null, 500);
+    json_response(false, 'Server error while loading orders.', null, 500);
 }
-

@@ -128,6 +128,25 @@ function build_shipping_address(PDO $db, int $userId): string
 }
 
 /**
+ * @return array<string, mixed>|null
+ */
+function get_user_primary_address(PDO $db, int $userId): ?array
+{
+    $stmt = $db->prepare(
+        'SELECT address_line, city, barangay, province, postal_code, country,
+                delivery_latitude, delivery_longitude
+         FROM user_addresses
+         WHERE user_id = :user_id
+         ORDER BY is_primary DESC, id ASC
+         LIMIT 1'
+    );
+    $stmt->execute([':user_id' => $userId]);
+    $address = $stmt->fetch();
+
+    return is_array($address) ? $address : null;
+}
+
+/**
  * Heuristic check for ciphertext-like values stored in legacy rows.
  */
 function is_probably_encrypted_text(string $value): bool

@@ -562,6 +562,48 @@
                     android:text="Select Province, then City, then Barangay. Country is set to Philippines."
                     android:textColor="#4B5563"
                     android:textSize="11sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="Pin Delivery Location"
+                    android:textColor="#111827"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="This location will be used automatically when you choose Use My Address during checkout."
+                    android:textColor="#4B5563"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_register_use_location"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:backgroundTint="#FFFFFF"
+                    android:text="Use Current Location"
+                    android:textAllCaps="false"
+                    android:textColor="#16A34A" />
+
+                <TextView
+                    android:id="@+id/register_map_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Tap the map or use your current location to set your delivery pin."
+                    android:textColor="#6B7280"
+                    android:textSize="12sp" />
+
+                <WebView
+                    android:id="@+id/register_map_webview"
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp"
+                    android:layout_marginTop="8dp" />
             </LinearLayout>
 
             <Button

@@ -1,7 +1,21 @@
 package com.example.vapeshop;
 
+import android.annotation.SuppressLint;
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.graphics.Typeface;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -34,6 +48,8 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -48,6 +64,9 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -57,11 +76,15 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -82,6 +105,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USER_LNG = "user_lng";
     private static final String KEY_NOTIFICATIONS_ENABLED = "notifications_enabled";
     private static final String KEY_DARK_MODE = "dark_mode";
+    private static final String KEY_USER_ROLE = "user_role";
+    private static final String KEY_USER_ID = "user_id";
     private static final String[] API_BASE_URLS = {
         // Physical device via USB + adb reverse (run: adb reverse tcp:8080 tcp:80)
         "http://127.0.0.1:8080/VapeShopSystem/mobile_api/",
@@ -94,11 +119,45 @@ public class MainActivity extends AppCompatActivity {
         "http://192.168.1.72/VapeShopSystem/mobile_api/"
     };
     private boolean isLoggedIn = false;
+    private String currentUserRole = "customer";
+    private int currentUserId = 0;
+    private int pendingProofOrderId = 0;
+    private final ActivityResultLauncher<String> deliveryProofPickerLauncher =
+        registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+            if (uri != null && pendingProofOrderId > 0) {
+                submitRiderProofToServer(pendingProofOrderId, uri, new SimpleCallback() {
+                    @Override
+                    public void onSuccess(String message) {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        loadFragment(new RiderDeliveriesFragment());
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+            pendingProofOrderId = 0;
+        });
     private final LinkedHashMap<String, CartItem> cartItems = new LinkedHashMap<>();
     private final Map<Integer, ProductCatalogEntry> productCatalogById = new HashMap<>();
     private final Map<String, Integer> productIdByName = new HashMap<>();
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final long MESSAGE_AUTO_REFRESH_MS = 4000L;
+    private static final long MESSAGE_BADGE_POLL_MS = 12000L;
+    private int supportUnreadCount = 0;
+    private boolean messageBadgePollingActive = false;
+    private final Runnable messageBadgePollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            pollSupportUnreadCount();
+            if (messageBadgePollingActive) {
+                mainHandler.postDelayed(this, MESSAGE_BADGE_POLL_MS);
+            }
+        }
+    };
     private AttachmentPickCallback pendingAttachmentPickCallback;
     private final ActivityResultLauncher<String[]> refundAttachmentPickerLauncher =
         registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), uris -> {
@@ -261,6 +320,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static class OrderInfo {
+        int orderId;
         String referenceNumber;
         String orderDate;
         String deliveryStatus;
@@ -270,12 +330,19 @@ public class MainActivity extends AppCompatActivity {
         String shippingContact;
         boolean reviewSubmitted;
         boolean refundRequested;
+        boolean canRequestReturn;
+        boolean canPay;
+        boolean canCancel;
+        boolean canConfirmReceived;
+        String paymentStatus;
         String refundReason;
         String refundMethod;
         String refundAccount;
         String returnCode;
+        String qrPayload;
 
         OrderInfo(
+            int orderId,
             String referenceNumber,
             String orderDate,
             String deliveryStatus,
@@ -284,6 +351,7 @@ public class MainActivity extends AppCompatActivity {
             String shippingAddress,
             String shippingContact
         ) {
+            this.orderId = orderId;
             this.referenceNumber = referenceNumber;
             this.orderDate = orderDate;
             this.deliveryStatus = deliveryStatus;
@@ -293,32 +361,54 @@ public class MainActivity extends AppCompatActivity {
             this.shippingContact = shippingContact;
             this.reviewSubmitted = false;
             this.refundRequested = false;
+            this.canRequestReturn = false;
+            this.canPay = false;
+            this.canCancel = false;
+            this.canConfirmReceived = false;
+            this.paymentStatus = "unpaid";
             this.refundReason = "";
-            this.refundMethod = "GCash";
+            this.refundMethod = "gcash";
             this.refundAccount = "";
             this.returnCode = "";
+            this.qrPayload = "";
         }
     }
 
     private static class SupportMessage {
+        int id;
         String senderName;
         String messageBody;
         String createdAt;
+        String senderRole;
+        String messageType;
         boolean fromCustomer;
 
-        SupportMessage(String senderName, String messageBody, String createdAt, boolean fromCustomer) {
+        SupportMessage(
+            int id,
+            String senderName,
+            String messageBody,
+            String createdAt,
+            String senderRole,
+            String messageType,
+            boolean fromCustomer
+        ) {
+            this.id = id;
             this.senderName = senderName;
             this.messageBody = messageBody;
             this.createdAt = createdAt;
+            this.senderRole = senderRole == null ? "" : senderRole;
+            this.messageType = messageType == null ? "text" : messageType;
             this.fromCustomer = fromCustomer;
         }
     }
 
     private static class ChatOrderOption {
+        int orderId;
         String reference;
         String productSummary;
 
-        ChatOrderOption(String reference, String productSummary) {
+        ChatOrderOption(int orderId, String reference, String productSummary) {
+            this.orderId = orderId;
             this.reference = reference;
             this.productSummary = productSummary;
         }
@@ -380,11 +470,24 @@ public class MainActivity extends AppCompatActivity {
         });
 
         setupNavigation();
+        restoreSessionIfPossible();
+    }
+
+    private void restoreSessionIfPossible() {
+        if (hasRegisteredAccount()) {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            currentUserRole = prefs.getString(KEY_USER_ROLE, "customer");
+            currentUserId = prefs.getInt(KEY_USER_ID, 0);
+            isLoggedIn = true;
+            routeAfterLogin();
+            return;
+        }
         loadFragment(new LoginFragment());
     }
 
     @Override
     protected void onDestroy() {
+        stopMessageBadgePolling();
         super.onDestroy();
         networkExecutor.shutdownNow();
     }
@@ -395,6 +498,15 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.nav_cart).setOnClickListener(v ->
             loadFragment(new CartFragment()));
+
+        findViewById(R.id.nav_messages).setOnClickListener(v -> {
+            if (!isUserLoggedIn()) {
+                Toast.makeText(this, "Please login to open messages", Toast.LENGTH_SHORT).show();
+                loadFragment(new LoginFragment());
+                return;
+            }
+            loadFragment(MessagesFragment.newInstance("", "", false));
+        });
 
         findViewById(R.id.nav_my_purchase).setOnClickListener(v -> {
             if (!isUserLoggedIn()) {
@@ -423,8 +535,55 @@ public class MainActivity extends AppCompatActivity {
 
     private void onLoginSuccess() {
         isLoggedIn = true;
-        loadFragment(new HomeFragment());
+        routeAfterLogin();
         Toast.makeText(this, "Login successful", Toast.LENGTH_SHORT).show();
+    }
+
+    public void routeAfterLogin() {
+        setRoleNavigationVisible(isCustomerRole());
+        if (isCustomerRole()) {
+            startMessageBadgePolling();
+        } else {
+            stopMessageBadgePolling();
+            supportUnreadCount = 0;
+            refreshMessageBadges();
+        }
+        if (isAdminRole()) {
+            loadFragment(new AdminOrdersFragment());
+        } else if (isRiderRole()) {
+            loadFragment(new RiderDeliveriesFragment());
+        } else {
+            loadFragment(new HomeFragment());
+        }
+    }
+
+    public boolean isCustomerRole() {
+        return "customer".equalsIgnoreCase(currentUserRole) || currentUserRole.isEmpty();
+    }
+
+    public boolean isAdminRole() {
+        String role = currentUserRole == null ? "" : currentUserRole.toLowerCase(Locale.US);
+        return "admin".equals(role) || "staff".equals(role);
+    }
+
+    public boolean isRiderRole() {
+        return "rider".equalsIgnoreCase(currentUserRole);
+    }
+
+    private void setRoleNavigationVisible(boolean visible) {
+        int vis = visible ? View.VISIBLE : View.GONE;
+        findViewById(R.id.nav_home).setVisibility(vis);
+        findViewById(R.id.nav_cart).setVisibility(vis);
+        findViewById(R.id.nav_messages_wrap).setVisibility(vis);
+        findViewById(R.id.nav_my_purchase).setVisibility(vis);
+    }
+
+    public int getCurrentUserId() {
+        return currentUserId;
+    }
+
+    public String getCurrentUserRole() {
+        return currentUserRole;
     }
 
     public boolean isUserLoggedIn() {
@@ -595,9 +754,17 @@ public class MainActivity extends AppCompatActivity {
                     String country = data != null ? data.optString("country", "Philippines") : "Philippines";
                     double latitude = data != null ? data.optDouble("latitude", 6.1164) : 6.1164;
                     double longitude = data != null ? data.optDouble("longitude", 125.1716) : 125.1716;
+                    String role = data != null ? data.optString("role", "customer") : "customer";
+                    int userId = data != null ? data.optInt("user_id", 0) : 0;
+                    currentUserRole = role == null || role.isEmpty() ? "customer" : role;
+                    currentUserId = userId;
                     saveAccountLocally(
                         fullName, savedEmail, password, phone, street, city, barangay, postalCode, province, country, latitude, longitude
                     );
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putString(KEY_USER_ROLE, currentUserRole)
+                        .putInt(KEY_USER_ID, currentUserId)
+                        .apply();
                     callback.onSuccess(fullName, savedEmail);
                 } catch (Exception e) {
                     callback.onError("Invalid server response");
@@ -620,6 +787,8 @@ public class MainActivity extends AppCompatActivity {
         String city,
         String barangay,
         String postalCode,
+        double deliveryLatitude,
+        double deliveryLongitude,
         SimpleCallback callback
     ) {
         Map<String, String> params = new HashMap<>();
@@ -633,6 +802,8 @@ public class MainActivity extends AppCompatActivity {
         params.put("postal_code", postalCode);
         params.put("province", "South Cotabato");
         params.put("country", "Philippines");
+        params.put("delivery_latitude", String.format(Locale.US, "%.6f", deliveryLatitude));
+        params.put("delivery_longitude", String.format(Locale.US, "%.6f", deliveryLongitude));
 
         apiPost("register.php", params, new SimpleCallback() {
             @Override
@@ -654,8 +825,8 @@ public class MainActivity extends AppCompatActivity {
                         postalCode,
                         "South Cotabato",
                         "Philippines",
-                        6.1164,
-                        125.1716
+                        deliveryLatitude,
+                        deliveryLongitude
                     );
                     callback.onSuccess(root.optString("message", "Account created"));
                 } catch (Exception e) {
@@ -1073,24 +1244,763 @@ public class MainActivity extends AppCompatActivity {
         return details.toString();
     }
 
-    public void checkoutOnServer(double totalAmount, SimpleCallback callback) {
-        Map<String, String> params = new HashMap<>();
-        String shippingAddress = getRegisteredShippingAddress();
-        String contactNumber = getRegisteredPhone();
-        double latitude = getRegisteredLatitude();
-        double longitude = getRegisteredLongitude();
-        params.put("email", getRegisteredEmail());
-        params.put("total_amount", String.format(Locale.US, "%.2f", totalAmount));
-        params.put("shipping_address", shippingAddress);
-        params.put("delivery_address", shippingAddress);
-        params.put("contact_number", contactNumber);
-        params.put("phone", contactNumber);
-        params.put("latitude", String.format(Locale.US, "%.6f", latitude));
-        params.put("longitude", String.format(Locale.US, "%.6f", longitude));
-        params.put("customer_latitude", String.format(Locale.US, "%.6f", latitude));
-        params.put("customer_longitude", String.format(Locale.US, "%.6f", longitude));
-        params.put("delivery_latitude", String.format(Locale.US, "%.6f", latitude));
-        params.put("delivery_longitude", String.format(Locale.US, "%.6f", longitude));
+    private static final int REQ_CHECKOUT_LOCATION = 9021;
+    private static final String GCASH_MERCHANT_NUMBER = "+639365879409";
+    private static final String GCASH_MERCHANT_NAME = "QuickPuff VapeShop";
+    private final Map<String, List<String>> checkoutProvinceCityMap = new HashMap<>();
+    private final Map<String, List<String>> checkoutCityBarangayMap = new HashMap<>();
+
+    private interface OnMapLocationListener {
+        void onLocationPicked(double latitude, double longitude);
+    }
+
+    public void showCheckoutDialog(SimpleCallback callback) {
+        if (!isUserLoggedIn()) {
+            Toast.makeText(this, "Please login before checkout", Toast.LENGTH_SHORT).show();
+            loadFragment(new LoginFragment());
+            return;
+        }
+        if (getCartItemCount() == 0) {
+            Toast.makeText(this, "Your cart is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_checkout, null);
+        TextView totalView = dialogView.findViewById(R.id.checkout_total_amount);
+        TextView itemCountView = dialogView.findViewById(R.id.checkout_item_count);
+        Spinner paymentSpinner = dialogView.findViewById(R.id.checkout_payment_method);
+        LinearLayout gcashSection = dialogView.findViewById(R.id.checkout_gcash_section);
+        EditText gcashReference = dialogView.findViewById(R.id.checkout_gcash_reference);
+        TextView btnEnterAddress = dialogView.findViewById(R.id.btn_address_enter);
+        TextView btnSavedAddress = dialogView.findViewById(R.id.btn_address_saved);
+        ImageView gcashQrImage = dialogView.findViewById(R.id.checkout_gcash_qr);
+        Button btnOpenGcash = dialogView.findViewById(R.id.btn_open_gcash);
+        TextView savedPreview = dialogView.findViewById(R.id.checkout_saved_address_preview);
+        LinearLayout manualFields = dialogView.findViewById(R.id.checkout_manual_fields);
+        EditText streetInput = dialogView.findViewById(R.id.checkout_street);
+        Spinner countrySpinner = dialogView.findViewById(R.id.checkout_country);
+        Spinner provinceSpinner = dialogView.findViewById(R.id.checkout_province);
+        Spinner citySpinner = dialogView.findViewById(R.id.checkout_city);
+        Spinner barangaySpinner = dialogView.findViewById(R.id.checkout_barangay);
+        EditText postalInput = dialogView.findViewById(R.id.checkout_postal);
+        EditText descriptionInput = dialogView.findViewById(R.id.checkout_description);
+        Button btnCurrentLocation = dialogView.findViewById(R.id.btn_use_current_location);
+        TextView mapStatus = dialogView.findViewById(R.id.checkout_map_status);
+        WebView mapWebView = dialogView.findViewById(R.id.checkout_map_webview);
+        TextView checkoutError = dialogView.findViewById(R.id.checkout_error);
+        Button placeOrderButton = dialogView.findViewById(R.id.btn_place_order);
+
+        double cartTotal = getCartTotal();
+        totalView.setText(String.format(Locale.US, "₱%.2f", cartTotal));
+        itemCountView.setText(getCartItemCount() + " item(s) in cart");
+        placeOrderButton.setText(String.format(Locale.US, "Place Order — ₱%.2f", cartTotal));
+
+        bindCheckoutSpinner(paymentSpinner, Arrays.asList(
+            "Select Payment Method",
+            "GCash",
+            "COD (Cash on Delivery)"
+        ));
+        bindCheckoutSpinner(countrySpinner, Arrays.asList("Philippines"));
+        initCheckoutAddressMappings();
+        setupCheckoutAddressSpinners(provinceSpinner, citySpinner, barangaySpinner);
+
+        final boolean[] useSavedAddress = {false};
+        final boolean[] mapPinned = {false};
+        final double[] deliveryLat = {getRegisteredLatitude()};
+        final double[] deliveryLng = {getRegisteredLongitude()};
+
+        Runnable refreshGcashQr = () -> {
+            Bitmap qr = createQrBitmap(buildGcashQrPayload(cartTotal), 420);
+            if (qr != null) {
+                gcashQrImage.setImageBitmap(qr);
+            }
+        };
+
+        Runnable refreshAddressMode = () -> {
+            if (useSavedAddress[0]) {
+                manualFields.setVisibility(View.GONE);
+                savedPreview.setVisibility(View.VISIBLE);
+                String saved = getRegisteredShippingAddress();
+                savedPreview.setText(saved.isEmpty()
+                    ? "No saved address found. Complete registration or use Enter address."
+                    : saved);
+                deliveryLat[0] = getRegisteredLatitude();
+                deliveryLng[0] = getRegisteredLongitude();
+                mapPinned[0] = true;
+                styleCheckoutAddressTab(btnEnterAddress, btnSavedAddress, false);
+            } else {
+                manualFields.setVisibility(View.VISIBLE);
+                savedPreview.setVisibility(View.GONE);
+                styleCheckoutAddressTab(btnEnterAddress, btnSavedAddress, true);
+            }
+        };
+        btnEnterAddress.setOnClickListener(v -> {
+            useSavedAddress[0] = false;
+            refreshAddressMode.run();
+        });
+        btnSavedAddress.setOnClickListener(v -> {
+            useSavedAddress[0] = true;
+            refreshAddressMode.run();
+        });
+        refreshAddressMode.run();
+
+        paymentSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                boolean isGcash = position == 1;
+                gcashSection.setVisibility(isGcash ? View.VISIBLE : View.GONE);
+                if (isGcash) {
+                    refreshGcashQr.run();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        btnOpenGcash.setOnClickListener(v -> openGcashApp());
+
+        setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned, (lat, lng) -> {
+            if (!useSavedAddress[0]) {
+                mapStatus.setText("Pin set. Tap Use Current Location to autofill address, or edit fields manually.");
+            }
+        });
+
+        btnCurrentLocation.setOnClickListener(v -> fetchCheckoutCurrentLocation(
+            mapWebView,
+            deliveryLat,
+            deliveryLng,
+            mapPinned,
+            mapStatus,
+            streetInput,
+            provinceSpinner,
+            citySpinner,
+            barangaySpinner,
+            postalInput
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Checkout")
+            .setView(dialogView)
+            .setNegativeButton("Close", null)
+            .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+        }
+
+        placeOrderButton.setOnClickListener(v -> {
+            checkoutError.setVisibility(View.GONE);
+            int paymentIndex = paymentSpinner.getSelectedItemPosition();
+            if (paymentIndex <= 0) {
+                checkoutError.setText("Please select a payment method (GCash or COD).");
+                checkoutError.setVisibility(View.VISIBLE);
+                return;
+            }
+            String paymentMethod = paymentIndex == 1 ? "gcash" : "cash_on_delivery";
+
+            Map<String, String> params = new HashMap<>();
+            params.put("email", getRegisteredEmail());
+            params.put("total_amount", String.format(Locale.US, "%.2f", cartTotal));
+            params.put("payment_method", paymentMethod);
+            params.put("contact_number", getRegisteredPhone());
+            params.put("phone", getRegisteredPhone());
+
+            if (paymentMethod.equals("gcash")) {
+                String ref = gcashReference.getText().toString().trim();
+                if (ref.length() < 6) {
+                    checkoutError.setText("Enter a valid GCash reference number (at least 6 characters).");
+                    checkoutError.setVisibility(View.VISIBLE);
+                    return;
+                }
+                params.put("gcash_reference", ref);
+            }
+
+            String description = descriptionInput.getText().toString().trim();
+            if (!description.isEmpty()) {
+                params.put("delivery_description", description);
+            }
+
+            if (useSavedAddress[0]) {
+                String savedAddress = getRegisteredShippingAddress();
+                if (savedAddress.isEmpty()) {
+                    checkoutError.setText("No registered address found. Use Enter address or update your profile.");
+                    checkoutError.setVisibility(View.VISIBLE);
+                    return;
+                }
+                params.put("delivery_address_mode", "saved_address");
+                params.put("shipping_address", savedAddress);
+                params.put("customer_latitude", String.format(Locale.US, "%.6f", deliveryLat[0]));
+                params.put("customer_longitude", String.format(Locale.US, "%.6f", deliveryLng[0]));
+                params.put("delivery_latitude", String.format(Locale.US, "%.6f", deliveryLat[0]));
+                params.put("delivery_longitude", String.format(Locale.US, "%.6f", deliveryLng[0]));
+            } else {
+                String street = streetInput.getText().toString().trim();
+                String country = countrySpinner.getSelectedItem() == null ? "" : countrySpinner.getSelectedItem().toString().trim();
+                String province = provinceSpinner.getSelectedItem() == null ? "" : provinceSpinner.getSelectedItem().toString().trim();
+                String city = citySpinner.getSelectedItem() == null ? "" : citySpinner.getSelectedItem().toString().trim();
+                String barangay = barangaySpinner.getSelectedItem() == null ? "" : barangaySpinner.getSelectedItem().toString().trim();
+                String postal = postalInput.getText().toString().trim();
+
+                if (street.isEmpty() || province.isEmpty() || city.isEmpty() || barangay.isEmpty() || postal.isEmpty()) {
+                    checkoutError.setText("Complete street, province, city, barangay, and postal code.");
+                    checkoutError.setVisibility(View.VISIBLE);
+                    return;
+                }
+                if (!mapPinned[0]) {
+                    checkoutError.setText("Pin your delivery location on the map (tap map or use current location).");
+                    checkoutError.setVisibility(View.VISIBLE);
+                    return;
+                }
+
+                params.put("delivery_address_mode", "manual");
+                params.put("delivery_address_line", street);
+                params.put("street", street);
+                params.put("delivery_country", country);
+                params.put("country", country);
+                params.put("delivery_province", province);
+                params.put("delivery_city", city);
+                params.put("delivery_barangay", barangay);
+                params.put("delivery_postal_code", postal);
+                params.put("delivery_latitude", String.format(Locale.US, "%.6f", deliveryLat[0]));
+                params.put("delivery_longitude", String.format(Locale.US, "%.6f", deliveryLng[0]));
+            }
+
+            placeOrderButton.setEnabled(false);
+            checkoutOnServer(params, new SimpleCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    placeOrderButton.setEnabled(true);
+                    dialog.dismiss();
+                    callback.onSuccess(message);
+                }
+
+                @Override
+                public void onError(String message) {
+                    placeOrderButton.setEnabled(true);
+                    checkoutError.setText(message);
+                    checkoutError.setVisibility(View.VISIBLE);
+                }
+            });
+        });
+
+        dialog.show();
+    }
+
+    private boolean hasCheckoutLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED
+            || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestCheckoutLocationPermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            },
+            REQ_CHECKOUT_LOCATION
+        );
+    }
+
+    private void styleCheckoutAddressTab(TextView enterTab, TextView savedTab, boolean enterSelected) {
+        enterTab.setBackgroundResource(enterSelected
+            ? R.drawable.bg_checkout_tab_selected
+            : R.drawable.bg_checkout_tab_unselected);
+        savedTab.setBackgroundResource(enterSelected
+            ? R.drawable.bg_checkout_tab_unselected
+            : R.drawable.bg_checkout_tab_selected);
+        enterTab.setTextColor(enterSelected ? 0xFF0F766E : 0xFF6B7280);
+        savedTab.setTextColor(enterSelected ? 0xFF6B7280 : 0xFF0F766E);
+        enterTab.setTypeface(null, enterSelected ? Typeface.BOLD : Typeface.NORMAL);
+        savedTab.setTypeface(null, enterSelected ? Typeface.NORMAL : Typeface.BOLD);
+    }
+
+    private String buildGcashQrPayload(double amount) {
+        return "GCASH|MERCHANT:" + GCASH_MERCHANT_NAME
+            + "|NUMBER:" + GCASH_MERCHANT_NUMBER
+            + "|AMOUNT:" + String.format(Locale.US, "%.2f", amount)
+            + "|REF:";
+    }
+
+    private Bitmap createQrBitmap(String content, int sizePx) {
+        try {
+            BitMatrix matrix = new MultiFormatWriter().encode(content, BarcodeFormat.QR_CODE, sizePx, sizePx);
+            Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+            for (int x = 0; x < sizePx; x++) {
+                for (int y = 0; y < sizePx; y++) {
+                    bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            return bitmap;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void openGcashApp() {
+        String[] packages = {"com.mynt.gcash", "com.globe.gcash.android"};
+        for (String pkg : packages) {
+            Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try {
+                    startActivity(launch);
+                    Toast.makeText(this, "Opening GCash app. Send payment to " + GCASH_MERCHANT_NUMBER, Toast.LENGTH_LONG).show();
+                    return;
+                } catch (Exception ignored) {
+                    // try next package
+                }
+            }
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("gcash://")));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.gcash.com/")));
+            } catch (Exception ex) {
+                Toast.makeText(this, "GCash app not found. Install GCash or pay using the QR code.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void applyCheckoutMapPin(WebView mapWebView, double lat, double lng) {
+        if (mapWebView == null) {
+            return;
+        }
+        String js = String.format(Locale.US, "setLocation(%.6f,%.6f,17)", lat, lng);
+        mapWebView.evaluateJavascript(js, null);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void fetchCheckoutCurrentLocation(
+        WebView mapWebView,
+        double[] deliveryLat,
+        double[] deliveryLng,
+        boolean[] mapPinned,
+        TextView mapStatus,
+        EditText streetInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner,
+        EditText postalInput
+    ) {
+        if (!hasCheckoutLocationPermission()) {
+            requestCheckoutLocationPermission();
+            mapStatus.setText("Allow location access, then tap Use Current Location again.");
+            return;
+        }
+        mapStatus.setText("Getting your current location...");
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager == null) {
+            mapStatus.setText("Location service unavailable.");
+            return;
+        }
+
+        Runnable applyLocation = () -> {
+            deliveryLat[0] = lastCheckoutGpsLat;
+            deliveryLng[0] = lastCheckoutGpsLng;
+            mapPinned[0] = true;
+            applyCheckoutMapPin(mapWebView, deliveryLat[0], deliveryLng[0]);
+            reverseGeocodeCheckoutAddress(
+                deliveryLat[0],
+                deliveryLng[0],
+                streetInput,
+                provinceSpinner,
+                citySpinner,
+                barangaySpinner,
+                postalInput,
+                mapStatus
+            );
+        };
+
+        Location cached = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        if (cached == null) {
+            cached = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+        }
+        if (cached != null && System.currentTimeMillis() - cached.getTime() < 120000) {
+            lastCheckoutGpsLat = cached.getLatitude();
+            lastCheckoutGpsLng = cached.getLongitude();
+            applyLocation.run();
+            return;
+        }
+
+        final LocationListener[] listenerHolder = new LocationListener[1];
+        listenerHolder[0] = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                locationManager.removeUpdates(this);
+                lastCheckoutGpsLat = location.getLatitude();
+                lastCheckoutGpsLng = location.getLongitude();
+                mainHandler.post(applyLocation);
+            }
+        };
+
+        mainHandler.postDelayed(() -> {
+            if (listenerHolder[0] != null) {
+                locationManager.removeUpdates(listenerHolder[0]);
+            }
+            if (!mapPinned[0]) {
+                mapStatus.setText("Unable to get GPS. Tap the map to pin manually.");
+            }
+        }, 15000);
+
+        try {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                0L,
+                0f,
+                listenerHolder[0],
+                Looper.getMainLooper()
+            );
+        } catch (Exception e) {
+            try {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    0L,
+                    0f,
+                    listenerHolder[0],
+                    Looper.getMainLooper()
+                );
+            } catch (Exception ex) {
+                mapStatus.setText("Unable to access GPS. Pin location on the map.");
+            }
+        }
+    }
+
+    private double lastCheckoutGpsLat = 6.1164;
+    private double lastCheckoutGpsLng = 125.1716;
+
+    private void reverseGeocodeCheckoutAddress(
+        double lat,
+        double lng,
+        EditText streetInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner,
+        EditText postalInput,
+        TextView mapStatus
+    ) {
+        mapStatus.setText("Looking up address for your location...");
+        networkExecutor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String urlText = "https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat="
+                    + URLEncoder.encode(String.format(Locale.US, "%.6f", lat), "UTF-8")
+                    + "&lon=" + URLEncoder.encode(String.format(Locale.US, "%.6f", lng), "UTF-8");
+                URL url = new URL(urlText);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setRequestProperty("User-Agent", "VapeShopMobile/1.0 (checkout)");
+
+                int code = connection.getResponseCode();
+                InputStream stream = code >= 200 && code < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+                String body = readStream(stream);
+                JSONObject root = new JSONObject(body);
+                JSONObject addr = root.optJSONObject("address");
+                if (addr == null) {
+                    throw new Exception("No address in response");
+                }
+
+                String house = addr.optString("house_number", "");
+                String road = addr.optString("road", "");
+                String street = (house + " " + road).trim();
+                if (street.isEmpty()) {
+                    street = addr.optString("pedestrian", "");
+                }
+                if (street.isEmpty()) {
+                    street = addr.optString("residential", "");
+                }
+
+                String city = firstNonEmpty(
+                    addr.optString("city", ""),
+                    addr.optString("town", ""),
+                    addr.optString("municipality", ""),
+                    addr.optString("county", "")
+                );
+                String province = addr.optString("state", "");
+                if (province.isEmpty()) {
+                    province = addr.optString("region", "");
+                }
+                String postal = addr.optString("postcode", "");
+
+                List<String> barangayCandidates = new ArrayList<>();
+                for (String key : new String[]{"suburb", "neighbourhood", "village", "hamlet", "quarter", "city_district"}) {
+                    String value = addr.optString(key, "").trim();
+                    if (!value.isEmpty()) {
+                        barangayCandidates.add(value);
+                    }
+                }
+
+                final String streetFinal = street;
+                final String cityFinal = city;
+                final String provinceFinal = province;
+                final String postalFinal = postal;
+                final List<String> barangayCandidatesFinal = barangayCandidates;
+
+                mainHandler.post(() -> {
+                    if (!streetFinal.isEmpty()) {
+                        streetInput.setText(streetFinal);
+                    }
+                    if (!provinceFinal.isEmpty()) {
+                        setCheckoutSpinnerValue(provinceSpinner, provinceFinal);
+                    }
+                    if (!cityFinal.isEmpty()) {
+                        setCheckoutSpinnerValue(citySpinner, cityFinal);
+                        updateCheckoutBarangays(citySpinner, barangaySpinner, getSpinnerValue(citySpinner));
+                    }
+                    matchBarangaySpinner(barangaySpinner, barangayCandidatesFinal);
+                    if (!postalFinal.isEmpty()) {
+                        postalInput.setText(postalFinal);
+                    }
+                    mapStatus.setText("Location captured and address autofilled.");
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> mapStatus.setText("Location captured. Address autofill unavailable — edit fields manually."));
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        });
+    }
+
+    private String firstNonEmpty(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private String getSpinnerValue(Spinner spinner) {
+        if (spinner.getSelectedItem() == null) {
+            return "";
+        }
+        return spinner.getSelectedItem().toString().trim();
+    }
+
+    private String normalizeLocationText(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.US)
+            .replace(".", "")
+            .replace("brgy", "")
+            .replace("barangay", "")
+            .replace("city", "")
+            .replace("poblacion", "pob")
+            .replaceAll("\\s+", " ")
+            .trim();
+    }
+
+    private void setCheckoutSpinnerValue(Spinner spinner, String targetValue) {
+        if (spinner == null || targetValue == null || targetValue.isEmpty()) {
+            return;
+        }
+        String targetNorm = normalizeLocationText(targetValue);
+        ArrayAdapter<?> adapter = (ArrayAdapter<?>) spinner.getAdapter();
+        if (adapter == null) {
+            return;
+        }
+        int partialIndex = -1;
+        for (int i = 0; i < adapter.getCount(); i++) {
+            String option = adapter.getItem(i).toString();
+            String optNorm = normalizeLocationText(option);
+            if (optNorm.equals(targetNorm)) {
+                spinner.setSelection(i);
+                return;
+            }
+            if (partialIndex < 0 && (optNorm.contains(targetNorm) || targetNorm.contains(optNorm))) {
+                partialIndex = i;
+            }
+        }
+        if (partialIndex >= 0) {
+            spinner.setSelection(partialIndex);
+            return;
+        }
+        List<String> items = new ArrayList<>();
+        for (int i = 0; i < adapter.getCount(); i++) {
+            items.add(adapter.getItem(i).toString());
+        }
+        items.add(targetValue);
+        bindCheckoutSpinner(spinner, items);
+        spinner.setSelection(items.size() - 1);
+    }
+
+    private void matchBarangaySpinner(Spinner barangaySpinner, List<String> candidates) {
+        if (barangaySpinner == null || candidates == null || candidates.isEmpty()) {
+            return;
+        }
+        ArrayAdapter<?> adapter = (ArrayAdapter<?>) barangaySpinner.getAdapter();
+        if (adapter == null) {
+            return;
+        }
+        List<String> options = new ArrayList<>();
+        for (int i = 0; i < adapter.getCount(); i++) {
+            options.add(adapter.getItem(i).toString());
+        }
+        for (String candidate : candidates) {
+            String targetNorm = normalizeLocationText(candidate);
+            if (targetNorm.isEmpty()) {
+                continue;
+            }
+            for (int i = 0; i < options.size(); i++) {
+                String optNorm = normalizeLocationText(options.get(i));
+                if (optNorm.equals(targetNorm) || optNorm.contains(targetNorm) || targetNorm.contains(optNorm)) {
+                    barangaySpinner.setSelection(i);
+                    return;
+                }
+            }
+        }
+    }
+
+    private void initCheckoutAddressMappings() {
+        checkoutProvinceCityMap.clear();
+        checkoutCityBarangayMap.clear();
+        checkoutProvinceCityMap.put("South Cotabato", Arrays.asList("General Santos City"));
+        checkoutCityBarangayMap.put("General Santos City", Arrays.asList(
+            "Apopong", "Baluan", "Batomelong", "Buayan", "Bula", "Calumpang",
+            "City Heights", "Conel", "Dadiangas East", "Dadiangas North",
+            "Dadiangas South", "Dadiangas West", "Fatima", "Katangawan",
+            "Labangal", "Lagao", "Ligaya", "Mabuhay", "Olympog", "San Isidro",
+            "San Jose", "Siguel", "Sinawal", "Tambler", "Tinagacan", "Upper Labay"
+        ));
+    }
+
+    private void setupCheckoutAddressSpinners(Spinner provinceSpinner, Spinner citySpinner, Spinner barangaySpinner) {
+        bindCheckoutSpinner(provinceSpinner, Arrays.asList("South Cotabato"));
+        provinceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String province = parent.getItemAtPosition(position).toString();
+                List<String> cities = checkoutProvinceCityMap.get(province);
+                if (cities == null || cities.isEmpty()) {
+                    cities = Arrays.asList("General Santos City");
+                }
+                bindCheckoutSpinner(citySpinner, cities);
+                citySpinner.setSelection(0);
+                updateCheckoutBarangays(citySpinner, barangaySpinner, cities.get(0));
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        citySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                updateCheckoutBarangays(citySpinner, barangaySpinner, parent.getItemAtPosition(position).toString());
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        if (provinceSpinner.getAdapter() != null && provinceSpinner.getAdapter().getCount() > 0) {
+            provinceSpinner.setSelection(0);
+        }
+    }
+
+    private void updateCheckoutBarangays(Spinner citySpinner, Spinner barangaySpinner, String city) {
+        List<String> barangays = checkoutCityBarangayMap.get(city);
+        if (barangays == null || barangays.isEmpty()) {
+            barangays = Arrays.asList("Poblacion");
+        }
+        bindCheckoutSpinner(barangaySpinner, barangays);
+        barangaySpinner.setSelection(0);
+    }
+
+    private void bindCheckoutSpinner(Spinner spinner, List<String> options) {
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+            this,
+            R.layout.item_spinner_selected_small,
+            options
+        );
+        adapter.setDropDownViewResource(R.layout.item_spinner_dropdown_small);
+        spinner.setAdapter(adapter);
+    }
+
+    public void setupDeliveryMapWebView(
+        WebView mapWebView,
+        TextView statusView,
+        double[] lat,
+        double[] lng,
+        boolean[] pinned
+    ) {
+        setupDeliveryMapWebView(mapWebView, statusView, lat, lng, pinned, null);
+    }
+
+    public void setupDeliveryMapWebView(
+        WebView mapWebView,
+        TextView statusView,
+        double[] lat,
+        double[] lng,
+        boolean[] pinned,
+        OnMapLocationListener listener
+    ) {
+        MapPinBridge mapBridge = new MapPinBridge(lat, lng, pinned, statusView, listener);
+        WebSettings webSettings = mapWebView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setGeolocationEnabled(true);
+        mapWebView.addJavascriptInterface(mapBridge, "AndroidCheckoutMap");
+        mapWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onGeolocationPermissionsShowPrompt(
+                String origin,
+                GeolocationPermissions.Callback callback
+            ) {
+                if (callback != null) {
+                    callback.invoke(origin, true, false);
+                }
+            }
+        });
+        mapWebView.loadUrl("file:///android_asset/checkout_map.html");
+    }
+
+    private static class MapPinBridge {
+        private final double[] lat;
+        private final double[] lng;
+        private final boolean[] pinned;
+        private final TextView status;
+        private final Handler handler;
+        private final OnMapLocationListener listener;
+
+        MapPinBridge(double[] lat, double[] lng, boolean[] pinned, TextView status, OnMapLocationListener listener) {
+            this.lat = lat;
+            this.lng = lng;
+            this.pinned = pinned;
+            this.status = status;
+            this.handler = new Handler(Looper.getMainLooper());
+            this.listener = listener;
+        }
+
+        @JavascriptInterface
+        public void onLocationPicked(double latitude, double longitude) {
+            handler.post(() -> {
+                lat[0] = latitude;
+                lng[0] = longitude;
+                pinned[0] = true;
+                if (status != null) {
+                    status.setText("Location captured. Drag the pin to adjust.");
+                }
+                if (listener != null) {
+                    listener.onLocationPicked(latitude, longitude);
+                }
+            });
+        }
+    }
+
+    public void checkoutOnServer(Map<String, String> params, SimpleCallback callback) {
+        if (!params.containsKey("email") || params.get("email") == null || params.get("email").isEmpty()) {
+            params.put("email", getRegisteredEmail());
+        }
         apiPost("checkout.php", params, new SimpleCallback() {
             @Override
             public void onSuccess(String responseBody) {
@@ -1260,7 +2170,8 @@ public class MainActivity extends AppCompatActivity {
                             String shippingAddress = shipment != null ? shipment.optString("shipping_address", "") : "";
                             String shippingContact = shipment != null ? shipment.optString("contact_number", "") : "";
                             String deliveryStatus = order.optString("delivery_status", order.optString("status", "to_pay"));
-                            orders.add(new OrderInfo(
+                            OrderInfo info = new OrderInfo(
+                                order.optInt("order_id", 0),
                                 order.optString("reference_number", ""),
                                 order.optString("order_date", ""),
                                 deliveryStatus,
@@ -1268,7 +2179,23 @@ public class MainActivity extends AppCompatActivity {
                                 order.optDouble("total_amount", 0),
                                 shippingAddress,
                                 shippingContact
-                            ));
+                            );
+                            info.refundRequested = order.optBoolean("refund_requested", false);
+                            info.canRequestReturn = order.optBoolean("can_request_return", false);
+                            info.canPay = order.optBoolean("can_pay", false);
+                            info.canCancel = order.optBoolean("can_cancel", false);
+                            info.canConfirmReceived = order.optBoolean("can_confirm_received", false);
+                            info.paymentStatus = order.optString("payment_status", "");
+                            info.refundReason = order.optString("refund_reason", "");
+                            String payoutMethod = order.optString("refund_method", "gcash");
+                            info.refundMethod = payoutMethod.isEmpty() ? "gcash" : payoutMethod;
+                            info.refundAccount = order.optString("refund_account", "");
+                            info.returnCode = order.optString("return_token", "");
+                            info.qrPayload = order.optString("qr_payload", "");
+                            if (info.qrPayload.isEmpty() && !info.returnCode.isEmpty()) {
+                                info.qrPayload = info.returnCode;
+                            }
+                            orders.add(info);
                         }
                     }
                     callback.onSuccess(orders);
@@ -1285,22 +2212,124 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void fetchSupportMessagesFromServer(MessagesCallback callback) {
+        fetchSupportMessagesFromServer(true, callback);
+    }
+
+    public void fetchSupportMessagesFromServer(boolean markRead, MessagesCallback callback) {
         if (!isUserLoggedIn()) {
             callback.onError("Please login to open messages");
             return;
         }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
-        String[] endpoints = {
-            "support_messages_list.php",
-            "support_chat_list.php",
-            "messages_list.php",
-            "chat_list.php"
-        };
-        tryFetchMessagesEndpoint(endpoints, 0, params, callback);
+        params.put("mark_read", markRead ? "1" : "0");
+        apiPost("support_messages_list.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Unable to load messages"));
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    if (data != null) {
+                        supportUnreadCount = Math.max(0, data.optInt("unread_count", 0));
+                        refreshMessageBadges();
+                    }
+                    List<SupportMessage> messages = parseSupportMessages(
+                        data != null ? data.toString() : responseBody
+                    );
+                    callback.onSuccess(messages);
+                } catch (Exception e) {
+                    callback.onError("Invalid message response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
     }
 
-    public void sendSupportMessageToServer(String message, String relatedOrderReference, String relatedProduct, SimpleCallback callback) {
+    public void pollSupportUnreadCount() {
+        if (!isUserLoggedIn()) {
+            return;
+        }
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("support_messages_unread.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    supportUnreadCount = data != null
+                        ? Math.max(0, data.optInt("unread_count", 0))
+                        : 0;
+                    refreshMessageBadges();
+                } catch (Exception ignored) {
+                    // keep previous badge count
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                // silent for background polling
+            }
+        });
+    }
+
+    public void startMessageBadgePolling() {
+        if (!isUserLoggedIn() || !isCustomerRole()) {
+            return;
+        }
+        if (messageBadgePollingActive) {
+            return;
+        }
+        messageBadgePollingActive = true;
+        mainHandler.removeCallbacks(messageBadgePollRunnable);
+        mainHandler.post(messageBadgePollRunnable);
+    }
+
+    public void stopMessageBadgePolling() {
+        messageBadgePollingActive = false;
+        mainHandler.removeCallbacks(messageBadgePollRunnable);
+    }
+
+    public void refreshMessageBadges() {
+        mainHandler.post(() -> {
+            applyUnreadBadge(findViewById(R.id.nav_messages_badge));
+            Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (current != null && current.getView() != null) {
+                applyUnreadBadge(current.getView().findViewById(R.id.messages_unread_badge));
+            }
+        });
+    }
+
+    private void applyUnreadBadge(TextView badge) {
+        if (badge == null) {
+            return;
+        }
+        if (supportUnreadCount > 0) {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(supportUnreadCount > 99 ? "99+" : String.valueOf(supportUnreadCount));
+        } else {
+            badge.setVisibility(View.GONE);
+        }
+    }
+
+    public void sendSupportMessageToServer(
+        String message,
+        int relatedOrderId,
+        String relatedOrderReference,
+        String relatedProduct,
+        SimpleCallback callback
+    ) {
         if (!isUserLoggedIn()) {
             callback.onError("Please login to send message");
             return;
@@ -1308,35 +2337,49 @@ public class MainActivity extends AppCompatActivity {
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
         params.put("message", message);
-        params.put("sender_role", "customer");
-        params.put("role", "customer");
-        params.put("sender", "customer");
-        params.put("content", message);
+        if (relatedOrderId > 0) {
+            params.put("order_id", String.valueOf(relatedOrderId));
+        }
         if (relatedOrderReference != null && !relatedOrderReference.trim().isEmpty()) {
             params.put("related_order", relatedOrderReference);
             params.put("order_reference", relatedOrderReference);
-            params.put("reference_number", relatedOrderReference);
         }
         if (relatedProduct != null && !relatedProduct.trim().isEmpty()) {
             params.put("related_product", relatedProduct);
-            params.put("product_name", relatedProduct);
-            params.put("subject", relatedProduct);
         }
-        String[] endpoints = {
-            "support_messages_send.php",
-            "support_chat_send.php",
-            "messages_send.php",
-            "chat_send.php"
-        };
-        trySendMessageEndpoint(endpoints, 0, params, callback);
+        String lower = message.toLowerCase(Locale.US);
+        if (lower.contains("human") || lower.contains("admin") || lower.contains("seller")) {
+            params.put("support_target", "human");
+        }
+        apiPost("support_messages_send.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Unable to send message"));
+                        return;
+                    }
+                    callback.onSuccess(root.optString("message", "Message sent."));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
     }
 
     public void submitReturnRefundToServer(
+        int orderId,
         String orderReference,
         String reason,
-        String refundMethod,
-        String refundAccount,
-        String returnCode,
+        String payoutMethod,
+        String payoutAccount,
+        String payoutAccountName,
         List<Uri> attachments,
         SimpleCallback callback
     ) {
@@ -1348,24 +2391,398 @@ public class MainActivity extends AppCompatActivity {
         params.put("email", getRegisteredEmail());
         params.put("request_type", "return_and_refund");
         params.put("reason", reason);
-        params.put("refund_method", refundMethod);
-        params.put("refund_account", refundAccount);
-        params.put("return_code", returnCode);
-        params.put("order_reference", orderReference == null ? "" : orderReference);
-        params.put("reference_number", orderReference == null ? "" : orderReference);
-        params.put("related_order", orderReference == null ? "" : orderReference);
-        params.put("status", "requested");
-        params.put("evidence_count", String.valueOf(attachments == null ? 0 : attachments.size()));
-        params.put("evidence_names", buildAttachmentNames(attachments));
+        params.put("payout_method", payoutMethod);
+        params.put("payout_account", payoutAccount);
+        params.put("payout_account_name", payoutAccountName);
+        if (orderId > 0) {
+            params.put("order_id", String.valueOf(orderId));
+        }
+        if (orderReference != null && !orderReference.isEmpty()) {
+            params.put("order_reference", orderReference);
+            params.put("reference_number", orderReference);
+        }
+        apiPostMultipart("return_refund_request.php", params, attachments, "return_evidence[]", new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Return/refund request failed"));
+                        return;
+                    }
+                    callback.onSuccess(root.optString("message", "Return request submitted."));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
 
-        String[] endpoints = {
-            "return_refund_request.php",
-            "returns_request.php",
-            "refund_request.php",
-            "returns_submit.php",
-            "return_refund_submit.php"
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    public void performCustomerOrderAction(int orderId, String action, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("action", action);
+        apiPost("order_action.php", params, wrapJsonCallback(callback));
+    }
+
+    public void fetchOrderTracking(int orderId, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        apiPost("order_tracking.php", params, callback);
+    }
+
+    private static final long LIVE_TRACKING_POLL_MS = 3000L;
+    private int liveTrackingOrderId = 0;
+    private WebView liveTrackingWebView;
+    private TextView liveTrackingStatusView;
+    private TextView liveTrackingMetaView;
+
+    interface OrderDetailsUiUpdater {
+        void onOrderStatusUpdated(String deliveryStatus, boolean canPay, boolean canCancel, boolean canConfirmReceived);
+    }
+
+    private OrderDetailsUiUpdater orderDetailsUiUpdater;
+
+    public void setOrderDetailsUiUpdater(OrderDetailsUiUpdater updater) {
+        orderDetailsUiUpdater = updater;
+    }
+
+    public void clearOrderDetailsUiUpdater() {
+        orderDetailsUiUpdater = null;
+    }
+
+    public void refreshOrderDetailsFromServer(int orderId) {
+        if (orderId <= 0 || !isUserLoggedIn()) {
+            return;
+        }
+        fetchOrderTracking(orderId, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                applyLiveTrackingResponse(responseBody);
+                notifyOrderDetailsUiFromTracking(responseBody);
+            }
+
+            @Override
+            public void onError(String message) {
+                // keep current UI
+            }
+        });
+    }
+
+    private void notifyOrderDetailsUiFromTracking(String responseBody) {
+        if (orderDetailsUiUpdater == null) {
+            return;
+        }
+        try {
+            JSONObject root = new JSONObject(responseBody);
+            if (!root.optBoolean("success", false)) {
+                return;
+            }
+            JSONObject data = root.optJSONObject("data");
+            JSONObject order = data != null ? data.optJSONObject("order") : null;
+            if (order == null) {
+                return;
+            }
+            String deliveryStatus = order.optString("delivery_status", order.optString("status", "to_pay"));
+            boolean canPay = order.optBoolean("can_pay", false);
+            boolean canCancel = order.optBoolean("can_cancel", false);
+            boolean canConfirm = order.optBoolean("can_confirm_received", false)
+                || "delivered".equalsIgnoreCase(deliveryStatus);
+            mainHandler.post(() -> orderDetailsUiUpdater.onOrderStatusUpdated(
+                deliveryStatus,
+                canPay,
+                canCancel,
+                canConfirm
+            ));
+        } catch (Exception ignored) {
+            // keep current UI
+        }
+    }
+    private final Runnable liveTrackingPollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            pollLiveTrackingOnce();
+        }
+    };
+
+    public static boolean shouldShowLiveTracking(String deliveryStatus) {
+        if (deliveryStatus == null || deliveryStatus.isEmpty()) {
+            return false;
+        }
+        String status = deliveryStatus.toLowerCase(Locale.US);
+        return Arrays.asList(
+            "to_ship",
+            "ready_for_pickup",
+            "accepted_by_rider",
+            "delivered_to_rider",
+            "to_receive",
+            "delivered",
+            "completed"
+        ).contains(status);
+    }
+
+    public void setupLiveTrackingWebView(WebView webView) {
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        webView.loadUrl("file:///android_asset/live_tracking_map.html");
+    }
+
+    public void startLiveTracking(int orderId, WebView webView, TextView statusView, TextView metaView) {
+        stopLiveTracking();
+        if (orderId <= 0 || webView == null) {
+            return;
+        }
+        liveTrackingOrderId = orderId;
+        liveTrackingWebView = webView;
+        liveTrackingStatusView = statusView;
+        liveTrackingMetaView = metaView;
+        if (statusView != null) {
+            statusView.setText("Loading live map...");
+        }
+        if (metaView != null) {
+            metaView.setText("Distance: — | ETA: —");
+        }
+        setupLiveTrackingWebView(webView);
+        mainHandler.postDelayed(liveTrackingPollRunnable, 900);
+    }
+
+    public void stopLiveTracking() {
+        liveTrackingOrderId = 0;
+        liveTrackingWebView = null;
+        liveTrackingStatusView = null;
+        liveTrackingMetaView = null;
+        mainHandler.removeCallbacks(liveTrackingPollRunnable);
+    }
+
+    public void refreshLiveTrackingNow() {
+        if (liveTrackingOrderId > 0) {
+            pollLiveTrackingOnce();
+        }
+    }
+
+    private void pollLiveTrackingOnce() {
+        final int orderId = liveTrackingOrderId;
+        if (orderId <= 0) {
+            return;
+        }
+        fetchOrderTracking(orderId, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                applyLiveTrackingResponse(responseBody);
+                scheduleNextLiveTrackingPoll(orderId);
+            }
+
+            @Override
+            public void onError(String message) {
+                if (liveTrackingStatusView != null && liveTrackingOrderId == orderId) {
+                    liveTrackingStatusView.setText(message);
+                }
+                scheduleNextLiveTrackingPoll(orderId);
+            }
+        });
+    }
+
+    private void scheduleNextLiveTrackingPoll(int orderId) {
+        if (liveTrackingOrderId == orderId && orderId > 0) {
+            mainHandler.postDelayed(liveTrackingPollRunnable, LIVE_TRACKING_POLL_MS);
+        }
+    }
+
+    private boolean hasTrackingCoord(JSONObject tracking, String latKey, String lngKey) {
+        if (tracking == null || tracking.isNull(latKey) || tracking.isNull(lngKey)) {
+            return false;
+        }
+        double lat = tracking.optDouble(latKey, Double.NaN);
+        double lng = tracking.optDouble(lngKey, Double.NaN);
+        return !Double.isNaN(lat) && !Double.isNaN(lng) && !(lat == 0.0 && lng == 0.0);
+    }
+
+    private void applyLiveTrackingResponse(String responseBody) {
+        if (liveTrackingWebView == null) {
+            return;
+        }
+        try {
+            JSONObject root = new JSONObject(responseBody);
+            if (!root.optBoolean("success", false)) {
+                if (liveTrackingStatusView != null) {
+                    liveTrackingStatusView.setText(root.optString("message", "Tracking unavailable."));
+                }
+                return;
+            }
+            JSONObject data = root.optJSONObject("data");
+            JSONObject tracking = data != null ? data.optJSONObject("tracking") : root.optJSONObject("tracking");
+            if (tracking == null) {
+                if (liveTrackingStatusView != null) {
+                    liveTrackingStatusView.setText("Tracking unavailable.");
+                }
+                return;
+            }
+
+            final String trackingJson = tracking.toString();
+            liveTrackingWebView.post(() ->
+                liveTrackingWebView.evaluateJavascript("updateTracking(" + trackingJson + ")", null)
+            );
+
+            String status = tracking.optString("status", "");
+            String phase = tracking.optString("phase", "");
+            JSONObject rider = tracking.optJSONObject("rider");
+            String riderName = rider != null ? rider.optString("name", "Assigned rider") : "Assigned rider";
+
+            boolean hasRiderGps = hasTrackingCoord(tracking, "rider_latitude", "rider_longitude");
+            boolean hasDeliveryGps = hasTrackingCoord(tracking, "delivery_latitude", "delivery_longitude");
+
+            if (liveTrackingStatusView != null) {
+                if ("to_receive".equalsIgnoreCase(status) && hasRiderGps) {
+                    liveTrackingStatusView.setText("Out for Delivery | Rider: " + riderName);
+                } else if ("pickup".equals(phase)) {
+                    liveTrackingStatusView.setText("Rider on the way to store for pickup");
+                } else if (hasDeliveryGps) {
+                    String addr = tracking.optString("delivery_address", "");
+                    liveTrackingStatusView.setText(addr.isEmpty()
+                        ? "Your delivery location is pinned on the map."
+                        : "Delivery Address: " + addr);
+                } else {
+                    liveTrackingStatusView.setText("Status: " + status.replace('_', ' '));
+                }
+            }
+
+            if (liveTrackingMetaView != null) {
+                if (hasRiderGps && hasDeliveryGps
+                    && !tracking.isNull("distance_km")
+                    && !tracking.isNull("eta_minutes")) {
+                    liveTrackingMetaView.setText(String.format(
+                        Locale.US,
+                        "Distance: %.2f km | ETA: ~%d min",
+                        tracking.optDouble("distance_km", 0),
+                        tracking.optInt("eta_minutes", 0)
+                    ));
+                } else if ("to_receive".equalsIgnoreCase(status) && hasDeliveryGps) {
+                    liveTrackingMetaView.setText("Waiting for live rider GPS location...");
+                } else if (hasDeliveryGps) {
+                    liveTrackingMetaView.setText("Store, your address, and rider appear on the map when available.");
+                } else {
+                    liveTrackingMetaView.setText("Distance: — | ETA: —");
+                }
+            }
+
+            notifyOrderDetailsUiFromTracking(responseBody);
+        } catch (Exception e) {
+            if (liveTrackingStatusView != null) {
+                liveTrackingStatusView.setText("Unable to load tracking.");
+            }
+        }
+    }
+
+    public void fetchAdminOrders(SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("admin_orders_list.php", params, callback);
+    }
+
+    public void fetchRidersList(SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("admin_riders_list.php", params, callback);
+    }
+
+    public void adminAssignRider(int orderId, int riderId, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("rider_id", String.valueOf(riderId));
+        apiPost("admin_assign_rider.php", params, wrapJsonCallback(callback));
+    }
+
+    public void adminUpdateDeliveryStatus(int orderId, String status, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("status", status);
+        apiPost("admin_update_delivery_status.php", params, wrapJsonCallback(callback));
+    }
+
+    public void fetchRiderOrders(String listType, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("list", listType);
+        apiPost("rider_orders_list.php", params, callback);
+    }
+
+    public void riderUpdateStatus(int orderId, String status, Map<String, String> extra, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("status", status);
+        if (extra != null) {
+            params.putAll(extra);
+        }
+        apiPost("rider_update_status.php", params, wrapJsonCallback(callback));
+    }
+
+    public void openDeliveryProofPicker(int orderId) {
+        pendingProofOrderId = orderId;
+        deliveryProofPickerLauncher.launch("image/*");
+    }
+
+    public void submitRiderProofToServer(int orderId, Uri proofUri, SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("final_rider_latitude", String.format(Locale.US, "%.6f", getRegisteredLatitude()));
+        params.put("final_rider_longitude", String.format(Locale.US, "%.6f", getRegisteredLongitude()));
+        List<Uri> files = new ArrayList<>();
+        files.add(proofUri);
+        apiPostMultipart("rider_submit_proof.php", params, files, "delivery_proof", new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Proof upload failed"));
+                        return;
+                    }
+                    callback.onSuccess(root.optString("message", "Delivery proof submitted."));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    private SimpleCallback wrapJsonCallback(SimpleCallback callback) {
+        return new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Request failed"));
+                        return;
+                    }
+                    callback.onSuccess(root.optString("message", "Success"));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
         };
-        trySubmitReturnEndpoint(endpoints, 0, params, callback);
     }
 
     public void submitReviewToServer(
@@ -1716,18 +3133,66 @@ public class MainActivity extends AppCompatActivity {
                 item.optString("sender_role", item.optString("sender", "Support")));
             String body = item.optString("message",
                 item.optString("content", item.optString("body", item.optString("text", ""))));
-            String createdAt = item.optString("created_at",
-                item.optString("sent_at", item.optString("timestamp", item.optString("date", ""))));
+            String createdAt = item.optString("created_label",
+                item.optString("created_at",
+                    item.optString("sent_at", item.optString("timestamp", item.optString("date", "")))));
+            int messageId = item.optInt("id", 0);
             String role = item.optString("sender_role",
                 item.optString("role", item.optString("type", ""))).toLowerCase(Locale.US);
+            String messageType = item.optString("message_type", "text").toLowerCase(Locale.US);
             String senderEmail = item.optString("sender_email", item.optString("email", "")).toLowerCase(Locale.US);
-            boolean fromCustomer = role.contains("customer")
-                || role.contains("user")
-                || senderEmail.equals(customerEmail);
+            boolean fromCustomer = "customer".equals(role)
+                || (role.isEmpty() && senderEmail.equals(customerEmail));
+            if ("system".equals(messageType)) {
+                role = "system";
+                sender = "System";
+                fromCustomer = false;
+            } else if ("chatbot".equals(role) || "bot".equals(role)) {
+                role = "chatbot";
+                sender = "Chatbot";
+                fromCustomer = false;
+            } else if ("admin".equals(role) || "staff".equals(role)) {
+                role = "admin";
+                sender = "Admin";
+                fromCustomer = false;
+            } else if ("rider".equals(role)) {
+                role = "rider";
+                sender = "Rider";
+                fromCustomer = false;
+            } else if (fromCustomer) {
+                role = "customer";
+                sender = "You";
+            } else if (sender.isEmpty()) {
+                sender = "Admin";
+                role = "admin";
+            }
             if (body != null && !body.trim().isEmpty()) {
-                messages.add(new SupportMessage(sender, body, createdAt, fromCustomer));
+                messages.add(new SupportMessage(
+                    messageId,
+                    sender,
+                    body,
+                    createdAt,
+                    role,
+                    messageType,
+                    fromCustomer
+                ));
             }
         }
+        Collections.sort(messages, new Comparator<SupportMessage>() {
+            @Override
+            public int compare(SupportMessage left, SupportMessage right) {
+                if (left.id > 0 && right.id > 0 && left.id != right.id) {
+                    return Integer.compare(left.id, right.id);
+                }
+                String leftTime = left.createdAt == null ? "" : left.createdAt;
+                String rightTime = right.createdAt == null ? "" : right.createdAt;
+                int byTime = leftTime.compareTo(rightTime);
+                if (byTime != 0) {
+                    return byTime;
+                }
+                return Integer.compare(left.id, right.id);
+            }
+        });
         return messages;
     }
 
@@ -1798,6 +3263,173 @@ public class MainActivity extends AppCompatActivity {
             final String finalLastUrlTried = lastUrlTried;
             mainHandler.post(() -> callback.onError("Cannot connect to server. URL: " + finalLastUrlTried + " | " + finalLastError));
         });
+    }
+
+    private void apiPostMultipart(
+        String endpoint,
+        Map<String, String> params,
+        List<Uri> fileUris,
+        String fileFieldName,
+        SimpleCallback callback
+    ) {
+        networkExecutor.execute(() -> {
+            String lastError = "";
+            String lastUrlTried = "";
+            for (String baseUrl : API_BASE_URLS) {
+                HttpURLConnection connection = null;
+                try {
+                    lastUrlTried = baseUrl + endpoint;
+                    String boundary = "----VapeShopBoundary" + System.currentTimeMillis();
+                    URL url = new URL(lastUrlTried);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setConnectTimeout(60000);
+                    connection.setReadTimeout(60000);
+                    connection.setDoOutput(true);
+                    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                    connection.setRequestProperty("Accept", "application/json");
+
+                    ByteArrayOutputStream bodyStream = new ByteArrayOutputStream();
+                    if (params != null) {
+                        for (Map.Entry<String, String> entry : params.entrySet()) {
+                            writeMultipartField(bodyStream, boundary, entry.getKey(), entry.getValue());
+                        }
+                    }
+                    if (fileUris != null) {
+                        int fileIndex = 0;
+                        for (Uri uri : fileUris) {
+                            if (uri == null) {
+                                continue;
+                            }
+                            byte[] fileBytes = readUriBytes(uri);
+                            if (fileBytes == null || fileBytes.length == 0) {
+                                continue;
+                            }
+                            String fileName = resolveUriFileName(uri, fileIndex);
+                            String mimeType = guessMimeType(fileName);
+                            writeMultipartFile(
+                                bodyStream,
+                                boundary,
+                                fileFieldName == null ? "return_evidence[]" : fileFieldName,
+                                fileName,
+                                mimeType,
+                                fileBytes
+                            );
+                            fileIndex++;
+                        }
+                    }
+                    bodyStream.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+                    try (OutputStream os = connection.getOutputStream()) {
+                        os.write(bodyStream.toByteArray());
+                    }
+
+                    int code = connection.getResponseCode();
+                    InputStream stream = code >= 200 && code < 300
+                        ? connection.getInputStream()
+                        : connection.getErrorStream();
+                    String response = readStream(stream);
+                    if (response == null || response.isEmpty()) {
+                        response = "{\"success\":false,\"message\":\"Empty server response\"}";
+                    }
+                    final String responseFinal = response;
+                    mainHandler.post(() -> callback.onSuccess(responseFinal));
+                    return;
+                } catch (Exception e) {
+                    lastError = e.getMessage() == null ? "Unknown network error" : e.getMessage();
+                } finally {
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
+                }
+            }
+            final String finalLastError = lastError;
+            final String finalLastUrlTried = lastUrlTried;
+            mainHandler.post(() -> callback.onError("Cannot connect to server. URL: " + finalLastUrlTried + " | " + finalLastError));
+        });
+    }
+
+    private void writeMultipartField(ByteArrayOutputStream stream, String boundary, String name, String value) throws Exception {
+        stream.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        stream.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        stream.write((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
+        stream.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writeMultipartFile(
+        ByteArrayOutputStream stream,
+        String boundary,
+        String fieldName,
+        String fileName,
+        String mimeType,
+        byte[] fileBytes
+    ) throws Exception {
+        stream.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        stream.write(
+            ("Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + fileName + "\"\r\n")
+                .getBytes(StandardCharsets.UTF_8)
+        );
+        stream.write(("Content-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        stream.write(fileBytes);
+        stream.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private byte[] readUriBytes(Uri uri) {
+        try (InputStream inputStream = getContentResolver().openInputStream(uri)) {
+            if (inputStream == null) {
+                return null;
+            }
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] data = new byte[8192];
+            int read;
+            while ((read = inputStream.read(data)) != -1) {
+                buffer.write(data, 0, read);
+            }
+            return buffer.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String resolveUriFileName(Uri uri, int index) {
+        String name = null;
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (nameIndex >= 0) {
+                    name = cursor.getString(nameIndex);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (name == null || name.trim().isEmpty()) {
+            String segment = uri.getLastPathSegment();
+            name = segment == null ? ("evidence_" + index + ".jpg") : segment;
+        }
+        return name;
+    }
+
+    private String guessMimeType(String fileName) {
+        String lower = fileName.toLowerCase(Locale.US);
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (lower.endsWith(".mp4")) {
+            return "video/mp4";
+        }
+        if (lower.endsWith(".webm")) {
+            return "video/webm";
+        }
+        if (lower.endsWith(".mov")) {
+            return "video/quicktime";
+        }
+        return "image/jpeg";
     }
 
     private void apiPostCustomerModule(String endpoint, Map<String, String> params, SimpleCallback callback) {
@@ -2000,8 +3632,15 @@ public class MainActivity extends AppCompatActivity {
         return email.equalsIgnoreCase(savedEmail) && password.equals(savedPassword);
     }
 
-    private void onLogout() {
+    public void onLogout() {
+        stopLiveTracking();
+        stopMessageBadgePolling();
+        supportUnreadCount = 0;
+        refreshMessageBadges();
         isLoggedIn = false;
+        currentUserRole = "customer";
+        currentUserId = 0;
+        setRoleNavigationVisible(true);
         loadFragment(new LoginFragment());
         Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
     }
@@ -2057,6 +3696,9 @@ public class MainActivity extends AppCompatActivity {
         private Spinner barangaySpinner;
         private final Map<String, List<String>> provinceCityMap = new HashMap<>();
         private final Map<String, List<String>> cityBarangayMap = new HashMap<>();
+        private final double[] deliveryLat = {6.1164};
+        private final double[] deliveryLng = {125.1716};
+        private final boolean[] mapPinned = {false};
         private final ActivityResultLauncher<String> idPickerLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
                 if (uri == null) {
@@ -2088,12 +3730,30 @@ public class MainActivity extends AppCompatActivity {
             Button chooseIdButton = view.findViewById(R.id.btn_choose_id);
             Button createButton = view.findViewById(R.id.btn_create_account);
             Button backToLoginButton = view.findViewById(R.id.btn_back_to_login);
+            Button useLocationButton = view.findViewById(R.id.btn_register_use_location);
+            TextView mapStatus = view.findViewById(R.id.register_map_status);
+            WebView mapWebView = view.findViewById(R.id.register_map_webview);
 
             setupAddressMappings();
             bindSpinner(countrySpinner, Arrays.asList("Philippines"));
             bindSpinner(provinceSpinner, Arrays.asList("South Cotabato"));
             setupAddressAutoSelect();
             chooseIdButton.setOnClickListener(v -> idPickerLauncher.launch("image/*"));
+
+            MainActivity activity = (MainActivity) requireActivity();
+            activity.setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned);
+            useLocationButton.setOnClickListener(v -> activity.fetchCheckoutCurrentLocation(
+                mapWebView,
+                deliveryLat,
+                deliveryLng,
+                mapPinned,
+                mapStatus,
+                street,
+                provinceSpinner,
+                citySpinner,
+                barangaySpinner,
+                postalCode
+            ));
 
             createButton.setOnClickListener(v -> {
                 registerInlineError.setVisibility(View.GONE);
@@ -2159,7 +3819,11 @@ public class MainActivity extends AppCompatActivity {
                     registerInlineError.setVisibility(View.VISIBLE);
                     return;
                 }
-                MainActivity activity = (MainActivity) requireActivity();
+                if (!mapPinned[0]) {
+                    registerInlineError.setText("Pin your delivery location on the map (tap map or use current location).");
+                    registerInlineError.setVisibility(View.VISIBLE);
+                    return;
+                }
                 createButton.setEnabled(false);
                 createButton.setText("Creating...");
                 activity.registerWithServer(
@@ -2171,6 +3835,8 @@ public class MainActivity extends AppCompatActivity {
                     cityValue,
                     barangayValue,
                     postalCodeValue,
+                    deliveryLat[0],
+                    deliveryLng[0],
                     new SimpleCallback() {
                         @Override
                         public void onSuccess(String message) {
@@ -2322,6 +3988,14 @@ public class MainActivity extends AppCompatActivity {
             setupProductClickListeners(view);
             applyProductsFromServer(view);
             return view;
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            MainActivity activity = (MainActivity) requireActivity();
+            activity.pollSupportUnreadCount();
+            activity.refreshMessageBadges();
         }
 
         private void setupHeaderActions(View view) {
@@ -2606,6 +4280,15 @@ public class MainActivity extends AppCompatActivity {
         private static final String ARG_RELATED_PRODUCT = "related_product";
         private static final String ARG_LOCK_RELATED_ORDER = "lock_related_order";
 
+        private final Handler messagesRefreshHandler = new Handler(Looper.getMainLooper());
+        private Runnable messagesRefreshRunnable;
+        private boolean messagesMarkedReadOnce = false;
+        private LinearLayout threadContainer;
+        private androidx.core.widget.NestedScrollView messagesScroll;
+        private TextView messagesStatus;
+        private int lastRenderedMessageCount = -1;
+        private final Set<Integer> renderedMessageIds = new HashSet<>();
+
         static MessagesFragment newInstance(String relatedOrder, String relatedProduct, boolean lockRelatedOrder) {
             MessagesFragment fragment = new MessagesFragment();
             Bundle args = new Bundle();
@@ -2624,13 +4307,13 @@ public class MainActivity extends AppCompatActivity {
             String preselectedOrder = args != null ? args.getString(ARG_RELATED_ORDER, "") : "";
             String preselectedProduct = args != null ? args.getString(ARG_RELATED_PRODUCT, "") : "";
             boolean lockRelatedOrder = args != null && args.getBoolean(ARG_LOCK_RELATED_ORDER, false);
-            TextView status = view.findViewById(R.id.messages_status);
-            LinearLayout threadContainer = view.findViewById(R.id.messages_thread_container);
+            messagesStatus = view.findViewById(R.id.messages_status);
+            threadContainer = view.findViewById(R.id.messages_thread_container);
             EditText input = view.findViewById(R.id.messages_input);
-            androidx.core.widget.NestedScrollView scroll = view.findViewById(R.id.messages_scroll);
+            messagesScroll = view.findViewById(R.id.messages_scroll);
             Spinner relatedOrderSpinner = view.findViewById(R.id.messages_related_order_spinner);
             final List<ChatOrderOption> relatedOrderOptions = new ArrayList<>();
-            relatedOrderOptions.add(new ChatOrderOption("", ""));
+            relatedOrderOptions.add(new ChatOrderOption(0, "", ""));
             ArrayAdapter<ChatOrderOption> relatedOrderAdapter = new ArrayAdapter<>(
                 requireContext(),
                 android.R.layout.simple_spinner_item,
@@ -2646,12 +4329,11 @@ public class MainActivity extends AppCompatActivity {
             view.findViewById(R.id.btn_back_from_messages).setOnClickListener(v ->
                 ((MainActivity) requireActivity()).loadFragment(new HomeFragment()));
 
-            loadMessages(activity, threadContainer, scroll, status);
             activity.fetchOrdersFromServer(new OrdersCallback() {
                 @Override
                 public void onSuccess(List<OrderInfo> orders) {
                     relatedOrderOptions.clear();
-                    relatedOrderOptions.add(new ChatOrderOption("", ""));
+                    relatedOrderOptions.add(new ChatOrderOption(0, "", ""));
                     int targetSelection = 0;
                     for (OrderInfo order : orders) {
                         String reference = order.referenceNumber == null ? "" : order.referenceNumber;
@@ -2659,13 +4341,13 @@ public class MainActivity extends AppCompatActivity {
                         if (!preselectedOrder.isEmpty() && preselectedOrder.equalsIgnoreCase(reference)) {
                             productSummary = preselectedProduct.isEmpty() ? productSummary : preselectedProduct;
                         }
-                        relatedOrderOptions.add(new ChatOrderOption(reference, productSummary));
+                        relatedOrderOptions.add(new ChatOrderOption(order.orderId, reference, productSummary));
                         if (!preselectedOrder.isEmpty() && preselectedOrder.equalsIgnoreCase(reference)) {
                             targetSelection = relatedOrderOptions.size() - 1;
                         }
                     }
                     if (!preselectedOrder.isEmpty() && targetSelection == 0) {
-                        relatedOrderOptions.add(new ChatOrderOption(preselectedOrder, preselectedProduct));
+                        relatedOrderOptions.add(new ChatOrderOption(0, preselectedOrder, preselectedProduct));
                         targetSelection = relatedOrderOptions.size() - 1;
                     }
                     relatedOrderAdapter.notifyDataSetChanged();
@@ -2678,31 +4360,34 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            view.findViewById(R.id.btn_mark_messages_read).setOnClickListener(v -> {
-                status.setText("All messages marked as read.");
-                Toast.makeText(requireContext(), "Messages updated", Toast.LENGTH_SHORT).show();
-            });
+            Button sendButton = view.findViewById(R.id.btn_send_message);
+            LinearLayout quickActions = view.findViewById(R.id.messages_quick_actions);
+            setupMessageQuickActions(quickActions, input, () -> sendButton.performClick());
 
-            view.findViewById(R.id.btn_send_message).setOnClickListener(v -> {
+            sendButton.setOnClickListener(v -> {
                 String message = input.getText() == null ? "" : input.getText().toString().trim();
                 if (message.isEmpty()) {
                     Toast.makeText(requireContext(), "Type a message first", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 ChatOrderOption selected = (ChatOrderOption) relatedOrderSpinner.getSelectedItem();
+                int relatedOrderId = selected != null ? selected.orderId : 0;
                 String relatedOrderRef = selected != null ? selected.reference : "";
                 String relatedProduct = selected != null ? selected.productSummary : "";
-                activity.sendSupportMessageToServer(message, relatedOrderRef, relatedProduct, new SimpleCallback() {
+                sendButton.setEnabled(false);
+                activity.sendSupportMessageToServer(message, relatedOrderId, relatedOrderRef, relatedProduct, new SimpleCallback() {
                     @Override
                     public void onSuccess(String response) {
+                        sendButton.setEnabled(true);
                         input.setText("");
-                        status.setText(response);
-                        loadMessages(activity, threadContainer, scroll, status);
+                        messagesStatus.setText(response);
+                        loadMessages(activity, true);
                     }
 
                     @Override
                     public void onError(String message) {
-                        status.setText(message);
+                        sendButton.setEnabled(true);
+                        messagesStatus.setText(message);
                         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -2711,73 +4396,265 @@ public class MainActivity extends AppCompatActivity {
             return view;
         }
 
-        private void loadMessages(
-            MainActivity activity,
-            LinearLayout threadContainer,
-            androidx.core.widget.NestedScrollView scroll,
-            TextView status
-        ) {
-            threadContainer.removeAllViews();
-            activity.fetchSupportMessagesFromServer(new MessagesCallback() {
+        @Override
+        public void onResume() {
+            super.onResume();
+            messagesMarkedReadOnce = false;
+            lastRenderedMessageCount = -1;
+            renderedMessageIds.clear();
+            startMessagesAutoRefresh();
+        }
+
+        @Override
+        public void onPause() {
+            stopMessagesAutoRefresh();
+            super.onPause();
+        }
+
+        @Override
+        public void onDestroyView() {
+            stopMessagesAutoRefresh();
+            threadContainer = null;
+            messagesScroll = null;
+            messagesStatus = null;
+            super.onDestroyView();
+        }
+
+        private void startMessagesAutoRefresh() {
+            stopMessagesAutoRefresh();
+            MainActivity activity = (MainActivity) requireActivity();
+            messagesRefreshRunnable = () -> {
+                if (!isAdded() || threadContainer == null) {
+                    return;
+                }
+                boolean markRead = !messagesMarkedReadOnce;
+                loadMessages(activity, markRead);
+                messagesMarkedReadOnce = true;
+                messagesRefreshHandler.postDelayed(messagesRefreshRunnable, MESSAGE_AUTO_REFRESH_MS);
+            };
+            messagesRefreshHandler.post(messagesRefreshRunnable);
+        }
+
+        private void stopMessagesAutoRefresh() {
+            if (messagesRefreshRunnable != null) {
+                messagesRefreshHandler.removeCallbacks(messagesRefreshRunnable);
+                messagesRefreshRunnable = null;
+            }
+        }
+
+        private void setupMessageQuickActions(LinearLayout container, EditText input, Runnable onSend) {
+            String[][] chips = {
+                {"Order status", "What is my order status?"},
+                {"Delivery", "Where is my delivery?"},
+                {"Human support", "human support"}
+            };
+            for (String[] chip : chips) {
+                Button chipButton = new Button(requireContext());
+                chipButton.setText(chip[0]);
+                chipButton.setAllCaps(false);
+                chipButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+                chipButton.setTextColor(0xFF0F766E);
+                chipButton.setBackgroundColor(0xFFECFDF5);
+                chipButton.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+                params.setMarginEnd(dpToPx(8));
+                chipButton.setOnClickListener(v -> {
+                    input.setText(chip[1]);
+                    onSend.run();
+                });
+                container.addView(chipButton, params);
+            }
+        }
+
+        private void loadMessages(MainActivity activity, boolean markRead) {
+            if (threadContainer == null || messagesScroll == null || messagesStatus == null) {
+                return;
+            }
+            activity.fetchSupportMessagesFromServer(markRead, new MessagesCallback() {
                 @Override
                 public void onSuccess(List<SupportMessage> messages) {
-                    if (messages.isEmpty()) {
-                        addMessageBubble(
-                            threadContainer,
-                            "System",
-                            "I will connect you with an admin/seller. Please wait for a human reply.",
-                            false,
-                            0xFFF5EFE6
-                        );
-                        status.setText("No replies yet. Start the conversation below.");
-                    } else {
-                        for (SupportMessage item : messages) {
-                            String sender = item.senderName == null || item.senderName.trim().isEmpty() ? "Support" : item.senderName;
-                            String fullText = item.messageBody;
-                            if (item.createdAt != null && !item.createdAt.trim().isEmpty()) {
-                                fullText = item.messageBody + "\n" + item.createdAt;
-                            }
-                            int bubbleColor = item.fromCustomer ? 0xFFE9F9EF : 0xFFF3F4F6;
-                            addMessageBubble(threadContainer, sender, fullText, item.fromCustomer, bubbleColor);
-                        }
-                        status.setText("Connected to support conversation.");
+                    if (!isAdded() || threadContainer == null) {
+                        return;
                     }
-                    scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+                    renderMessageThread(messages);
+                    messagesScroll.post(() -> messagesScroll.fullScroll(View.FOCUS_DOWN));
                 }
 
                 @Override
                 public void onError(String message) {
-                    addMessageBubble(
-                        threadContainer,
-                        "System",
-                        "Unable to load server messages.\n" + message,
-                        false,
-                        0xFFFEE2E2
-                    );
-                    status.setText(message);
+                    if (!isAdded() || threadContainer == null) {
+                        return;
+                    }
+                    if (threadContainer.getChildCount() == 0) {
+                        addMessageBubble(
+                            threadContainer,
+                            0,
+                            "System",
+                            message,
+                            "system",
+                            "system",
+                            false,
+                            ""
+                        );
+                    }
+                    messagesStatus.setText("Could not load messages.");
                 }
             });
         }
 
-        private void addMessageBubble(LinearLayout parent, String sender, String message, boolean isUser, int bubbleColor) {
-            LinearLayout row = new LinearLayout(requireContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(isUser ? Gravity.END : Gravity.START);
+        private void renderMessageThread(List<SupportMessage> messages) {
+            if (threadContainer == null) {
+                return;
+            }
+            if (messages.isEmpty()) {
+                if (threadContainer.getChildCount() == 0) {
+                    addMessageBubble(
+                        threadContainer,
+                        0,
+                        "Chatbot",
+                        "Hi! Ask about order status, delivery, or payments. Type \"human support\" to reach an admin.",
+                        "chatbot",
+                        "text",
+                        false,
+                        ""
+                    );
+                    messagesStatus.setText("Start chatting below.");
+                }
+                lastRenderedMessageCount = 0;
+                return;
+            }
 
-            TextView bubble = new TextView(requireContext());
-            bubble.setText(sender + "\n" + message);
-            bubble.setTextColor(0xFF1F2937);
-            bubble.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-            bubble.setBackgroundColor(bubbleColor);
-            int pad = dpToPx(10);
-            bubble.setPadding(pad, pad, pad, pad);
+            Set<Integer> incomingIds = new HashSet<>();
+            for (SupportMessage item : messages) {
+                if (item.id > 0) {
+                    incomingIds.add(item.id);
+                }
+            }
+            boolean hasStableIds = !incomingIds.isEmpty();
+            if (hasStableIds) {
+                if (!incomingIds.equals(renderedMessageIds)) {
+                    threadContainer.removeAllViews();
+                    renderedMessageIds.clear();
+                }
+            } else if (messages.size() != lastRenderedMessageCount) {
+                threadContainer.removeAllViews();
+                renderedMessageIds.clear();
+            } else {
+                return;
+            }
+
+            boolean addedMessage = false;
+            for (SupportMessage item : messages) {
+                if (hasStableIds && item.id > 0 && renderedMessageIds.contains(item.id)) {
+                    continue;
+                }
+                String roleKey = resolveMessageRoleKey(item);
+                addMessageBubble(
+                    threadContainer,
+                    item.id,
+                    item.senderName,
+                    item.messageBody,
+                    roleKey,
+                    item.messageType,
+                    item.fromCustomer,
+                    item.createdAt
+                );
+                if (item.id > 0) {
+                    renderedMessageIds.add(item.id);
+                }
+                addedMessage = true;
+            }
+
+            if (addedMessage) {
+                messagesStatus.setText("Connected to QuickPuff support.");
+                lastRenderedMessageCount = messages.size();
+            }
+        }
+
+        private String resolveMessageRoleKey(SupportMessage item) {
+            if ("system".equals(item.messageType) || "system".equals(item.senderRole)) {
+                return "system";
+            }
+            if ("chatbot".equals(item.senderRole) || "bot".equals(item.senderRole)) {
+                return "chatbot";
+            }
+            if (item.fromCustomer || "customer".equals(item.senderRole)) {
+                return "customer";
+            }
+            if ("rider".equals(item.senderRole)) {
+                return "rider";
+            }
+            if ("admin".equals(item.senderRole) || "staff".equals(item.senderRole)) {
+                return "admin";
+            }
+            return "admin";
+        }
+
+        private void addMessageBubble(
+            LinearLayout parent,
+            int messageId,
+            String sender,
+            String message,
+            String roleKey,
+            String messageType,
+            boolean isUser,
+            String createdAt
+        ) {
+            View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_message_bubble, parent, false);
+            if (messageId > 0) {
+                row.setTag(messageId);
+            }
+            View bubbleWrap = row.findViewById(R.id.message_bubble_wrap);
+            TextView senderView = row.findViewById(R.id.message_sender);
+            TextView bodyView = row.findViewById(R.id.message_body);
+            TextView timeView = row.findViewById(R.id.message_time);
+
+            senderView.setText(sender);
+            bodyView.setText(message);
+            if (createdAt != null && !createdAt.trim().isEmpty()) {
+                timeView.setText(createdAt);
+                timeView.setVisibility(View.VISIBLE);
+            } else {
+                timeView.setVisibility(View.GONE);
+            }
+
+            boolean isSystem = "system".equals(roleKey) || "system".equals(messageType);
+            int bgRes = R.drawable.bg_message_incoming;
+            if (isUser || "customer".equals(roleKey)) {
+                bgRes = R.drawable.bg_message_outgoing;
+            } else if (isSystem) {
+                bgRes = R.drawable.bg_message_system;
+            } else if ("chatbot".equals(roleKey)) {
+                bgRes = R.drawable.bg_message_bot;
+            } else if ("rider".equals(roleKey)) {
+                bgRes = R.drawable.bg_message_rider;
+            } else if ("admin".equals(roleKey)) {
+                bgRes = R.drawable.bg_message_admin;
+            }
+            bubbleWrap.setBackgroundResource(bgRes);
 
             LinearLayout.LayoutParams bubbleParams = new LinearLayout.LayoutParams(
-                dpToPx(230),
+                ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             );
-            bubbleParams.topMargin = dpToPx(6);
-            row.addView(bubble, bubbleParams);
+            if (isSystem) {
+                bubbleParams.gravity = Gravity.CENTER_HORIZONTAL;
+                bubbleParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            } else if (isUser || "customer".equals(roleKey)) {
+                bubbleParams.gravity = Gravity.END;
+            } else {
+                bubbleParams.gravity = Gravity.START;
+            }
+            bubbleWrap.setLayoutParams(bubbleParams);
+
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            row.setLayoutParams(rowParams);
             parent.addView(row);
         }
 
@@ -2947,6 +4824,11 @@ public class MainActivity extends AppCompatActivity {
             if ("to_review".equals(tabKey)) {
                 return "completed".equals(status);
             }
+            if ("return_refund".equals(tabKey)) {
+                return Arrays.asList(
+                    "return_requested", "return_approved", "return_picked_up", "return_refund"
+                ).contains(status);
+            }
             return tabKey.equals(status);
         }
 
@@ -2975,6 +4857,9 @@ public class MainActivity extends AppCompatActivity {
             }
             if (Arrays.asList("delivered_to_rider", "delivered", "to_receive").contains(status)) {
                 return "to_receive";
+            }
+            if (Arrays.asList("return_requested", "return_approved", "return_picked_up").contains(status)) {
+                return "return_refund";
             }
             if (PURCHASE_TABS.containsKey(status)) {
                 return status;
@@ -3023,6 +4908,33 @@ public class MainActivity extends AppCompatActivity {
                     openOrderDetails(order)
                 );
 
+                Button confirmDeliveryBtn = row.findViewById(R.id.btn_confirm_delivery);
+                boolean canConfirmDelivery = order.canConfirmReceived
+                    || "delivered".equalsIgnoreCase(order.deliveryStatus);
+                confirmDeliveryBtn.setVisibility(canConfirmDelivery ? View.VISIBLE : View.GONE);
+                confirmDeliveryBtn.setOnClickListener(v -> {
+                    MainActivity host = (MainActivity) requireActivity();
+                    new AlertDialog.Builder(requireContext())
+                        .setTitle("Confirm Delivery")
+                        .setMessage("Confirm that you received order " + order.referenceNumber + "?")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Confirm", (dialog, which) ->
+                            host.performCustomerOrderAction(order.orderId, "confirm", new SimpleCallback() {
+                                @Override
+                                public void onSuccess(String message) {
+                                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                                    reloadOrdersFromServer();
+                                }
+
+                                @Override
+                                public void onError(String message) {
+                                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                                }
+                            })
+                        )
+                        .show();
+                });
+
                 LinearLayout postDeliveryActions = row.findViewById(R.id.purchase_post_delivery_actions);
                 Button reviewButton = row.findViewById(R.id.btn_review_order);
                 Button refundButton = row.findViewById(R.id.btn_return_refund);
@@ -3038,21 +4950,37 @@ public class MainActivity extends AppCompatActivity {
 
                 if (order.refundRequested) {
                     refundStatus.setText("Return request submitted. Show QR to rider during pickup.");
-                    refundTo.setText("Refund to: " + order.refundMethod + " - " + order.refundAccount);
-                    returnCode.setText("Return QR: " + order.returnCode);
-                    Bitmap qrBitmap = createQrBitmap(order.returnCode, 220);
+                    String methodLabel = order.refundMethod == null ? "" : order.refundMethod.toUpperCase(Locale.US);
+                    refundTo.setText("Refund to: " + methodLabel + " - " + order.refundAccount);
+                    String qrData = order.qrPayload != null && !order.qrPayload.isEmpty()
+                        ? order.qrPayload
+                        : order.returnCode;
+                    returnCode.setText("Return QR: " + (order.returnCode.isEmpty() ? "Ready" : order.returnCode));
+                    Bitmap qrBitmap = createQrBitmap(qrData, 220);
                     if (qrBitmap != null) {
                         returnQr.setImageBitmap(qrBitmap);
                     }
                 }
 
-                reviewButton.setEnabled(!order.reviewSubmitted);
+                applyPurchaseActionStyle(reviewButton, !order.reviewSubmitted, "outline");
                 reviewButton.setText(order.reviewSubmitted ? "Reviewed" : "Review");
                 reviewButton.setOnClickListener(v -> showReviewDialog(order));
 
-                refundButton.setEnabled(!order.refundRequested);
+                boolean canRequest = order.canRequestReturn && !order.refundRequested;
+                applyPurchaseActionStyle(refundButton, canRequest, "secondary");
                 refundButton.setText(order.refundRequested ? "Refund Requested" : "Return/Refund");
-                refundButton.setOnClickListener(v -> showReturnRefundDialog(order));
+                refundButton.setEnabled(canRequest || order.refundRequested);
+                refundButton.setOnClickListener(v -> {
+                    if (order.refundRequested) {
+                        Toast.makeText(requireContext(), "Return/refund already submitted for this order.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (!order.canRequestReturn) {
+                        Toast.makeText(requireContext(), "Return/refund is not available for this order.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    showReturnRefundDialog(order);
+                });
 
                 ordersContainer.addView(row);
             }
@@ -3060,6 +4988,60 @@ public class MainActivity extends AppCompatActivity {
 
         private void openOrderDetails(OrderInfo order) {
             ((MainActivity) requireActivity()).loadFragment(OrderDetailsFragment.newInstance(order));
+        }
+
+        static void clearActionButtonTint(Button button) {
+            if (button != null) {
+                button.setBackgroundTintList(null);
+            }
+        }
+
+        static void applyPurchaseActionStyle(Button button, boolean enabled, String variant) {
+            if (button == null) {
+                return;
+            }
+            button.setAllCaps(false);
+            clearActionButtonTint(button);
+            if (!enabled) {
+                button.setBackgroundResource(R.drawable.bg_purchase_action_muted);
+                button.setTextColor(0xFF6B7280);
+                button.setEnabled(false);
+                return;
+            }
+            button.setEnabled(true);
+            if ("primary".equals(variant)) {
+                button.setBackgroundResource(R.drawable.bg_purchase_action_primary);
+                button.setTextColor(0xFFFFFFFF);
+            } else if ("outline".equals(variant)) {
+                button.setBackgroundResource(R.drawable.bg_purchase_action_outline);
+                button.setTextColor(0xFF166534);
+            } else {
+                button.setBackgroundResource(R.drawable.bg_purchase_action_secondary);
+                button.setTextColor(0xFF374151);
+            }
+        }
+
+        private void reloadOrdersFromServer() {
+            MainActivity activity = (MainActivity) requireActivity();
+            activity.fetchOrdersFromServer(new OrdersCallback() {
+                @Override
+                public void onSuccess(List<OrderInfo> orders) {
+                    if (inlineError != null) {
+                        inlineError.setVisibility(View.GONE);
+                    }
+                    allOrders.clear();
+                    allOrders.addAll(orders);
+                    refreshPurchaseUi();
+                }
+
+                @Override
+                public void onError(String message) {
+                    if (inlineError != null) {
+                        inlineError.setText(message);
+                        inlineError.setVisibility(View.VISIBLE);
+                    }
+                }
+            });
         }
 
         private void applyStatusBadgeStyle(TextView statusView, String status) {
@@ -3123,7 +5105,7 @@ public class MainActivity extends AppCompatActivity {
                 })
             );
 
-            List<String> methods = Arrays.asList("GCash", "Maya", "Bank Transfer");
+            List<String> methods = Arrays.asList("GCash", "Maya");
             ArrayAdapter<String> methodAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, methods);
             methodAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             methodSpinner.setAdapter(methodAdapter);
@@ -3157,16 +5139,17 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(requireContext(), "Please provide account name.", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    String method = String.valueOf(methodSpinner.getSelectedItem());
-                    String returnCode = generateReturnCode(order.referenceNumber);
+                    String methodLabel = String.valueOf(methodSpinner.getSelectedItem());
+                    String payoutMethod = methodLabel.toLowerCase(Locale.US).contains("maya") ? "maya" : "gcash";
                     positive.setEnabled(false);
                     positive.setText("Submitting...");
                     activity.submitReturnRefundToServer(
+                        order.orderId,
                         order.referenceNumber,
                         reason,
-                        method,
-                        account + " (" + accountName + ")",
-                        returnCode,
+                        payoutMethod,
+                        account,
+                        accountName,
                         attachmentUris,
                         new SimpleCallback() {
                             @Override
@@ -3174,11 +5157,22 @@ public class MainActivity extends AppCompatActivity {
                                 order.refundRequested = true;
                                 order.deliveryStatus = "return_requested";
                                 order.refundReason = reason;
-                                order.refundMethod = method;
+                                order.refundMethod = payoutMethod;
                                 order.refundAccount = account + " (" + accountName + ")";
-                                order.returnCode = returnCode;
                                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                                refreshPurchaseUi();
+                                activity.fetchOrdersFromServer(new OrdersCallback() {
+                                    @Override
+                                    public void onSuccess(List<OrderInfo> orders) {
+                                        allOrders.clear();
+                                        allOrders.addAll(orders);
+                                        refreshPurchaseUi();
+                                    }
+
+                                    @Override
+                                    public void onError(String msg) {
+                                        refreshPurchaseUi();
+                                    }
+                                });
                                 dialog.dismiss();
                             }
 
@@ -3318,6 +5312,12 @@ public class MainActivity extends AppCompatActivity {
                     return "Return/Refund";
                 case "failed_delivery":
                     return "Failed Delivery";
+                case "return_requested":
+                    return "Return Requested";
+                case "return_approved":
+                    return "Return Approved";
+                case "return_picked_up":
+                    return "Return Picked Up";
                 default:
                     return status.replace('_', ' ');
             }
@@ -3342,10 +5342,33 @@ public class MainActivity extends AppCompatActivity {
         private static final String ARG_REFUND_METHOD = "refund_method";
         private static final String ARG_REFUND_ACCOUNT = "refund_account";
         private static final String ARG_RETURN_CODE = "return_code";
+        private static final String ARG_ORDER_ID = "order_id";
+        private static final String ARG_CAN_PAY = "can_pay";
+        private static final String ARG_CAN_CANCEL = "can_cancel";
+        private static final String ARG_CAN_CONFIRM = "can_confirm";
+
+        private View detailsRoot;
+        private TextView odStatusView;
+        private LinearLayout deliveryActions;
+        private LinearLayout postDeliveryActions;
+        private View liveTrackingCard;
+        private Button payBtn;
+        private Button cancelBtn;
+        private Button confirmBtn;
+        private TextView trackingStatusText;
+        private int orderId;
+        private String currentStatus = "to_pay";
+        private boolean canPay;
+        private boolean canCancel;
+        private boolean canConfirm;
 
         static OrderDetailsFragment newInstance(OrderInfo order) {
             OrderDetailsFragment fragment = new OrderDetailsFragment();
             Bundle args = new Bundle();
+            args.putInt(ARG_ORDER_ID, order.orderId);
+            args.putBoolean(ARG_CAN_PAY, order.canPay);
+            args.putBoolean(ARG_CAN_CANCEL, order.canCancel);
+            args.putBoolean(ARG_CAN_CONFIRM, order.canConfirmReceived);
             args.putString(ARG_REFERENCE, order.referenceNumber);
             args.putString(ARG_DATE, order.orderDate);
             args.putString(ARG_STATUS, order.deliveryStatus);
@@ -3358,7 +5381,9 @@ public class MainActivity extends AppCompatActivity {
             args.putString(ARG_REFUND_REASON, order.refundReason);
             args.putString(ARG_REFUND_METHOD, order.refundMethod);
             args.putString(ARG_REFUND_ACCOUNT, order.refundAccount);
-            args.putString(ARG_RETURN_CODE, order.returnCode);
+            args.putString(ARG_RETURN_CODE, order.qrPayload != null && !order.qrPayload.isEmpty()
+                ? order.qrPayload
+                : order.returnCode);
             fragment.setArguments(args);
             return fragment;
         }
@@ -3382,7 +5407,16 @@ public class MainActivity extends AppCompatActivity {
             String refundMethod = args != null ? args.getString(ARG_REFUND_METHOD, "GCash") : "GCash";
             String refundAccount = args != null ? args.getString(ARG_REFUND_ACCOUNT, "") : "";
             String returnCode = args != null ? args.getString(ARG_RETURN_CODE, "") : "";
+            orderId = args != null ? args.getInt(ARG_ORDER_ID, 0) : 0;
+            canPay = args != null && args.getBoolean(ARG_CAN_PAY, false);
+            canCancel = args != null && args.getBoolean(ARG_CAN_CANCEL, false);
+            canConfirm = args != null && args.getBoolean(ARG_CAN_CONFIRM, false);
+            currentStatus = status;
+            if (!canConfirm && "delivered".equalsIgnoreCase(currentStatus)) {
+                canConfirm = true;
+            }
 
+            detailsRoot = view;
             ((TextView) view.findViewById(R.id.od_reference)).setText(reference);
             ((TextView) view.findViewById(R.id.od_date)).setText(date);
             ((TextView) view.findViewById(R.id.od_total)).setText(String.format(Locale.US, "₱%.2f", total));
@@ -3391,9 +5425,9 @@ public class MainActivity extends AppCompatActivity {
             ((TextView) view.findViewById(R.id.od_shipping_fee)).setText("Shipping: ₱0.00");
             ((TextView) view.findViewById(R.id.od_grand_total)).setText(String.format(Locale.US, "Total: ₱%.2f", total));
 
-            TextView statusView = view.findViewById(R.id.od_status);
-            statusView.setText(MyPurchaseFragment.getDeliveryStatusLabel(status).toUpperCase(Locale.US));
-            applyStatusBadgeStyle(statusView, status);
+            odStatusView = view.findViewById(R.id.od_status);
+            odStatusView.setText(MyPurchaseFragment.getDeliveryStatusLabel(status).toUpperCase(Locale.US));
+            applyStatusBadgeStyle(odStatusView, status);
 
             TextView addressView = view.findViewById(R.id.od_delivery_address);
             if (address == null || address.trim().isEmpty()) {
@@ -3419,17 +5453,54 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(requireContext(), "Opening seller messages...", Toast.LENGTH_SHORT).show();
             });
 
-            boolean successfulDelivery = isSuccessfulDelivery(status);
-            LinearLayout postDeliveryActions = view.findViewById(R.id.od_post_delivery_actions);
-            postDeliveryActions.setVisibility(successfulDelivery ? View.VISIBLE : View.GONE);
+            deliveryActions = view.findViewById(R.id.od_delivery_actions);
+            payBtn = view.findViewById(R.id.btn_pay_order);
+            cancelBtn = view.findViewById(R.id.btn_cancel_order);
+            confirmBtn = view.findViewById(R.id.btn_confirm_received);
+            trackingStatusText = view.findViewById(R.id.od_tracking_status_text);
+            TextView trackingMeta = view.findViewById(R.id.od_tracking_meta);
+            WebView trackingMapWebView = view.findViewById(R.id.od_tracking_map_webview);
+            liveTrackingCard = view.findViewById(R.id.od_live_tracking_card);
+            postDeliveryActions = view.findViewById(R.id.od_post_delivery_actions);
+
+            MyPurchaseFragment.clearActionButtonTint(payBtn);
+            MyPurchaseFragment.clearActionButtonTint(cancelBtn);
+            MyPurchaseFragment.clearActionButtonTint(confirmBtn);
+            MyPurchaseFragment.clearActionButtonTint(view.findViewById(R.id.btn_track_order));
+            MyPurchaseFragment.clearActionButtonTint(view.findViewById(R.id.btn_message_seller_details));
+
+            payBtn.setOnClickListener(v -> runOrderAction(activity, orderId, "pay", odStatusView, trackingStatusText));
+            cancelBtn.setOnClickListener(v -> runOrderAction(activity, orderId, "cancel", odStatusView, trackingStatusText));
+            confirmBtn.setOnClickListener(v -> {
+                new AlertDialog.Builder(requireContext())
+                    .setTitle("Confirm Delivery")
+                    .setMessage("Confirm that you received this order?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Confirm", (dialog, which) ->
+                        runOrderAction(activity, orderId, "confirm", odStatusView, trackingStatusText)
+                    )
+                    .show();
+            });
+            view.findViewById(R.id.btn_track_order).setOnClickListener(v -> activity.refreshLiveTrackingNow());
+
+            refreshDeliveryUi(currentStatus, canPay, canCancel, canConfirm);
+
+            if (orderId > 0 && MainActivity.shouldShowLiveTracking(currentStatus)) {
+                liveTrackingCard.setVisibility(View.VISIBLE);
+                activity.startLiveTracking(orderId, trackingMapWebView, trackingStatusText, trackingMeta);
+            } else {
+                liveTrackingCard.setVisibility(View.GONE);
+            }
 
             Button reviewButton = view.findViewById(R.id.btn_review_order_details);
-            reviewButton.setEnabled(!reviewSubmitted);
+            MyPurchaseFragment.applyPurchaseActionStyle(reviewButton, !reviewSubmitted, "outline");
             reviewButton.setText(reviewSubmitted ? "Reviewed" : "Review Order");
             reviewButton.setOnClickListener(v ->
                 showReviewDialog(reference, items, reviewButton)
             );
-            view.findViewById(R.id.btn_return_refund_details).setOnClickListener(v ->
+            Button returnRefundButton = view.findViewById(R.id.btn_return_refund_details);
+            MyPurchaseFragment.applyPurchaseActionStyle(returnRefundButton, !refundRequested, "secondary");
+            returnRefundButton.setOnClickListener(v ->
                 Toast.makeText(requireContext(), "Return/refund request already submitted in Purchase tab.", Toast.LENGTH_SHORT).show()
             );
 
@@ -3455,6 +5526,99 @@ public class MainActivity extends AppCompatActivity {
             return view;
         }
 
+        @Override
+        public void onResume() {
+            super.onResume();
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity == null || orderId <= 0) {
+                return;
+            }
+            activity.setOrderDetailsUiUpdater(this::refreshDeliveryUi);
+            activity.refreshOrderDetailsFromServer(orderId);
+        }
+
+        @Override
+        public void onPause() {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity != null) {
+                activity.clearOrderDetailsUiUpdater();
+            }
+            super.onPause();
+        }
+
+        @Override
+        public void onDestroyView() {
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity != null) {
+                activity.clearOrderDetailsUiUpdater();
+                activity.stopLiveTracking();
+            }
+            super.onDestroyView();
+        }
+
+        private void refreshDeliveryUi(
+            String deliveryStatus,
+            boolean showPay,
+            boolean showCancel,
+            boolean showConfirm
+        ) {
+            if (deliveryActions == null || odStatusView == null || detailsRoot == null) {
+                return;
+            }
+            currentStatus = deliveryStatus == null ? currentStatus : deliveryStatus;
+            canPay = showPay;
+            canCancel = showCancel;
+            canConfirm = showConfirm || "delivered".equalsIgnoreCase(currentStatus);
+
+            odStatusView.setText(MyPurchaseFragment.getDeliveryStatusLabel(currentStatus).toUpperCase(Locale.US));
+            applyStatusBadgeStyle(odStatusView, currentStatus);
+            applyTimelineState(detailsRoot, currentStatus);
+
+            boolean showDeliveryActions = canPay || canCancel || canConfirm
+                || Arrays.asList("delivered_to_rider", "to_receive", "delivered", "completed")
+                    .contains(currentStatus.toLowerCase(Locale.US));
+            deliveryActions.setVisibility(showDeliveryActions ? View.VISIBLE : View.GONE);
+            payBtn.setVisibility(canPay ? View.VISIBLE : View.GONE);
+            cancelBtn.setVisibility(canCancel ? View.VISIBLE : View.GONE);
+            confirmBtn.setVisibility(canConfirm ? View.VISIBLE : View.GONE);
+
+            boolean successfulDelivery = isSuccessfulDelivery(currentStatus);
+            if (postDeliveryActions != null) {
+                postDeliveryActions.setVisibility(successfulDelivery ? View.VISIBLE : View.GONE);
+            }
+
+            MainActivity activity = (MainActivity) getActivity();
+            if (activity != null && liveTrackingCard != null) {
+                if (orderId > 0 && MainActivity.shouldShowLiveTracking(currentStatus)) {
+                    liveTrackingCard.setVisibility(View.VISIBLE);
+                } else if (!canConfirm) {
+                    liveTrackingCard.setVisibility(View.GONE);
+                }
+            }
+
+            if ("delivered".equalsIgnoreCase(currentStatus) && trackingStatusText != null) {
+                trackingStatusText.setText("Rider marked this order as delivered. Please confirm receipt.");
+            }
+        }
+
+        private void runOrderAction(MainActivity activity, int orderId, String action, TextView statusView, TextView trackingStatus) {
+            if (orderId <= 0) {
+                Toast.makeText(requireContext(), "Invalid order.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            activity.performCustomerOrderAction(orderId, action, new SimpleCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                    activity.loadFragment(new MyPurchaseFragment());
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            });
+        }
 
         private void applyTimelineState(View root, String status) {
             int step = getTrackingStep(status);
@@ -3564,7 +5728,7 @@ public class MainActivity extends AppCompatActivity {
                     activity.submitReviewToServer(reference, items, rating, comment, new SimpleCallback() {
                         @Override
                         public void onSuccess(String message) {
-                            reviewButton.setEnabled(false);
+                            MyPurchaseFragment.applyPurchaseActionStyle(reviewButton, false, "outline");
                             reviewButton.setText("Reviewed");
                             Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
                             dialog.dismiss();
@@ -3617,7 +5781,7 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(requireContext(), "Your cart is empty", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                activity.checkoutOnServer(activity.getCartTotal(), new SimpleCallback() {
+                activity.showCheckoutDialog(new SimpleCallback() {
                     @Override
                     public void onSuccess(String message) {
                         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
@@ -3843,6 +6007,293 @@ public class MainActivity extends AppCompatActivity {
         private int dpToPx(int dp) {
             float density = requireContext().getResources().getDisplayMetrics().density;
             return Math.round(dp * density);
+        }
+    }
+
+    public static class AdminOrdersFragment extends Fragment {
+        private final List<JSONObject> riders = new ArrayList<>();
+
+        @Override
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+            View view = inflater.inflate(R.layout.fragment_role_dashboard, container, false);
+            MainActivity activity = (MainActivity) requireActivity();
+            ((TextView) view.findViewById(R.id.role_dashboard_title)).setText("Admin — Orders");
+            ((TextView) view.findViewById(R.id.role_dashboard_subtitle)).setText("Assign riders and update delivery status");
+            LinearLayout containerLayout = view.findViewById(R.id.role_orders_container);
+            view.findViewById(R.id.btn_role_logout).setOnClickListener(v -> activity.onLogout());
+            view.findViewById(R.id.btn_role_refresh).setOnClickListener(v -> loadOrders(activity, containerLayout));
+            loadRiders(activity);
+            loadOrders(activity, containerLayout);
+            return view;
+        }
+
+        private void loadRiders(MainActivity activity) {
+            activity.fetchRidersList(new SimpleCallback() {
+                @Override
+                public void onSuccess(String responseBody) {
+                    riders.clear();
+                    try {
+                        JSONObject root = new JSONObject(responseBody);
+                        JSONObject data = root.optJSONObject("data");
+                        JSONArray arr = data != null ? data.optJSONArray("riders") : null;
+                        if (arr != null) {
+                            for (int i = 0; i < arr.length(); i++) {
+                                JSONObject r = arr.optJSONObject(i);
+                                if (r != null) {
+                                    riders.add(r);
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        private void loadOrders(MainActivity activity, LinearLayout containerLayout) {
+            activity.fetchAdminOrders(new SimpleCallback() {
+                @Override
+                public void onSuccess(String responseBody) {
+                    containerLayout.removeAllViews();
+                    try {
+                        JSONObject root = new JSONObject(responseBody);
+                        JSONObject data = root.optJSONObject("data");
+                        JSONArray orders = data != null ? data.optJSONArray("orders") : null;
+                        if (orders == null || orders.length() == 0) {
+                            TextView empty = new TextView(requireContext());
+                            empty.setText("No orders found.");
+                            containerLayout.addView(empty);
+                            return;
+                        }
+                        for (int i = 0; i < orders.length(); i++) {
+                            JSONObject order = orders.optJSONObject(i);
+                            if (order != null) {
+                                containerLayout.addView(buildOrderRow(activity, order));
+                            }
+                        }
+                    } catch (Exception e) {
+                        Toast.makeText(requireContext(), "Invalid response", Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        private View buildOrderRow(MainActivity activity, JSONObject order) {
+            View row = getLayoutInflater().inflate(R.layout.item_role_order, null);
+            int orderId = order.optInt("order_id", 0);
+            String status = order.optString("delivery_status", "");
+            ((TextView) row.findViewById(R.id.role_order_reference)).setText(order.optString("reference_number", "#" + orderId));
+            ((TextView) row.findViewById(R.id.role_order_status)).setText(MyPurchaseFragment.getDeliveryStatusLabel(status));
+            ((TextView) row.findViewById(R.id.role_order_customer)).setText(
+                "Customer: " + order.optString("customer_name", "") + " | Payment: " + order.optString("payment_status", "")
+            );
+            JSONObject shipment = order.optJSONObject("shipment");
+            String addr = shipment != null ? shipment.optString("shipping_address", "") : "";
+            ((TextView) row.findViewById(R.id.role_order_address)).setText(addr.isEmpty() ? "No address" : addr);
+            LinearLayout actions = row.findViewById(R.id.role_order_actions);
+            if ("to_pay".equals(status)) {
+                addActionButton(actions, "Mark To Ship", () ->
+                    activity.adminUpdateDeliveryStatus(orderId, "to_ship", simpleRefresh(activity)));
+            }
+            addActionButton(actions, "Assign Rider", () -> showAssignRiderDialog(activity, orderId, actions));
+            if ("to_ship".equals(status) || "ready_for_pickup".equals(status)) {
+                addActionButton(actions, "Ready for Pickup", () ->
+                    activity.adminUpdateDeliveryStatus(orderId, "ready_for_pickup", simpleRefresh(activity)));
+            }
+            if ("delivered".equals(status)) {
+                addActionButton(actions, "Confirm Completed", () ->
+                    activity.adminUpdateDeliveryStatus(orderId, "completed", simpleRefresh(activity)));
+            }
+            return row;
+        }
+
+        private void addActionButton(LinearLayout parent, String label, Runnable action) {
+            Button btn = new Button(requireContext());
+            btn.setText(label);
+            btn.setAllCaps(false);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = 6;
+            btn.setLayoutParams(lp);
+            btn.setOnClickListener(v -> action.run());
+            parent.addView(btn);
+        }
+
+        private SimpleCallback simpleRefresh(MainActivity activity) {
+            return new SimpleCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                    activity.loadFragment(new AdminOrdersFragment());
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            };
+        }
+
+        private void showAssignRiderDialog(MainActivity activity, int orderId, LinearLayout ignored) {
+            if (riders.isEmpty()) {
+                Toast.makeText(requireContext(), "No riders available.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String[] names = new String[riders.size()];
+            for (int i = 0; i < riders.size(); i++) {
+                names[i] = riders.get(i).optString("name", "Rider");
+            }
+            new AlertDialog.Builder(requireContext())
+                .setTitle("Select rider")
+                .setItems(names, (d, which) -> {
+                    int riderId = riders.get(which).optInt("id", 0);
+                    activity.adminAssignRider(orderId, riderId, simpleRefresh(activity));
+                })
+                .show();
+        }
+    }
+
+    public static class RiderDeliveriesFragment extends Fragment {
+        @Override
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+            View view = inflater.inflate(R.layout.fragment_role_dashboard, container, false);
+            MainActivity activity = (MainActivity) requireActivity();
+            ((TextView) view.findViewById(R.id.role_dashboard_title)).setText("Rider — Deliveries");
+            ((TextView) view.findViewById(R.id.role_dashboard_subtitle)).setText("Accept, pickup, deliver, and return pickups");
+            LinearLayout containerLayout = view.findViewById(R.id.role_orders_container);
+            view.findViewById(R.id.btn_role_logout).setOnClickListener(v -> activity.onLogout());
+            view.findViewById(R.id.btn_role_refresh).setOnClickListener(v -> loadDeliveries(activity, containerLayout));
+            loadDeliveries(activity, containerLayout);
+            return view;
+        }
+
+        private void loadDeliveries(MainActivity activity, LinearLayout containerLayout) {
+            activity.fetchRiderOrders("active", new SimpleCallback() {
+                @Override
+                public void onSuccess(String responseBody) {
+                    containerLayout.removeAllViews();
+                    try {
+                        JSONObject root = new JSONObject(responseBody);
+                        JSONArray orders = root.optJSONObject("data") != null
+                            ? root.optJSONObject("data").optJSONArray("orders") : null;
+                        if (orders == null || orders.length() == 0) {
+                            TextView empty = new TextView(requireContext());
+                            empty.setText("No assigned deliveries.");
+                            containerLayout.addView(empty);
+                            return;
+                        }
+                        for (int i = 0; i < orders.length(); i++) {
+                            JSONObject order = orders.optJSONObject(i);
+                            if (order != null) {
+                                containerLayout.addView(buildRiderRow(activity, order));
+                            }
+                        }
+                    } catch (Exception e) {
+                        Toast.makeText(requireContext(), "Invalid response", Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        private View buildRiderRow(MainActivity activity, JSONObject order) {
+            View row = getLayoutInflater().inflate(R.layout.item_role_order, null);
+            int orderId = order.optInt("order_id", 0);
+            String status = order.optString("delivery_status", "");
+            ((TextView) row.findViewById(R.id.role_order_reference)).setText(order.optString("reference_number", ""));
+            ((TextView) row.findViewById(R.id.role_order_status)).setText(MyPurchaseFragment.getDeliveryStatusLabel(status));
+            ((TextView) row.findViewById(R.id.role_order_customer)).setText(
+                "Customer: " + order.optString("customer_name", "")
+            );
+            JSONObject shipment = order.optJSONObject("shipment");
+            String addr = shipment != null ? shipment.optString("shipping_address", "") : "";
+            ((TextView) row.findViewById(R.id.role_order_address)).setText(addr);
+            LinearLayout actions = row.findViewById(R.id.role_order_actions);
+            SimpleCallback refresh = new SimpleCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                    activity.loadFragment(new RiderDeliveriesFragment());
+                }
+
+                @Override
+                public void onError(String message) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            };
+            if ("ready_for_pickup".equals(status)) {
+                addRiderBtn(actions, "Accept Delivery", () ->
+                    activity.riderUpdateStatus(orderId, "accepted_by_rider", null, refresh));
+            }
+            if ("accepted_by_rider".equals(status)) {
+                addRiderBtn(actions, "Picked Up from Store", () ->
+                    activity.riderUpdateStatus(orderId, "delivered_to_rider", null, refresh));
+            }
+            if ("delivered_to_rider".equals(status) || "failed_delivery".equals(status)) {
+                addRiderBtn(actions, "Start Delivery", () ->
+                    activity.riderUpdateStatus(orderId, "to_receive", null, refresh));
+            }
+            if ("to_receive".equals(status)) {
+                addRiderBtn(actions, "Submit Delivery Proof", () -> activity.openDeliveryProofPicker(orderId));
+                addRiderBtn(actions, "Reschedule", () -> {
+                    Map<String, String> extra = new HashMap<>();
+                    extra.put("reschedule_at", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date()));
+                    extra.put("reschedule_reason", "Rescheduled from mobile app");
+                    activity.riderUpdateStatus(orderId, "reschedule_delivery", extra, refresh);
+                });
+                addRiderBtn(actions, "Failed Delivery", () -> {
+                    Map<String, String> extra = new HashMap<>();
+                    extra.put("cancel_reason", "Unable to deliver");
+                    activity.riderUpdateStatus(orderId, "failed_delivery", extra, refresh);
+                });
+            }
+            if ("return_approved".equals(status)) {
+                addRiderBtn(actions, "Accept Return Pickup", () ->
+                    activity.riderUpdateStatus(orderId, "accept_return_pickup", null, refresh));
+                addRiderBtn(actions, "Scan Return QR", () -> promptReturnQr(activity, orderId, refresh));
+            }
+            return row;
+        }
+
+        private void addRiderBtn(LinearLayout parent, String label, Runnable action) {
+            Button btn = new Button(requireContext());
+            btn.setText(label);
+            btn.setAllCaps(false);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = 6;
+            btn.setLayoutParams(lp);
+            btn.setOnClickListener(v -> action.run());
+            parent.addView(btn);
+        }
+
+        private void promptReturnQr(MainActivity activity, int orderId, SimpleCallback refresh) {
+            EditText input = new EditText(requireContext());
+            input.setHint("Paste or scan QR payload");
+            new AlertDialog.Builder(requireContext())
+                .setTitle("Return QR")
+                .setView(input)
+                .setPositiveButton("Submit", (d, w) -> {
+                    Map<String, String> extra = new HashMap<>();
+                    extra.put("return_qr_scan", input.getText().toString().trim());
+                    activity.riderUpdateStatus(orderId, "return_picked_up", extra, refresh);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
         }
     }
 
