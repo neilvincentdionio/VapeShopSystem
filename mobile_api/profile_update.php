@@ -16,7 +16,7 @@ if (strlen($newFullName) < 3) {
 }
 
 assert_safe_text_fields([
-    $newFullName => 'person_name',
+    ['value' => $newFullName, 'type' => 'person_name'],
 ]);
 
 try {

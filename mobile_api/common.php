@@ -89,14 +89,23 @@ function normalize_email(string $email): string
 /**
  * Reject registration/profile text that contains unsupported special characters.
  *
- * @param array<string, string> $fields Map of input key => validation type.
+ * Each item: ['value' => string, 'type' => validation type]
+ *
+ * @param list<array{value: string, type: string}> $fields
  */
 function assert_safe_text_fields(array $fields): void
 {
     $messages = safe_input_messages();
 
-    foreach ($fields as $value => $type) {
-        if ($value === '' || matches_safe_input($value, $type)) {
+    foreach ($fields as $field) {
+        if (! is_array($field)) {
+            continue;
+        }
+
+        $value = trim((string) ($field['value'] ?? ''));
+        $type = trim((string) ($field['type'] ?? ''));
+
+        if ($value === '' || $type === '' || matches_safe_input($value, $type)) {
             continue;
         }
 
@@ -117,33 +126,166 @@ function find_user_by_email(PDO $db, string $email): ?array
 }
 
 /**
- * Build readable shipping address from user primary address.
+ * Load CodeIgniter services/config without running the web app or Spark CLI.
  */
-function build_shipping_address(PDO $db, int $userId): string
+function mobile_ci_bootstrap(): void
 {
-    $stmt = $db->prepare(
-        'SELECT address_line, city, barangay, province, postal_code, country
-         FROM user_addresses
-         WHERE user_id = :user_id
-         ORDER BY is_primary DESC, id ASC
-         LIMIT 1'
-    );
-    $stmt->execute([':user_id' => $userId]);
-    $address = $stmt->fetch();
+    static $booted = false;
 
-    if (!is_array($address)) {
+    if ($booted) {
+        return;
+    }
+
+    $booted = true;
+    $root = dirname(__DIR__);
+
+    if (! defined('FCPATH')) {
+        define('FCPATH', $root . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR);
+    }
+
+    if (! class_exists(\CodeIgniter\Boot::class, false)) {
+        require $root . '/vendor/autoload.php';
+        require $root . '/app/Config/Paths.php';
+        $paths = new \Config\Paths();
+        require $paths->systemDirectory . '/Boot.php';
+        \CodeIgniter\Boot::bootWorker($paths);
+    }
+}
+
+/**
+ * Bootstrap CodeIgniter encrypter for decrypting user address/profile fields.
+ */
+function mobile_encryption_service(): ?\App\Libraries\EncryptionService
+{
+    static $service = null;
+    static $attempted = false;
+
+    if ($attempted) {
+        return $service;
+    }
+
+    $attempted = true;
+
+    try {
+        mobile_ci_bootstrap();
+        $service = new \App\Libraries\EncryptionService();
+    } catch (Throwable $e) {
+        error_log('mobile_encryption_service failed: ' . $e->getMessage());
+        $service = null;
+    }
+
+    return $service;
+}
+
+/**
+ * Decrypt a stored phone or address field (no-op when value is already plain text).
+ */
+function mobile_decrypt_sensitive(string $value, string $type = 'address'): string
+{
+    if ($value === '') {
         return '';
     }
 
-    $parts = [];
+    $service = mobile_encryption_service();
+    if ($service === null) {
+        return $value;
+    }
+
+    return $type === 'phone'
+        ? $service->decryptPhoneNumber($value)
+        : $service->decryptAddress($value);
+}
+
+/**
+ * Encrypt a stored phone or address field for database writes.
+ */
+function mobile_encrypt_sensitive(string $value, string $type = 'address'): string
+{
+    if ($value === '') {
+        return '';
+    }
+
+    $service = mobile_encryption_service();
+    if ($service === null) {
+        return $value;
+    }
+
+    return $type === 'phone'
+        ? $service->encryptPhoneNumber($value)
+        : $service->encryptAddress($value);
+}
+
+/**
+ * @param array<string, mixed> $row
+ * @return array<string, mixed>
+ */
+function mobile_decrypt_address_row(array $row): array
+{
     foreach (['address_line', 'city', 'barangay', 'province', 'postal_code', 'country'] as $field) {
+        if (array_key_exists($field, $row) && $row[$field] !== null && (string) $row[$field] !== '') {
+            $row[$field] = mobile_decrypt_sensitive((string) $row[$field], 'address');
+        }
+    }
+
+    return $row;
+}
+
+/**
+ * @param array<string, mixed> $address
+ */
+function mobile_format_address_parts(array $address): string
+{
+    $parts = [];
+    foreach (['address_line', 'barangay', 'city', 'province', 'postal_code', 'country'] as $field) {
         $value = trim((string) ($address[$field] ?? ''));
-        if ($value !== '' && !is_probably_encrypted_text($value)) {
+        if ($value !== '') {
             $parts[] = $value;
         }
     }
 
     return implode(', ', $parts);
+}
+
+/**
+ * Build readable shipping address from user primary address.
+ */
+function build_shipping_address(PDO $db, int $userId): string
+{
+    $address = get_user_primary_address($db, $userId);
+
+    return $address === null ? '' : mobile_format_address_parts($address);
+}
+
+/**
+ * Prefer decrypted DB address when client sent ciphertext from stale local cache.
+ */
+function mobile_normalize_shipping_address(string $address, PDO $db, int $userId): string
+{
+    $address = trim($address);
+
+    // The mobile app stores address parts and joins them with `, `.
+    // If decrypting fails for saved parts, the resulting full string contains spaces/commas,
+    // which makes `is_probably_encrypted_text($address)` return false.
+    // So we check each comma-separated part individually.
+    $looksEncrypted = false;
+    if ($address !== '') {
+        $parts = array_map(static fn ($p): string => trim((string) $p), explode(',', $address));
+        foreach ($parts as $part) {
+            if ($part !== '' && is_probably_encrypted_text($part)) {
+                $looksEncrypted = true;
+                break;
+            }
+        }
+    }
+
+    if ($address === '' || $looksEncrypted) {
+        $fromDb = build_shipping_address($db, $userId);
+        if ($fromDb !== '') {
+            return $fromDb;
+        }
+    }
+
+    return $address;
 }
 
 /**
@@ -162,7 +304,7 @@ function get_user_primary_address(PDO $db, int $userId): ?array
     $stmt->execute([':user_id' => $userId]);
     $address = $stmt->fetch();
 
-    return is_array($address) ? $address : null;
+    return is_array($address) ? mobile_decrypt_address_row($address) : null;
 }
 
 /**

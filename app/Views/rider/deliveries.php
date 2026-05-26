@@ -29,7 +29,13 @@
     }
 
     .deliveries-panel {
-        overflow: hidden;
+        overflow: visible;
+    }
+
+    .deliveries-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .deliveries-toolbar {
@@ -91,7 +97,9 @@
 
     .deliveries-table {
         width: 100%;
+        min-width: 980px;
         border-collapse: collapse;
+        table-layout: fixed;
     }
 
     .deliveries-table th,
@@ -100,6 +108,79 @@
         text-align: left;
         border-bottom: 1px solid #e0e0e0;
         vertical-align: top;
+    }
+
+    .deliveries-table th:nth-child(1),
+    .deliveries-table td:nth-child(1) {
+        width: 11%;
+    }
+
+    .deliveries-table th:nth-child(2),
+    .deliveries-table td:nth-child(2) {
+        width: 14%;
+    }
+
+    .deliveries-table th:nth-child(3),
+    .deliveries-table td:nth-child(3) {
+        width: 22%;
+    }
+
+    .deliveries-table th:nth-child(4),
+    .deliveries-table td:nth-child(4) {
+        width: 11%;
+    }
+
+    .deliveries-table th:nth-child(5),
+    .deliveries-table td:nth-child(5) {
+        width: 14%;
+    }
+
+    .deliveries-table th:nth-child(6),
+    .deliveries-table td:nth-child(6) {
+        width: 12%;
+    }
+
+    .deliveries-table th:nth-child(7),
+    .deliveries-table td:nth-child(7) {
+        width: 16%;
+    }
+
+    .deliveries-table td.delivery-address-cell {
+        overflow: hidden;
+    }
+
+    .delivery-address-text {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+    }
+
+    .deliveries-table td.delivery-description-cell {
+        overflow: hidden;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+    .deliveries-table th:last-child,
+    .deliveries-table td.delivery-actions-cell {
+        position: sticky;
+        right: 0;
+        z-index: 2;
+        background: #ffffff;
+        box-shadow: -6px 0 10px rgba(15, 23, 42, 0.06);
+    }
+
+    .deliveries-table th:last-child {
+        background: #f8f9fa;
+        z-index: 3;
+    }
+
+    .deliveries-table tr.is-highlighted td.delivery-actions-cell {
+        background: #fff7ed;
     }
 
     .deliveries-table th {
@@ -125,10 +206,10 @@
     }
 
     .deliveries-table td.delivery-actions-cell {
-        width: 1%;
         white-space: normal;
         padding: 0.65rem 0.75rem;
-        min-width: 130px;
+        min-width: 150px;
+        vertical-align: middle;
     }
 
     .delivery-status-cell__inner {
@@ -358,12 +439,12 @@
             width: 100%;
         }
 
-        .deliveries-panel {
-            overflow-x: auto;
+        .deliveries-table {
+            min-width: 900px;
         }
 
-        .deliveries-table {
-            min-width: 760px;
+        .action-stack {
+            max-width: 132px;
         }
     }
 </style>
@@ -419,6 +500,7 @@
                 <option value="filter-cancelled">Cancelled</option>
             </select>
         </div>
+        <div class="deliveries-table-wrap">
         <table class="deliveries-table">
             <thead>
                 <tr>
@@ -428,13 +510,14 @@
                     <th>Contact</th>
                     <th>Description</th>
                     <th>Status</th>
-                    <th>ACTIONS</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($deliveries as $delivery): ?>
                     <?php
                         $deliveryOrderId = (int) ($delivery['id'] ?? 0);
+                        $displayAddress = (string) ($delivery['shipping_address'] ?? 'No delivery address provided');
                         $status = (string) ($delivery['delivery_status'] ?? 'to_ship');
                         if (strtolower((string) ($delivery['status'] ?? '')) === 'cancelled') {
                             $status = 'cancelled';
@@ -451,9 +534,11 @@
                             <?= esc($delivery['customer']['name'] ?? 'Customer') ?>
                             <div class="muted"><?= esc($delivery['customer']['email'] ?? '') ?></div>
                         </td>
-                        <td class="muted"><?= esc($delivery['shipping_address'] ?? 'No delivery address provided') ?></td>
-                        <td class="muted"><?= esc($delivery['contact_number'] ?? ($delivery['customer']['phone'] ?? 'Not provided')) ?></td>
-                        <td class="muted"><?= esc(shipment_notes_for_display($delivery['shipment_notes'] ?? '') ?: 'None') ?></td>
+                        <td class="muted delivery-address-cell">
+                            <span class="delivery-address-text" title="<?= esc($displayAddress) ?>"><?= esc($displayAddress) ?></span>
+                        </td>
+                        <td class="muted"><?= esc($delivery['contact_number'] ?? 'Not provided') ?></td>
+                        <td class="muted delivery-description-cell"><?= esc(shipment_notes_for_display($delivery['shipment_notes'] ?? '') ?: 'None') ?></td>
                         <td class="delivery-status-cell">
                             <div class="delivery-status-cell__inner">
                             <?php if ($status === 'cancelled'): ?>
@@ -536,6 +621,7 @@
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
     <?php endif; ?>
 </section>
 
@@ -1606,15 +1692,42 @@ function openRouteMap(orderId) {
     modal.style.display = 'block';
     fetch(`<?= site_url('dashboard/order-details-json') ?>/${orderId}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-    }).then(r => r.json()).then(data => {
+    }).then(r => r.json()).then(async data => {
         if (!data.success || !data.order) return;
         const o = data.order;
         const pickupPhase = ['ready_for_pickup', 'accepted_by_rider'].includes(String(o.delivery_status || ''));
-        const targetLat = pickupPhase ? o.store_latitude : o.delivery_latitude;
-        const targetLng = pickupPhase ? o.store_longitude : o.delivery_longitude;
+        let targetLat = pickupPhase ? o.store_latitude : o.delivery_latitude;
+        let targetLng = pickupPhase ? o.store_longitude : o.delivery_longitude;
         const label = pickupPhase ? 'Going to Pickup (Store)' : 'Out for Delivery (Customer)';
         document.getElementById('routeMapLabel').textContent = label;
-        if (!targetLat || !targetLng) {
+
+        function isValidCoord(v) {
+            return typeof v === 'number' && Number.isFinite(v);
+        }
+
+        async function geocodeAddress(addr) {
+            const q = (addr || '').trim();
+            if (q.length < 4) return null;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+            const res = await fetch(url).catch(() => null);
+            if (!res) return null;
+            const json = await res.json().catch(() => null);
+            if (!Array.isArray(json) || json.length === 0) return null;
+            const lat = parseFloat(json[0]?.lat);
+            const lng = parseFloat(json[0]?.lon);
+            return isValidCoord(lat) && isValidCoord(lng) ? { lat, lng } : null;
+        }
+
+        if (!isValidCoord(targetLat) || !isValidCoord(targetLng)) {
+            const addressToUse = pickupPhase ? (o.store_address || '') : (o.shipping_address || '');
+            const geo = await geocodeAddress(addressToUse);
+            if (geo) {
+                targetLat = geo.lat;
+                targetLng = geo.lng;
+            }
+        }
+
+        if (!isValidCoord(targetLat) || !isValidCoord(targetLng)) {
             document.getElementById('routeMapMeta').textContent = 'Destination coordinates are not set.';
             return;
         }

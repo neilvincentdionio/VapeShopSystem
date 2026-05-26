@@ -114,6 +114,10 @@ $defaultAddressMode = ($hasSavedAddress && $hasSavedPin) ? 'saved_address' : 'ma
                             <div class="saved-address-note">
                                 Your registered map location will be sent to the rider and admin automatically.
                             </div>
+                        <?php else: ?>
+                            <div class="saved-address-note" style="color:#b45309;">
+                                No saved map pin yet. Pin your location on the map below before placing the order.
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

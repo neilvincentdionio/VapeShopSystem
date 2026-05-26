@@ -20,8 +20,12 @@ import android.graphics.Typeface;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.util.DisplayMetrics;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -281,7 +285,7 @@ public class MainActivity extends AppCompatActivity {
             if (reviewCount <= 0 || averageRating <= 0) {
                 return "No ratings yet";
             }
-            return String.format(Locale.US, "%.1f (%d review%s)", averageRating, reviewCount, reviewCount == 1 ? "" : "s");
+            return String.format(Locale.US, "★ %.1f (%d review%s)", averageRating, reviewCount, reviewCount == 1 ? "" : "s");
         }
 
         String formatStockLabel() {
@@ -295,27 +299,91 @@ public class MainActivity extends AppCompatActivity {
             return String.format(Locale.US, "In stock (%d available)", stockQty);
         }
 
+        String formatCardSpecLabel() {
+            String categoryLabel = category == null ? "" : category.trim();
+            if (puffs > 0 && !categoryLabel.isEmpty()) {
+                return String.format(Locale.US, "%s · %,d puffs", categoryLabel, puffs);
+            }
+            if (puffs > 0) {
+                return String.format(Locale.US, "%,d puffs", puffs);
+            }
+            if (!categoryLabel.isEmpty()) {
+                return categoryLabel;
+            }
+            if (spec != null && !spec.trim().isEmpty()) {
+                return compactSpecForCard(spec.trim());
+            }
+            return "";
+        }
+
+        String formatCardStockLabel() {
+            if (needsFlavorSelection()) {
+                int flavorCount = variants == null ? 0 : variants.size();
+                if (stockQty <= 0) {
+                    return flavorCount > 0
+                        ? String.format(Locale.US, "Out of stock · %d flavors", flavorCount)
+                        : "Out of stock";
+                }
+                return String.format(Locale.US, "%d left · %d flavors", stockQty, flavorCount);
+            }
+            if (stockQty <= 0) {
+                return "Out of stock";
+            }
+            return String.format(Locale.US, "%d left", stockQty);
+        }
+
+        String formatCardRatingLabel() {
+            if (reviewCount <= 0 || averageRating <= 0) {
+                return "No ratings yet";
+            }
+            return String.format(Locale.US, "★ %.1f (%d)", averageRating, reviewCount);
+        }
+
+        String formatCardSpecBlock() {
+            String specLabel = formatCardSpecLabel();
+            String stockLabel = formatCardStockLabel();
+            if (specLabel.isEmpty()) {
+                return stockLabel;
+            }
+            if (stockLabel.isEmpty()) {
+                return specLabel;
+            }
+            return specLabel + "\n" + stockLabel;
+        }
+
+        private static String compactSpecForCard(String fullSpec) {
+            String[] parts = fullSpec.split("\\s*•\\s*");
+            if (parts.length == 0) {
+                return fullSpec;
+            }
+            if (parts.length == 1) {
+                return parts[0].trim();
+            }
+            return parts[0].trim() + " · " + parts[1].trim();
+        }
+
         String formatFlavorSummary() {
             if (variants == null || variants.isEmpty()) {
                 return "No flavors listed";
             }
             StringBuilder summary = new StringBuilder();
-            int shown = 0;
             for (ProductVariant variant : variants) {
-                if (shown >= 8) {
-                    summary.append("\n+").append(variants.size() - shown).append(" more flavors");
-                    break;
+                if (variant == null) {
+                    continue;
+                }
+                String flavor = variant.flavor == null ? "" : variant.flavor.trim();
+                if (flavor.isEmpty()) {
+                    continue;
                 }
                 if (summary.length() > 0) {
                     summary.append('\n');
                 }
-                summary.append(variant.flavor)
+                summary.append(flavor)
                     .append(" (")
                     .append(variant.stockQty)
                     .append(" left)");
-                shown++;
             }
-            return summary.toString();
+            return summary.length() > 0 ? summary.toString() : "No flavors listed";
         }
     }
 
@@ -477,12 +545,40 @@ public class MainActivity extends AppCompatActivity {
         if (hasRegisteredAccount()) {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             currentUserRole = prefs.getString(KEY_USER_ROLE, "customer");
+            if (currentUserRole == null) {
+                currentUserRole = "customer";
+            }
             currentUserId = prefs.getInt(KEY_USER_ID, 0);
             isLoggedIn = true;
             routeAfterLogin();
+            refreshSavedAddressFromServer(null);
             return;
         }
         loadFragment(new LoginFragment());
+    }
+
+    private boolean isActivityAlive() {
+        return !isFinishing() && !isDestroyed();
+    }
+
+    private void runOnUiThreadIfAlive(Runnable action) {
+        if (action == null) {
+            return;
+        }
+        if (!isActivityAlive()) {
+            return;
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (isActivityAlive()) {
+                action.run();
+            }
+            return;
+        }
+        runOnUiThread(() -> {
+            if (isActivityAlive()) {
+                action.run();
+            }
+        });
     }
 
     @Override
@@ -522,10 +618,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadFragment(Fragment fragment) {
+        if (fragment == null || !isActivityAlive()) {
+            return;
+        }
         FragmentManager fragmentManager = getSupportFragmentManager();
+        if (fragmentManager.isDestroyed()) {
+            return;
+        }
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
         fragmentTransaction.replace(R.id.fragment_container, fragment);
-        fragmentTransaction.commit();
+        if (fragmentManager.isStateSaved()) {
+            fragmentTransaction.commitAllowingStateLoss();
+        } else {
+            fragmentTransaction.commit();
+        }
     }
 
     public void openRefundAttachmentPicker(AttachmentPickCallback callback) {
@@ -558,7 +664,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public boolean isCustomerRole() {
-        return "customer".equalsIgnoreCase(currentUserRole) || currentUserRole.isEmpty();
+        String role = currentUserRole == null ? "" : currentUserRole;
+        return "customer".equalsIgnoreCase(role) || role.isEmpty();
     }
 
     public boolean isAdminRole() {
@@ -605,14 +712,25 @@ public class MainActivity extends AppCompatActivity {
         return prefs.getString(KEY_USER_PHONE, "");
     }
 
+    private String sanitizeAddressField(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        return isProbablyEncryptedText(trimmed) ? "" : trimmed;
+    }
+
     public String getRegisteredShippingAddress() {
+        if (hasCorruptedSavedAddress()) {
+            return "";
+        }
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String street = prefs.getString(KEY_USER_STREET, "");
-        String barangay = prefs.getString(KEY_USER_BARANGAY, "");
-        String city = prefs.getString(KEY_USER_CITY, "");
-        String province = prefs.getString(KEY_USER_PROVINCE, "South Cotabato");
-        String postalCode = prefs.getString(KEY_USER_POSTAL_CODE, "");
-        String country = prefs.getString(KEY_USER_COUNTRY, "Philippines");
+        String street = sanitizeAddressField(prefs.getString(KEY_USER_STREET, ""));
+        String barangay = sanitizeAddressField(prefs.getString(KEY_USER_BARANGAY, ""));
+        String city = sanitizeAddressField(prefs.getString(KEY_USER_CITY, ""));
+        String province = sanitizeAddressField(prefs.getString(KEY_USER_PROVINCE, "South Cotabato"));
+        String postalCode = sanitizeAddressField(prefs.getString(KEY_USER_POSTAL_CODE, ""));
+        String country = sanitizeAddressField(prefs.getString(KEY_USER_COUNTRY, "Philippines"));
         StringBuilder sb = new StringBuilder();
         if (!street.trim().isEmpty()) sb.append(street.trim());
         if (!barangay.trim().isEmpty()) {
@@ -636,6 +754,155 @@ public class MainActivity extends AppCompatActivity {
             sb.append(country.trim());
         }
         return sb.toString();
+    }
+
+    private boolean isProbablyEncryptedText(String value) {
+        if (value == null) {
+            return false;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() < 60 || trimmed.contains(" ")) {
+            return false;
+        }
+        return trimmed.matches("^[A-Za-z0-9+/=._-]+$");
+    }
+
+    private String formatDateTimeForDisplay(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        String[] patterns = {"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss"};
+        java.text.SimpleDateFormat output = new java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US);
+        for (String pattern : patterns) {
+            try {
+                java.text.SimpleDateFormat input = new java.text.SimpleDateFormat(pattern, Locale.US);
+                java.util.Date parsed = input.parse(raw.trim());
+                if (parsed != null) {
+                    return output.format(parsed);
+                }
+            } catch (Exception ignored) {
+                // Try next pattern.
+            }
+        }
+        return null;
+    }
+
+    private String resolveOrderPlacedLabel(JSONObject order) {
+        if (order == null) {
+            return "—";
+        }
+        String createdAt = order.optString("created_at", "").trim();
+        if (createdAt.isEmpty()) {
+            createdAt = order.optString("placed_at", "").trim();
+        }
+        if (!createdAt.isEmpty()) {
+            String formatted = formatDateTimeForDisplay(createdAt);
+            if (formatted != null) {
+                return formatted;
+            }
+        }
+
+        String reference = order.optString("reference_number", "");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("ORD-(\\d{14})-", java.util.regex.Pattern.CASE_INSENSITIVE)
+            .matcher(reference);
+        if (matcher.find()) {
+            try {
+                java.text.SimpleDateFormat input = new java.text.SimpleDateFormat("yyyyMMddHHmmss", Locale.US);
+                java.text.SimpleDateFormat output = new java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US);
+                java.util.Date parsed = input.parse(matcher.group(1));
+                if (parsed != null) {
+                    return output.format(parsed);
+                }
+            } catch (Exception ignored) {
+                // Fall through to order_date.
+            }
+        }
+
+        String orderDate = order.optString("order_date", "").trim();
+        return orderDate.isEmpty() ? "—" : orderDate;
+    }
+
+    public boolean hasCorruptedSavedAddress() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String[] fields = {
+            prefs.getString(KEY_USER_STREET, ""),
+            prefs.getString(KEY_USER_BARANGAY, ""),
+            prefs.getString(KEY_USER_CITY, ""),
+            prefs.getString(KEY_USER_PROVINCE, ""),
+            prefs.getString(KEY_USER_POSTAL_CODE, ""),
+            prefs.getString(KEY_USER_COUNTRY, "")
+        };
+        for (String field : fields) {
+            if (isProbablyEncryptedText(field)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void refreshSavedAddressFromServer(Runnable onComplete) {
+        String email = getRegisteredEmail();
+        if (email.isEmpty()) {
+            runOnUiThreadIfAlive(onComplete);
+            return;
+        }
+
+        Map<String, String> params = new HashMap<>();
+        params.put("email", email);
+        apiPost("user_address.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    if (data == null) {
+                        return;
+                    }
+                    SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                    String password = prefs.getString(KEY_USER_PASSWORD, "");
+                    String fullName = prefs.getString(KEY_USER_FULL_NAME, "Customer");
+                    String phone = data.optString("phone", prefs.getString(KEY_USER_PHONE, ""));
+                    String street = sanitizeAddressField(data.optString("street", ""));
+                    String city = sanitizeAddressField(data.optString("city", ""));
+                    String barangay = sanitizeAddressField(data.optString("barangay", ""));
+                    String postalCode = sanitizeAddressField(data.optString("postal_code", ""));
+                    String province = sanitizeAddressField(data.optString("province", "South Cotabato"));
+                    String country = sanitizeAddressField(data.optString("country", "Philippines"));
+                    double latitude = data.has("latitude")
+                        ? data.optDouble("latitude", getRegisteredLatitude())
+                        : getRegisteredLatitude();
+                    double longitude = data.has("longitude")
+                        ? data.optDouble("longitude", getRegisteredLongitude())
+                        : getRegisteredLongitude();
+                    saveAccountLocally(
+                        fullName,
+                        email,
+                        password,
+                        phone,
+                        street,
+                        city,
+                        barangay,
+                        postalCode,
+                        province,
+                        country,
+                        latitude,
+                        longitude
+                    );
+                } catch (Exception ignored) {
+                    // Keep existing cached address if refresh fails.
+                }
+                runOnUiThreadIfAlive(onComplete);
+            }
+
+            @Override
+            public void onError(String message) {
+                runOnUiThreadIfAlive(onComplete);
+            }
+        });
     }
 
     public double getRegisteredLatitude() {
@@ -746,12 +1013,12 @@ public class MainActivity extends AppCompatActivity {
                     String fullName = data != null ? data.optString("full_name", "Customer") : "Customer";
                     String savedEmail = data != null ? data.optString("email", email) : email;
                     String phone = data != null ? data.optString("phone", "") : "";
-                    String street = data != null ? data.optString("street", "") : "";
-                    String city = data != null ? data.optString("city", "") : "";
-                    String barangay = data != null ? data.optString("barangay", "") : "";
-                    String postalCode = data != null ? data.optString("postal_code", "") : "";
-                    String province = data != null ? data.optString("province", "South Cotabato") : "South Cotabato";
-                    String country = data != null ? data.optString("country", "Philippines") : "Philippines";
+                    String street = data != null ? sanitizeAddressField(data.optString("street", "")) : "";
+                    String city = data != null ? sanitizeAddressField(data.optString("city", "")) : "";
+                    String barangay = data != null ? sanitizeAddressField(data.optString("barangay", "")) : "";
+                    String postalCode = data != null ? sanitizeAddressField(data.optString("postal_code", "")) : "";
+                    String province = data != null ? sanitizeAddressField(data.optString("province", "South Cotabato")) : "South Cotabato";
+                    String country = data != null ? sanitizeAddressField(data.optString("country", "Philippines")) : "Philippines";
                     double latitude = data != null ? data.optDouble("latitude", 6.1164) : 6.1164;
                     double longitude = data != null ? data.optDouble("longitude", 125.1716) : 125.1716;
                     String role = data != null ? data.optString("role", "customer") : "customer";
@@ -765,7 +1032,9 @@ public class MainActivity extends AppCompatActivity {
                         .putString(KEY_USER_ROLE, currentUserRole)
                         .putInt(KEY_USER_ID, currentUserId)
                         .apply();
-                    callback.onSuccess(fullName, savedEmail);
+                    refreshSavedAddressFromServer(() ->
+                        runOnUiThreadIfAlive(() -> callback.onSuccess(fullName, savedEmail))
+                    );
                 } catch (Exception e) {
                     callback.onError("Invalid server response");
                 }
@@ -895,6 +1164,223 @@ public class MainActivity extends AppCompatActivity {
                 callback.onError(message);
             }
         });
+    }
+
+    public void updateAddressWithServer(
+        String phone,
+        String street,
+        String city,
+        String barangay,
+        String postalCode,
+        String province,
+        String country,
+        double latitude,
+        double longitude,
+        SimpleCallback callback
+    ) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("phone", phone == null ? "" : phone);
+        params.put("street", street);
+        params.put("city", city);
+        params.put("barangay", barangay);
+        params.put("postal_code", postalCode);
+        params.put("province", province);
+        params.put("country", country);
+        params.put("delivery_latitude", String.format(Locale.US, "%.6f", latitude));
+        params.put("delivery_longitude", String.format(Locale.US, "%.6f", longitude));
+        apiPost("address_update.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Unable to update address"));
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                    String password = prefs.getString(KEY_USER_PASSWORD, "");
+                    String fullName = prefs.getString(KEY_USER_FULL_NAME, "Customer");
+                    String email = getRegisteredEmail();
+                    String savedPhone = data != null ? data.optString("phone", phone) : phone;
+                    String savedStreet = data != null ? sanitizeAddressField(data.optString("street", street)) : street;
+                    String savedCity = data != null ? sanitizeAddressField(data.optString("city", city)) : city;
+                    String savedBarangay = data != null ? sanitizeAddressField(data.optString("barangay", barangay)) : barangay;
+                    String savedPostal = data != null ? sanitizeAddressField(data.optString("postal_code", postalCode)) : postalCode;
+                    String savedProvince = data != null ? sanitizeAddressField(data.optString("province", province)) : province;
+                    String savedCountry = data != null ? sanitizeAddressField(data.optString("country", country)) : country;
+                    double savedLat = data != null ? data.optDouble("latitude", latitude) : latitude;
+                    double savedLng = data != null ? data.optDouble("longitude", longitude) : longitude;
+                    saveAccountLocally(
+                        fullName,
+                        email,
+                        password,
+                        savedPhone,
+                        savedStreet,
+                        savedCity,
+                        savedBarangay,
+                        savedPostal,
+                        savedProvince,
+                        savedCountry,
+                        savedLat,
+                        savedLng
+                    );
+                    callback.onSuccess(root.optString("message", "Address updated"));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    public void showEditAddressDialog(Runnable onSaved) {
+        if (!isUserLoggedIn()) {
+            Toast.makeText(this, "Please login first", Toast.LENGTH_SHORT).show();
+            loadFragment(new LoginFragment());
+            return;
+        }
+        Runnable openDialog = () -> openEditAddressDialog(onSaved);
+        if (hasCorruptedSavedAddress()) {
+            refreshSavedAddressFromServer(openDialog);
+        } else {
+            openDialog.run();
+        }
+    }
+
+    private void openEditAddressDialog(Runnable onSaved) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_edit_address, null);
+        EditText phoneInput = dialogView.findViewById(R.id.edit_address_phone);
+        EditText streetInput = dialogView.findViewById(R.id.edit_address_street);
+        Spinner provinceSpinner = dialogView.findViewById(R.id.edit_address_province);
+        Spinner citySpinner = dialogView.findViewById(R.id.edit_address_city);
+        Spinner barangaySpinner = dialogView.findViewById(R.id.edit_address_barangay);
+        EditText postalInput = dialogView.findViewById(R.id.edit_address_postal);
+        Button btnCurrentLocation = dialogView.findViewById(R.id.btn_edit_address_location);
+        TextView mapStatus = dialogView.findViewById(R.id.edit_address_map_status);
+        WebView mapWebView = dialogView.findViewById(R.id.edit_address_map_webview);
+        TextView errorView = dialogView.findViewById(R.id.edit_address_error);
+
+        initCheckoutAddressMappings();
+        setupCheckoutAddressSpinners(provinceSpinner, citySpinner, barangaySpinner);
+        prefillEditAddressFields(phoneInput, streetInput, postalInput, provinceSpinner, citySpinner, barangaySpinner);
+
+        final boolean[] mapPinned = {true};
+        final double[] deliveryLat = {getRegisteredLatitude()};
+        final double[] deliveryLng = {getRegisteredLongitude()};
+
+        setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned, null);
+        btnCurrentLocation.setOnClickListener(v -> fetchCheckoutCurrentLocation(
+            mapWebView,
+            deliveryLat,
+            deliveryLng,
+            mapPinned,
+            mapStatus,
+            streetInput,
+            provinceSpinner,
+            citySpinner,
+            barangaySpinner,
+            postalInput
+        ));
+        DisplayMetrics metrics = getResources().getDisplayMetrics();
+        int dialogHeight = (int) (metrics.heightPixels * 0.92f);
+        dialogView.setLayoutParams(new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dialogHeight
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Edit Delivery Address")
+            .setView(dialogView)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", null)
+            .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dialogHeight
+            );
+        }
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            errorView.setVisibility(View.GONE);
+            String phone = phoneInput.getText().toString().trim();
+            String street = streetInput.getText().toString().trim();
+            String city = citySpinner.getSelectedItem() != null
+                ? citySpinner.getSelectedItem().toString().trim()
+                : "";
+            String barangay = barangaySpinner.getSelectedItem() != null
+                ? barangaySpinner.getSelectedItem().toString().trim()
+                : "";
+            String postalCode = postalInput.getText().toString().trim();
+            String province = provinceSpinner.getSelectedItem() != null
+                ? provinceSpinner.getSelectedItem().toString().trim()
+                : "South Cotabato";
+            String country = "Philippines";
+
+            if (street.isEmpty() || city.isEmpty() || barangay.isEmpty() || postalCode.isEmpty()) {
+                errorView.setText("Please complete street, city, barangay, and postal code.");
+                errorView.setVisibility(View.VISIBLE);
+                return;
+            }
+            if (!mapPinned[0]) {
+                errorView.setText("Please pin your delivery location on the map.");
+                errorView.setVisibility(View.VISIBLE);
+                return;
+            }
+
+            updateAddressWithServer(
+                phone,
+                street,
+                city,
+                barangay,
+                postalCode,
+                province,
+                country,
+                deliveryLat[0],
+                deliveryLng[0],
+                new SimpleCallback() {
+                    @Override
+                    public void onSuccess(String message) {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        dialog.dismiss();
+                        if (onSaved != null) {
+                            onSaved.run();
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        errorView.setText(message);
+                        errorView.setVisibility(View.VISIBLE);
+                    }
+                }
+            );
+        }));
+
+        dialog.show();
+    }
+
+    private void prefillEditAddressFields(
+        EditText phoneInput,
+        EditText streetInput,
+        EditText postalInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner
+    ) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        phoneInput.setText(prefs.getString(KEY_USER_PHONE, ""));
+        streetInput.setText(prefs.getString(KEY_USER_STREET, ""));
+        postalInput.setText(prefs.getString(KEY_USER_POSTAL_CODE, ""));
+        setCheckoutSpinnerValue(provinceSpinner, prefs.getString(KEY_USER_PROVINCE, "South Cotabato"));
+        setCheckoutSpinnerValue(citySpinner, prefs.getString(KEY_USER_CITY, "General Santos City"));
+        matchBarangaySpinner(barangaySpinner, Arrays.asList(prefs.getString(KEY_USER_BARANGAY, "")));
     }
 
     public void syncCartItemToServer(String productName, int quantity, Integer variantId, SimpleCallback callback) {
@@ -1265,6 +1751,15 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (hasCorruptedSavedAddress()) {
+            refreshSavedAddressFromServer(() -> openCheckoutDialog(callback));
+            return;
+        }
+
+        openCheckoutDialog(callback);
+    }
+
+    private void openCheckoutDialog(SimpleCallback callback) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_checkout, null);
         TextView totalView = dialogView.findViewById(R.id.checkout_total_amount);
         TextView itemCountView = dialogView.findViewById(R.id.checkout_item_count);
@@ -1340,7 +1835,11 @@ public class MainActivity extends AppCompatActivity {
         });
         btnSavedAddress.setOnClickListener(v -> {
             useSavedAddress[0] = true;
-            refreshAddressMode.run();
+            if (hasCorruptedSavedAddress()) {
+                refreshSavedAddressFromServer(refreshAddressMode);
+            } else {
+                refreshAddressMode.run();
+            }
         });
         refreshAddressMode.run();
 
@@ -1727,10 +2226,12 @@ public class MainActivity extends AppCompatActivity {
                     addr.optString("municipality", ""),
                     addr.optString("county", "")
                 );
-                String province = addr.optString("state", "");
-                if (province.isEmpty()) {
-                    province = addr.optString("region", "");
-                }
+                String province = normalizeProvinceName(
+                    firstNonEmpty(
+                        addr.optString("state", ""),
+                        addr.optString("region", "")
+                    )
+                );
                 String postal = addr.optString("postcode", "");
 
                 List<String> barangayCandidates = new ArrayList<>();
@@ -1742,9 +2243,13 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 final String streetFinal = street;
-                final String cityFinal = city;
+                final String cityFinal = normalizeCityName(city);
                 final String provinceFinal = province;
-                final String postalFinal = postal;
+                String postalResolved = postal;
+                if (postalResolved.isEmpty() && "General Santos City".equals(cityFinal)) {
+                    postalResolved = "9500";
+                }
+                final String postalFinal = postalResolved;
                 final List<String> barangayCandidatesFinal = barangayCandidates;
 
                 mainHandler.post(() -> {
@@ -1799,6 +2304,41 @@ public class MainActivity extends AppCompatActivity {
             .replace("poblacion", "pob")
             .replaceAll("\\s+", " ")
             .trim();
+    }
+
+    private String normalizeProvinceName(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return "";
+        }
+        String norm = normalizeLocationText(raw);
+        if (norm.contains("soccsksargen") || norm.contains("south cotabato") || norm.contains("sarangani")) {
+            return "South Cotabato";
+        }
+        if (norm.contains("davao del sur")) {
+            return "Davao del Sur";
+        }
+        if (norm.contains("davao del norte")) {
+            return "Davao del Norte";
+        }
+        if (norm.contains("davao occidental")) {
+            return "Davao Occidental";
+        }
+        if (norm.contains("davao oriental")) {
+            return "Davao Oriental";
+        }
+        return raw.trim();
+    }
+
+    private String normalizeCityName(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        String norm = normalizeLocationText(trimmed);
+        if ("gensan".equals(norm) || norm.contains("general santos")) {
+            return "General Santos City";
+        }
+        return trimmed;
     }
 
     private void setCheckoutSpinnerValue(Spinner spinner, String targetValue) {
@@ -1949,7 +2489,10 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setGeolocationEnabled(true);
+        webSettings.setBuiltInZoomControls(false);
+        webSettings.setDisplayZoomControls(false);
         mapWebView.addJavascriptInterface(mapBridge, "AndroidCheckoutMap");
+        enableMapTouchInScroll(mapWebView);
         mapWebView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onGeolocationPermissionsShowPrompt(
@@ -1961,7 +2504,83 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        mapWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                syncMapLocation(view, lat[0], lng[0], 16);
+                view.postDelayed(() ->
+                    view.evaluateJavascript("if(window.map){map.invalidateSize(true);}", null),
+                    350
+                );
+            }
+        });
         mapWebView.loadUrl("file:///android_asset/checkout_map.html");
+    }
+
+    private void enableMapTouchInScroll(WebView mapWebView) {
+        if (mapWebView == null) {
+            return;
+        }
+        mapWebView.setOnTouchListener((v, event) -> {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                ViewParent parent = v.getParent();
+                while (parent != null) {
+                    parent.requestDisallowInterceptTouchEvent(true);
+                    parent = parent.getParent();
+                }
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                ViewParent parent = v.getParent();
+                while (parent != null) {
+                    parent.requestDisallowInterceptTouchEvent(false);
+                    parent = parent.getParent();
+                }
+            }
+            return false;
+        });
+    }
+
+    private void syncMapLocation(WebView mapWebView, double lat, double lng, int zoom) {
+        if (mapWebView == null) {
+            return;
+        }
+        mapWebView.evaluateJavascript(
+            "if (typeof setLocation === 'function') { setLocation(" + lat + "," + lng + "," + zoom + "); }",
+            null
+        );
+    }
+
+    private void openFullscreenMapPicker(
+        WebView previewMap,
+        TextView statusView,
+        double[] deliveryLat,
+        double[] deliveryLng,
+        boolean[] mapPinned
+    ) {
+        View fullView = LayoutInflater.from(this).inflate(R.layout.dialog_fullscreen_map, null);
+        WebView fullMap = fullView.findViewById(R.id.fullscreen_map_webview);
+        TextView fullStatus = fullView.findViewById(R.id.fullscreen_map_status);
+        Button doneBtn = fullView.findViewById(R.id.btn_fullscreen_map_done);
+
+        setupDeliveryMapWebView(fullMap, fullStatus, deliveryLat, deliveryLng, mapPinned, null);
+
+        AlertDialog fullDialog = new AlertDialog.Builder(this)
+            .setView(fullView)
+            .create();
+        if (fullDialog.getWindow() != null) {
+            fullDialog.getWindow().setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            );
+        }
+        doneBtn.setOnClickListener(v -> {
+            syncMapLocation(previewMap, deliveryLat[0], deliveryLng[0], 17);
+            if (statusView != null) {
+                statusView.setText("Location saved. Use full screen map again if you need to adjust.");
+            }
+            fullDialog.dismiss();
+        });
+        fullDialog.show();
     }
 
     private static class MapPinBridge {
@@ -1988,7 +2607,7 @@ public class MainActivity extends AppCompatActivity {
                 lng[0] = longitude;
                 pinned[0] = true;
                 if (status != null) {
-                    status.setText("Location captured. Drag the pin to adjust.");
+                    status.setText("Pin placed. Pinch to zoom or drag the map to fine-tune.");
                 }
                 if (listener != null) {
                     listener.onLocationPicked(latitude, longitude);
@@ -2173,7 +2792,7 @@ public class MainActivity extends AppCompatActivity {
                             OrderInfo info = new OrderInfo(
                                 order.optInt("order_id", 0),
                                 order.optString("reference_number", ""),
-                                order.optString("order_date", ""),
+                                resolveOrderPlacedLabel(order),
                                 deliveryStatus,
                                 summary.length() == 0 ? "No items" : summary.toString(),
                                 order.optDouble("total_amount", 0),
@@ -2302,13 +2921,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void refreshMessageBadges() {
-        mainHandler.post(() -> {
-            applyUnreadBadge(findViewById(R.id.nav_messages_badge));
-            Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-            if (current != null && current.getView() != null) {
-                applyUnreadBadge(current.getView().findViewById(R.id.messages_unread_badge));
-            }
-        });
+        mainHandler.post(() -> applyUnreadBadge(findViewById(R.id.nav_messages_badge)));
     }
 
     private void applyUnreadBadge(TextView badge) {
@@ -3244,10 +3857,7 @@ public class MainActivity extends AppCompatActivity {
                     InputStream stream = code >= 200 && code < 300
                         ? connection.getInputStream()
                         : connection.getErrorStream();
-                    String response = readStream(stream);
-                    if (response == null || response.isEmpty()) {
-                        response = "{\"success\":false,\"message\":\"Empty server response\"}";
-                    }
+                    String response = normalizeApiResponse(readStream(stream));
                     final String responseFinal = response;
                     mainHandler.post(() -> callback.onSuccess(responseFinal));
                     return;
@@ -3263,6 +3873,22 @@ public class MainActivity extends AppCompatActivity {
             final String finalLastUrlTried = lastUrlTried;
             mainHandler.post(() -> callback.onError("Cannot connect to server. URL: " + finalLastUrlTried + " | " + finalLastError));
         });
+    }
+
+    private String normalizeApiResponse(String response) {
+        if (response == null || response.trim().isEmpty()) {
+            return "{\"success\":false,\"message\":\"Empty server response\"}";
+        }
+        String trimmed = response.trim();
+        if (trimmed.startsWith("{")) {
+            return trimmed;
+        }
+        int start = trimmed.indexOf('{');
+        int end = trimmed.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return trimmed.substring(start, end + 1);
+        }
+        return "{\"success\":false,\"message\":\"Invalid server response\"}";
     }
 
     private void apiPostMultipart(
@@ -3734,13 +4360,12 @@ public class MainActivity extends AppCompatActivity {
             TextView mapStatus = view.findViewById(R.id.register_map_status);
             WebView mapWebView = view.findViewById(R.id.register_map_webview);
 
-            setupAddressMappings();
-            bindSpinner(countrySpinner, Arrays.asList("Philippines"));
-            bindSpinner(provinceSpinner, Arrays.asList("South Cotabato"));
-            setupAddressAutoSelect();
             chooseIdButton.setOnClickListener(v -> idPickerLauncher.launch("image/*"));
 
             MainActivity activity = (MainActivity) requireActivity();
+            activity.initCheckoutAddressMappings();
+            activity.setupCheckoutAddressSpinners(provinceSpinner, citySpinner, barangaySpinner);
+            bindSpinner(countrySpinner, Arrays.asList("Philippines"));
             activity.setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned);
             useLocationButton.setOnClickListener(v -> activity.fetchCheckoutCurrentLocation(
                 mapWebView,
@@ -4001,15 +4626,19 @@ public class MainActivity extends AppCompatActivity {
         private void setupHeaderActions(View view) {
             MainActivity activity = (MainActivity) requireActivity();
             View loginAction = view.findViewById(R.id.action_login);
-            loginAction.setVisibility(activity.isUserLoggedIn() ? View.GONE : View.VISIBLE);
-            loginAction.setOnClickListener(v ->
-                activity.loadFragment(new LoginFragment()));
-            view.findViewById(R.id.action_search).setOnClickListener(v ->
-                showSearchDialog(view));
-            view.findViewById(R.id.action_messages).setOnClickListener(v ->
-                activity.loadFragment(MessagesFragment.newInstance("", "", false)));
-            view.findViewById(R.id.action_notifications).setOnClickListener(v ->
-                activity.loadFragment(new NotificationsFragment()));
+            if (loginAction != null) {
+                loginAction.setVisibility(activity.isUserLoggedIn() ? View.GONE : View.VISIBLE);
+                loginAction.setOnClickListener(v -> activity.loadFragment(new LoginFragment()));
+            }
+            View searchAction = view.findViewById(R.id.action_search);
+            if (searchAction != null) {
+                searchAction.setOnClickListener(v -> showSearchDialog(view));
+            }
+            View notificationsAction = view.findViewById(R.id.action_notifications);
+            if (notificationsAction != null) {
+                notificationsAction.setOnClickListener(v ->
+                    activity.loadFragment(new NotificationsFragment()));
+            }
         }
 
         private void showSearchDialog(View rootView) {
@@ -4190,9 +4819,14 @@ public class MainActivity extends AppCompatActivity {
             TextView nameText = (TextView) content.getChildAt(1);
             TextView priceText = (TextView) content.getChildAt(2);
             TextView specText = (TextView) content.getChildAt(3);
+            TextView ratingText = (TextView) content.getChildAt(4);
             nameText.setText(product.name);
             priceText.setText(String.format(Locale.US, "₱%.2f", product.price));
-            specText.setText(product.spec + " • " + product.formatStockLabel());
+            String specBlock = product.formatCardSpecBlock();
+            specText.setText(specBlock.isEmpty() ? product.category : specBlock);
+            specText.setMaxLines(2);
+            ratingText.setMaxLines(1);
+            ratingText.setText(product.formatCardRatingLabel());
         }
 
         private void openProductDetail(String productName, int imageResId) {
@@ -5848,44 +6482,104 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public static class SettingsFragment extends Fragment {
+        private TextView profileName;
+        private TextView profileEmail;
+        private TextView deliveryAddressView;
+        private View logoutAction;
+        private MainActivity activity;
+
         @Override
         public View onCreateView(LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
             View view = inflater.inflate(R.layout.fragment_settings, container, false);
-            MainActivity activity = (MainActivity) requireActivity();
-            TextView profileName = view.findViewById(R.id.settings_profile_name);
-            TextView profileEmail = view.findViewById(R.id.settings_profile_email);
-            View logoutAction = view.findViewById(R.id.action_logout);
+            activity = (MainActivity) requireActivity();
+            profileName = view.findViewById(R.id.settings_profile_name);
+            profileEmail = view.findViewById(R.id.settings_profile_email);
+            deliveryAddressView = view.findViewById(R.id.settings_delivery_address);
+            logoutAction = view.findViewById(R.id.action_logout);
 
+            bindSettingsContent();
+            refreshAddressFromServer();
+
+            View.OnClickListener requireLogin = v -> {
+                if (!activity.isUserLoggedIn()) {
+                    Toast.makeText(requireContext(), "Please login first", Toast.LENGTH_SHORT).show();
+                    activity.loadFragment(new LoginFragment());
+                }
+            };
+
+            View.OnClickListener openEditProfile = v -> {
+                if (!activity.isUserLoggedIn()) {
+                    requireLogin.onClick(v);
+                    return;
+                }
+                showEditProfileDialog(activity, profileName, profileEmail);
+            };
+
+            View.OnClickListener openEditAddress = v -> {
+                if (!activity.isUserLoggedIn()) {
+                    requireLogin.onClick(v);
+                    return;
+                }
+                activity.showEditAddressDialog(this::bindSettingsContent);
+            };
+
+            view.findViewById(R.id.action_edit_profile).setOnClickListener(openEditProfile);
+            view.findViewById(R.id.btn_edit_profile_quick).setOnClickListener(openEditProfile);
+            view.findViewById(R.id.action_edit_address).setOnClickListener(openEditAddress);
+            view.findViewById(R.id.btn_edit_address_quick).setOnClickListener(openEditAddress);
+            view.findViewById(R.id.action_change_password).setOnClickListener(v -> {
+                if (!activity.isUserLoggedIn()) {
+                    requireLogin.onClick(v);
+                    return;
+                }
+                showChangePasswordDialog(activity);
+            });
+            logoutAction.setOnClickListener(v -> activity.onLogout());
+            return view;
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            if (activity != null && activity.isUserLoggedIn()) {
+                bindSettingsContent();
+                refreshAddressFromServer();
+            }
+        }
+
+        private void bindSettingsContent() {
             String registeredEmail = activity.getRegisteredEmail();
             if (activity.isUserLoggedIn() && !registeredEmail.isEmpty()) {
                 profileName.setText(activity.getRegisteredFullName());
                 profileEmail.setText(registeredEmail);
                 logoutAction.setVisibility(View.VISIBLE);
+                updateAddressDisplay();
             } else {
                 profileName.setText("Guest User");
                 profileEmail.setText("Login to manage your account");
+                deliveryAddressView.setText("Login to add your delivery address.");
                 logoutAction.setVisibility(View.GONE);
             }
+        }
 
-            view.findViewById(R.id.action_edit_profile).setOnClickListener(v -> {
-                if (!activity.isUserLoggedIn()) {
-                    Toast.makeText(requireContext(), "Please login first", Toast.LENGTH_SHORT).show();
-                    activity.loadFragment(new LoginFragment());
-                    return;
+        private void updateAddressDisplay() {
+            String address = activity.getRegisteredShippingAddress();
+            if (address.isEmpty()) {
+                if (activity.hasCorruptedSavedAddress()) {
+                    deliveryAddressView.setText("Loading your delivery address...");
+                } else {
+                    deliveryAddressView.setText("No delivery address saved yet. Tap Edit to add one.");
                 }
-                showEditProfileDialog(activity, profileName, profileEmail);
-            });
-            view.findViewById(R.id.action_change_password).setOnClickListener(v -> {
-                if (!activity.isUserLoggedIn()) {
-                    Toast.makeText(requireContext(), "Please login first", Toast.LENGTH_SHORT).show();
-                    activity.loadFragment(new LoginFragment());
-                    return;
-                }
-                showChangePasswordDialog(activity);
-            });
-            view.findViewById(R.id.action_logout).setOnClickListener(v ->
-                activity.onLogout());
-            return view;
+            } else {
+                deliveryAddressView.setText(address);
+            }
+        }
+
+        private void refreshAddressFromServer() {
+            if (!activity.isUserLoggedIn()) {
+                return;
+            }
+            activity.refreshSavedAddressFromServer(this::updateAddressDisplay);
         }
 
         private void showEditProfileDialog(MainActivity activity, TextView profileName, TextView profileEmail) {
@@ -6357,8 +7051,27 @@ public class MainActivity extends AppCompatActivity {
             productName.setText(product.name);
             productPrice.setText(String.format(Locale.US, "₱%.2f", product.price));
             productCategory.setText(product.category);
-            if (product.puffs > 0) {
-                productSpecs.setText(String.format(Locale.US, "%,d Puffs", product.puffs));
+            String specText = product.spec == null ? "" : product.spec.trim();
+            String categoryText = product.category == null ? "" : product.category.trim();
+            if (!specText.isEmpty() && !categoryText.isEmpty()) {
+                String specLower = specText.toLowerCase(Locale.US);
+                String catLower = categoryText.toLowerCase(Locale.US);
+                if (specLower.startsWith(catLower)) {
+                    specText = specText.substring(categoryText.length()).trim();
+                    if (specText.startsWith("•") || specText.startsWith("·")) {
+                        specText = specText.substring(1).trim();
+                    }
+                    if (specText.startsWith("-")) {
+                        specText = specText.substring(1).trim();
+                    }
+                }
+            }
+            if (specText.isEmpty() && product.puffs > 0) {
+                specText = String.format(Locale.US, "%,d Puffs", product.puffs);
+            }
+
+            if (!specText.isEmpty()) {
+                productSpecs.setText(specText);
                 productSpecs.setVisibility(View.VISIBLE);
             } else {
                 productSpecs.setVisibility(View.GONE);
@@ -6366,7 +7079,8 @@ public class MainActivity extends AppCompatActivity {
             productRating.setText(product.formatRatingLabel());
             productStock.setText(product.formatStockLabel());
 
-            if (product.needsFlavorSelection()) {
+            boolean showFlavors = product.variants != null && !product.variants.isEmpty();
+            if (showFlavors) {
                 productFlavors.setText(product.formatFlavorSummary());
                 view.findViewById(R.id.flavor_card).setVisibility(View.VISIBLE);
             } else {

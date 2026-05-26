@@ -1415,9 +1415,17 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 </div>
                             </td>
                             <td>
-                                <?= date('M j, Y', strtotime($order['date'])) ?>
-                                <br>
-                                <small class="meta-text"><?= date('g:i A', strtotime($order['date'])) ?></small>
+                                <?php
+                                    $placedAt = (string) ($order['created_at'] ?? $order['date'] ?? '');
+                                    $placedTs = $placedAt !== '' ? strtotime($placedAt) : false;
+                                ?>
+                                <?php if ($placedTs !== false): ?>
+                                    <?= date('M j, Y', $placedTs) ?>
+                                    <br>
+                                    <small class="meta-text"><?= date('g:i A', $placedTs) ?></small>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if ($order['customer']): ?>

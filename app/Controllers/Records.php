@@ -151,6 +151,7 @@ class Records extends BaseController
             ->orderBy('record_date', strtoupper($dateSort))
             ->orderBy('id', $dateSort === 'asc' ? 'ASC' : 'DESC')
             ->paginate(10);
+        $records = $this->attachOrderPlacementTimes($records);
         $pager = $recordsModel->pager;
 
         $recordTypes = array_map(
@@ -915,5 +916,69 @@ class Records extends BaseController
         ];
 
         return $labels[$status] ?? ucfirst($status);
+    }
+
+    /**
+     * For sales records synced from orders, show the real order placement time.
+     *
+     * @param array<int, array<string, mixed>> $records
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachOrderPlacementTimes(array $records): array
+    {
+        if ($records === []) {
+            return $records;
+        }
+
+        $references = [];
+        foreach ($records as $record) {
+            if (($record['record_type'] ?? '') !== 'sales') {
+                continue;
+            }
+            $reference = trim((string) ($record['reference_number'] ?? ''));
+            if ($reference !== '') {
+                $references[] = $reference;
+            }
+        }
+
+        if ($references === []) {
+            return $records;
+        }
+
+        $references = array_values(array_unique($references));
+        $db = \Config\Database::connect();
+        if (! $db->tableExists('orders')) {
+            return $records;
+        }
+
+        $rows = $db->table('orders')
+            ->select('reference_number, created_at')
+            ->whereIn('reference_number', $references)
+            ->get()
+            ->getResultArray();
+
+        $placedAtByReference = [];
+        foreach ($rows as $row) {
+            $ref = trim((string) ($row['reference_number'] ?? ''));
+            if ($ref !== '') {
+                $placedAtByReference[$ref] = (string) ($row['created_at'] ?? '');
+            }
+        }
+
+        foreach ($records as &$record) {
+            $ref = trim((string) ($record['reference_number'] ?? ''));
+            if ($ref === '' || ! isset($placedAtByReference[$ref])) {
+                continue;
+            }
+            $placedAt = $placedAtByReference[$ref];
+            $record['placed_at'] = $placedAt;
+            $placedTs = strtotime($placedAt);
+            if ($placedTs !== false) {
+                $record['record_date'] = date('Y-m-d', $placedTs);
+            }
+        }
+        unset($record);
+
+        return $records;
     }
 }

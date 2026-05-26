@@ -139,6 +139,7 @@
         .btn:hover { filter: brightness(0.95); }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: .7rem; border-bottom: 1px solid #e0e0e0; text-align: left; font-size: .92rem; color: #333333; }
+        .meta-text { color: #6b7280; font-size: .8rem; }
         th { color: #333333; font-weight: 600; background: #f8f9fa; }
         .sort-link { color: #333333; text-decoration: none; }
         .sort-link:hover { text-decoration: underline; }
@@ -345,10 +346,16 @@
                                 <td><?= (int) $item['id'] ?></td>
                                 <td>
                                     <?php
-                                        $recordDate = $item['date'] ?? ($item['record_date'] ?? '');
-                                        $recordDateTs = strtotime((string) $recordDate);
+                                        $recordWhen = $item['placed_at'] ?? ($item['created_at'] ?? ($item['date'] ?? ($item['record_date'] ?? '')));
+                                        $recordDateTs = strtotime((string) $recordWhen);
                                     ?>
-                                    <?= $recordDateTs !== false ? htmlspecialchars(date('M d, Y', $recordDateTs)) : '-' ?>
+                                    <?php if ($recordDateTs !== false): ?>
+                                        <?= htmlspecialchars(date('M d, Y', $recordDateTs)) ?>
+                                        <br>
+                                        <small class="meta-text"><?= htmlspecialchars(date('g:i A', $recordDateTs)) ?></small>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
                                 </td>
                                 <td><?= htmlspecialchars((string) ($item['reference_number'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars(ucfirst((string) ($item['record_type'] ?? ''))) ?></td>

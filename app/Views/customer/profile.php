@@ -173,12 +173,71 @@
         margin: .4rem 0 0 1.1rem;
     }
 
+    .profile-map-panel {
+        margin-top: .85rem;
+        padding-top: .85rem;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .profile-map-panel h4 {
+        margin: 0 0 .35rem;
+        font-size: .95rem;
+        color: #333333;
+    }
+
+    .profile-map-panel p {
+        margin: 0 0 .65rem;
+        color: #666666;
+        font-size: .82rem;
+        line-height: 1.45;
+    }
+
+    .profile-map-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        align-items: center;
+        margin-bottom: .6rem;
+    }
+
+    .profile-map-btn {
+        border: 1px solid #27c56f;
+        background: #ffffff;
+        color: #1d9f57;
+        border-radius: 8px;
+        padding: .45rem .75rem;
+        font-size: .82rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .profile-map-btn:hover {
+        background: #f0faf4;
+    }
+
+    #profile_delivery_map {
+        height: 220px;
+        width: 100%;
+        border: 1px solid #d7d9dd;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    #profile_map_status {
+        margin-top: .5rem;
+        font-size: .8rem;
+        color: #666666;
+    }
+
     @media (max-width: 720px) {
         .profile-grid-2 {
             grid-template-columns: 1fr;
         }
     }
 </style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <section class="panel profile-card">
     <?php
@@ -192,6 +251,8 @@
         $customerAccount['country'] ?? '',
     ]));
     $hasErrors = !empty(session()->getFlashdata('errors'));
+    $profileDeliveryLat = old('delivery_latitude', $customerAccount['delivery_latitude'] ?? '');
+    $profileDeliveryLng = old('delivery_longitude', $customerAccount['delivery_longitude'] ?? '');
     ?>
     <h1>Profile</h1>
     <p>Manage your customer details and keep account information updated.</p>
@@ -288,6 +349,18 @@
                     </div>
                 </div>
                 <div class="profile-help">Select Province, then City, then Barangay. Country is set to Philippines.</div>
+
+                <div class="profile-map-panel">
+                    <h4>Pin Delivery Location</h4>
+                    <p>Pin your exact location so riders and checkout can use your map coordinates.</p>
+                    <div class="profile-map-toolbar">
+                        <button type="button" class="profile-map-btn" id="profile_use_location_btn">Use Current Location</button>
+                        <span id="profile_map_status">Tap the map or use your current location to set your delivery pin.</span>
+                    </div>
+                    <div id="profile_delivery_map"></div>
+                    <input type="hidden" name="delivery_latitude" id="profile_delivery_latitude" value="<?= esc((string) $profileDeliveryLat) ?>">
+                    <input type="hidden" name="delivery_longitude" id="profile_delivery_longitude" value="<?= esc((string) $profileDeliveryLng) ?>">
+                </div>
             </div>
         </div>
 
@@ -541,6 +614,91 @@
             });
         }
 
+        let profileMap = null;
+        let profileMarker = null;
+
+        function setProfilePin(lat, lng, message) {
+            const latInput = document.getElementById('profile_delivery_latitude');
+            const lngInput = document.getElementById('profile_delivery_longitude');
+            const statusEl = document.getElementById('profile_map_status');
+            if (!latInput || !lngInput) {
+                return;
+            }
+            latInput.value = String(lat);
+            lngInput.value = String(lng);
+            if (!profileMap || typeof L === 'undefined') {
+                return;
+            }
+            if (!profileMarker) {
+                profileMarker = L.marker([lat, lng]).addTo(profileMap);
+            } else {
+                profileMarker.setLatLng([lat, lng]);
+            }
+            profileMap.setView([lat, lng], Math.max(profileMap.getZoom(), 15));
+            if (message && statusEl) {
+                statusEl.textContent = message;
+            }
+        }
+
+        function initProfileMap() {
+            if (typeof L === 'undefined' || profileMap) {
+                if (profileMap) {
+                    setTimeout(function() {
+                        profileMap.invalidateSize();
+                    }, 250);
+                }
+                return;
+            }
+            const mapEl = document.getElementById('profile_delivery_map');
+            const latInput = document.getElementById('profile_delivery_latitude');
+            const lngInput = document.getElementById('profile_delivery_longitude');
+            if (!mapEl) {
+                return;
+            }
+            const defaultLat = 6.1164;
+            const defaultLng = 125.1716;
+            const initialLat = parseFloat(latInput?.value || '') || defaultLat;
+            const initialLng = parseFloat(lngInput?.value || '') || defaultLng;
+            profileMap = L.map('profile_delivery_map').setView([initialLat, initialLng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(profileMap);
+            setProfilePin(initialLat, initialLng, latInput?.value ? 'Saved delivery pin loaded.' : '');
+            profileMap.on('click', function(event) {
+                setProfilePin(event.latlng.lat, event.latlng.lng, 'Delivery pin updated.');
+            });
+            setTimeout(function() {
+                profileMap.invalidateSize();
+            }, 250);
+        }
+
+        function ensureProfileMap() {
+            initProfileMap();
+        }
+
+        document.getElementById('profile_use_location_btn')?.addEventListener('click', function() {
+            const statusEl = document.getElementById('profile_map_status');
+            if (!navigator.geolocation) {
+                if (statusEl) {
+                    statusEl.textContent = 'Geolocation is not supported on this device.';
+                }
+                return;
+            }
+            ensureProfileMap();
+            if (statusEl) {
+                statusEl.textContent = 'Getting your current location...';
+            }
+            navigator.geolocation.getCurrentPosition(function(position) {
+                setProfilePin(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    'Current location saved as your delivery pin.'
+                );
+            }, function() {
+                if (statusEl) {
+                    statusEl.textContent = 'Unable to get location. Please tap the map to set your pin.';
+                }
+            }, { enableHighAccuracy: true, timeout: 10000 });
+        });
+
         document.querySelectorAll('[data-edit-target]').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 const target = btn.getAttribute('data-edit-target');
@@ -550,6 +708,9 @@
                 }
                 row.classList.toggle('is-editing');
                 if (row.classList.contains('is-editing')) {
+                    if (target === 'address') {
+                        ensureProfileMap();
+                    }
                     const customFocusSelector = row.getAttribute('data-focus-selector');
                     const input = customFocusSelector
                         ? row.querySelector(customFocusSelector)
@@ -563,6 +724,31 @@
                 }
             });
         });
+
+        const profileForm = document.querySelector('form[action*="dashboard/profile/update"]');
+        profileForm?.addEventListener('submit', function(event) {
+            const addressLine = document.getElementById('address-line-input')?.value?.trim() || '';
+            const city = document.getElementById('address-city')?.value?.trim() || '';
+            const barangay = document.getElementById('address-barangay')?.value?.trim() || '';
+            const province = document.getElementById('address-province')?.value?.trim() || '';
+            const postal = document.getElementById('postal-code-input')?.value?.trim() || '';
+            const hasAddress = addressLine !== '' || city !== '' || barangay !== '' || province !== '' || postal !== '';
+            const lat = document.getElementById('profile_delivery_latitude')?.value?.trim() || '';
+            const lng = document.getElementById('profile_delivery_longitude')?.value?.trim() || '';
+            if (hasAddress && (!lat || !lng)) {
+                event.preventDefault();
+                alert('Please pin your delivery location on the map before saving your address.');
+                const addressRow = document.querySelector('[data-row="address"]');
+                if (addressRow && !addressRow.classList.contains('is-editing')) {
+                    addressRow.classList.add('is-editing');
+                }
+                ensureProfileMap();
+            }
+        });
+
+        if (document.querySelector('[data-row="address"]')?.classList.contains('is-editing')) {
+            ensureProfileMap();
+        }
 
         document.querySelectorAll('[data-role-locked]').forEach(function(btn) {
             btn.addEventListener('click', function() {

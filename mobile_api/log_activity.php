@@ -12,18 +12,8 @@ function mobile_log_activity(
     string $status = 'success'
 ): void {
     try {
-        if (! class_exists(\App\Libraries\ActivityLogger::class, false)) {
-            $root = dirname(__DIR__);
-            if (! defined('FCPATH')) {
-                define('FCPATH', $root . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR);
-            }
-
-            require $root . '/vendor/autoload.php';
-            require $root . '/app/Config/Paths.php';
-            $paths = new \Config\Paths();
-            require $paths->systemDirectory . '/Boot.php';
-            \CodeIgniter\Boot::bootSpark($paths);
-        }
+        require_once __DIR__ . '/common.php';
+        mobile_ci_bootstrap();
 
         (new \App\Libraries\ActivityLogger())->logUserAction(
             $userId,

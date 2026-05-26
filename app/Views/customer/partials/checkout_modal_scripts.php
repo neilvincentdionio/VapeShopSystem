@@ -274,17 +274,20 @@ function validateCheckoutModal() {
             alert('No saved address found. Please enter your delivery address manually.');
             return false;
         }
-        if (savedDeliveryLatitude === null || savedDeliveryLongitude === null) {
-            alert('Your account has no saved map location yet. Please enter your address manually and pin the map.');
-            return false;
+    }
+
+    if (addressMode === 'saved_address') {
+        // Use saved account coordinates when available; otherwise keep the pin set on the map below.
+        if (savedDeliveryLatitude !== null && savedDeliveryLongitude !== null) {
+            applySavedDeliveryLocation();
         }
     }
-    if (addressMode === 'saved_address') {
-        applySavedDeliveryLocation();
-    }
-    if (!document.getElementById('delivery_latitude').value || !document.getElementById('delivery_longitude').value) {
+
+    const latValue = (document.getElementById('delivery_latitude')?.value || '').trim();
+    const lngValue = (document.getElementById('delivery_longitude')?.value || '').trim();
+    if (!latValue || !lngValue) {
         alert(addressMode === 'saved_address'
-            ? 'Your saved delivery location is missing. Please enter your address manually and pin the map.'
+            ? 'Please pin your delivery location on the map below your saved address.'
             : 'Please pin your exact delivery location on the map.');
         return false;
     }

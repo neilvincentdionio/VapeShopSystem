@@ -281,7 +281,17 @@
                             <tr id="return-order-<?= $orderId ?>" class="<?= $highlightOrderId === $orderId ? 'is-highlighted' : '' ?>">
                                 <td>
                                     <strong><?= esc($row['reference_number'] ?? ('#' . $orderId)) ?></strong>
-                                    <div class="muted"><?= esc(date('M d, Y', strtotime((string) ($row['date'] ?? 'now')))) ?></div>
+                                    <?php
+                                        $placedAt = (string) ($row['created_at'] ?? $row['date'] ?? '');
+                                        $placedTs = $placedAt !== '' ? strtotime($placedAt) : false;
+                                    ?>
+                                    <div class="muted">
+                                        <?php if ($placedTs !== false): ?>
+                                            <?= esc(date('M d, Y g:i A', $placedTs)) ?>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </div>
                                     <div class="muted">₱<?= number_format((float) ($row['total_amount'] ?? 0), 2) ?></div>
                                 </td>
                                 <td>

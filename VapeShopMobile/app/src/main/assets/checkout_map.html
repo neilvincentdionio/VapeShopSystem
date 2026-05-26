@@ -6,20 +6,64 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
+        #map { height: 100%; width: 100%; touch-action: none; }
+        .map-controls {
+            position: absolute;
+            right: 12px;
+            bottom: 72px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .map-btn {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 12px;
+            background: #ffffff;
+            color: #111827;
+            font-size: 22px;
+            font-weight: 700;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+            cursor: pointer;
+            line-height: 1;
+        }
+        .map-btn:active { background: #f3f4f6; }
     </style>
 </head>
 <body>
 <div id="map"></div>
+<div class="map-controls">
+    <button type="button" class="map-btn" id="zoom-in" aria-label="Zoom in">+</button>
+    <button type="button" class="map-btn" id="zoom-out" aria-label="Zoom out">−</button>
+    <button type="button" class="map-btn" id="recenter" aria-label="Center on pin" title="Center on pin">◎</button>
+</div>
 <script>
     const defaultLat = 6.1164;
     const defaultLng = 125.1716;
-    let map = L.map('map', { zoomControl: true }).setView([defaultLat, defaultLng], 14);
+    const map = L.map('map', {
+        zoomControl: false,
+        tap: true,
+        touchZoom: true,
+        scrollWheelZoom: true,
+        doubleClickZoom: true,
+        boxZoom: false,
+        minZoom: 11,
+        maxZoom: 19
+    }).setView([defaultLat, defaultLng], 16);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap'
     }).addTo(map);
-    let marker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(map);
+
+    const marker = L.marker([defaultLat, defaultLng], {
+        draggable: true,
+        autoPan: true,
+        autoPanPadding: [48, 48]
+    }).addTo(map);
 
     function notify(lat, lng) {
         if (window.AndroidCheckoutMap && window.AndroidCheckoutMap.onLocationPicked) {
@@ -30,13 +74,15 @@
     window.setLocation = function (lat, lng, zoom) {
         const ll = [lat, lng];
         marker.setLatLng(ll);
-        map.setView(ll, zoom || Math.max(map.getZoom(), 17));
+        const targetZoom = zoom || Math.max(map.getZoom(), 17);
+        map.setView(ll, targetZoom, { animate: true });
         notify(lat, lng);
-        setTimeout(function () { map.invalidateSize(); }, 200);
+        setTimeout(function () { map.invalidateSize(true); }, 250);
     };
 
     marker.on('dragend', function () {
         const pos = marker.getLatLng();
+        map.panTo(pos, { animate: true });
         notify(pos.lat, pos.lng);
     });
 
@@ -45,7 +91,25 @@
         notify(e.latlng.lat, e.latlng.lng);
     });
 
-    setTimeout(function () { map.invalidateSize(); }, 400);
+    document.getElementById('zoom-in').addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        map.zoomIn();
+    });
+    document.getElementById('zoom-out').addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        map.zoomOut();
+    });
+    document.getElementById('recenter').addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const pos = marker.getLatLng();
+        map.setView(pos, Math.max(map.getZoom(), 17), { animate: true });
+    });
+
+    setTimeout(function () { map.invalidateSize(true); }, 400);
+    setTimeout(function () { map.invalidateSize(true); }, 900);
 </script>
 </body>
 </html>

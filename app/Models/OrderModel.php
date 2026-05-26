@@ -478,7 +478,7 @@ class OrderModel extends Model
 
         return $this->db->table('orders o')
             ->select(
-                'o.id, o.reference_number, o.title, o.description, o.order_date AS date, o.order_date AS record_date, o.status, o.notes, o.customer_id AS created_by, o.created_at, o.updated_at, ' .
+                'o.id, o.reference_number, o.title, o.description, o.order_date, o.created_at AS date, DATE(o.created_at) AS record_date, o.status, o.notes, o.customer_id AS created_by, o.created_at, o.updated_at, ' .
                 'COALESCE(i.total_quantity, 0) AS quantity, COALESCE(o.total_amount, i.total_amount, 0) AS total_amount, COALESCE(o.total_profit, i.total_profit, 0) AS total_profit, ' .
                 "COALESCE(p.method, 'cash') AS payment_method, CASE WHEN COALESCE(s.status, o.status) = 'completed' THEN 'paid' ELSE COALESCE(p.status, 'unpaid') END AS payment_status, " .
                 'p.amount_received, p.change_amount, ' .

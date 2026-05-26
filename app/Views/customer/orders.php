@@ -887,7 +887,20 @@ window.addEventListener('beforeunload', function() {
                             <button class="copy-btn" onclick="copyToClipboard('<?= esc($order['reference_number']) ?>')">
                                 <i class="fas fa-copy"></i>
                             </button>
-                            <div class="order-date"><?= date('M j, Y', strtotime($order['date'])) ?></div>
+                            <?php
+                                $placedAt = (string) ($order['created_at'] ?? $order['date'] ?? '');
+                                $placedTs = $placedAt !== '' ? strtotime($placedAt) : false;
+                            ?>
+                            <div class="order-date">
+                                <?php if ($placedTs !== false): ?>
+                                    <?= date('M j, Y', $placedTs) ?>
+                                    <span style="display:block;font-size:.82rem;color:#6b7280;font-weight:400;">
+                                        <?= date('g:i A', $placedTs) ?>
+                                    </span>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <?php
                             $orderShipmentNotes = (string) ($order['shipment_notes'] ?? '');

@@ -45,10 +45,11 @@ function mobile_resolve_checkout_delivery(PDO $db, int $userId, array $input): ?
     $lng = mobile_parse_longitude($input['delivery_longitude'] ?? $input['longitude'] ?? null);
 
     if ($mode === 'saved_address' || $mode === 'use_my_address' || $mode === 'saved') {
-        $address = trim((string) ($input['shipping_address'] ?? ''));
-        if ($address === '') {
-            $address = build_shipping_address($db, $userId);
-        }
+        $address = mobile_normalize_shipping_address(
+            trim((string) ($input['shipping_address'] ?? '')),
+            $db,
+            $userId
+        );
         if ($address === '') {
             return null;
         }

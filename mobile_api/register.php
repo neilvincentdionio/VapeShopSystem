@@ -47,13 +47,13 @@ if (strlen($fullName) < 3) {
 }
 
 assert_safe_text_fields([
-    $fullName => 'person_name',
-    $street => 'address',
-    $city => 'location',
-    $barangay => 'location',
-    $province => 'location',
-    $country => 'location',
-    $postalCode => 'postal_code',
+    ['value' => $fullName, 'type' => 'person_name'],
+    ['value' => $street, 'type' => 'address'],
+    ['value' => $city, 'type' => 'location'],
+    ['value' => $barangay, 'type' => 'location'],
+    ['value' => $province, 'type' => 'location'],
+    ['value' => $country, 'type' => 'location'],
+    ['value' => $postalCode, 'type' => 'postal_code'],
 ]);
 
 if (strlen($password) < 8) {
@@ -99,7 +99,7 @@ try {
     );
     $insertProfile->execute([
         ':user_id' => $userId,
-        ':phone_number' => $phone,
+        ':phone_number' => mobile_encrypt_sensitive($phone, 'phone'),
         ':legal_age_confirmed' => 1,
         ':login_attempts' => 0,
         ':created_at' => $now,
@@ -112,12 +112,12 @@ try {
     );
     $insertAddress->execute([
         ':user_id' => $userId,
-        ':address_line' => $street,
-        ':city' => $city,
-        ':barangay' => $barangay,
-        ':province' => $province,
-        ':postal_code' => $postalCode,
-        ':country' => $country,
+        ':address_line' => mobile_encrypt_sensitive($street, 'address'),
+        ':city' => mobile_encrypt_sensitive($city, 'address'),
+        ':barangay' => mobile_encrypt_sensitive($barangay, 'address'),
+        ':province' => mobile_encrypt_sensitive($province, 'address'),
+        ':postal_code' => mobile_encrypt_sensitive($postalCode, 'address'),
+        ':country' => mobile_encrypt_sensitive($country, 'address'),
         ':delivery_latitude' => $deliveryLatitude,
         ':delivery_longitude' => $deliveryLongitude,
         ':is_primary' => 1,

@@ -72,24 +72,68 @@ function customerCancelledAtDelivery(orderId) {
     .catch(() => alert('An error occurred while cancelling the order'));
 }
 
-<?php if ((!empty($order['delivery_latitude']) && !empty($order['delivery_longitude'])) || (!empty($order['store_latitude']) && !empty($order['store_longitude']))): ?>
+<?php if (! empty($order)): ?>
 const status = <?= json_encode((string) ($order['delivery_status'] ?? '')) ?>;
-const customerLat = <?= json_encode(!empty($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null) ?>;
-const customerLng = <?= json_encode(!empty($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null) ?>;
-const storeLat = <?= json_encode(!empty($order['store_latitude']) ? (float) $order['store_latitude'] : null) ?>;
-const storeLng = <?= json_encode(!empty($order['store_longitude']) ? (float) $order['store_longitude'] : null) ?>;
+let customerLat = <?= json_encode(!empty($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null) ?>;
+let customerLng = <?= json_encode(!empty($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null) ?>;
+let storeLat = <?= json_encode(!empty($order['store_latitude']) ? (float) $order['store_latitude'] : null) ?>;
+let storeLng = <?= json_encode(!empty($order['store_longitude']) ? (float) $order['store_longitude'] : null) ?>;
 const storeAddress = <?= json_encode((string) ($order['store_address'] ?? 'Store')) ?>;
 const customerAddress = <?= json_encode((string) ($order['delivery_address'] ?? $order['shipping_address'] ?? 'Customer')) ?>;
 const toStore = ['ready_for_pickup', 'accepted_by_rider'].includes(status);
-const destLat = toStore ? storeLat : customerLat;
-const destLng = toStore ? storeLng : customerLng;
+
 const mapEl = document.getElementById('rider_delivery_map');
 
-if (mapEl && destLat && destLng) {
-    const map = L.map('rider_delivery_map').setView([destLat, destLng], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    L.marker([destLat, destLng]).addTo(map).bindPopup(toStore ? `Pickup: ${storeAddress}` : `Delivery: ${customerAddress}`);
-    let routeLine = null;
+function isValidCoord(v) {
+    return typeof v === 'number' && Number.isFinite(v);
+}
+
+async function geocodeAddress(addr) {
+    const q = (addr || '').trim();
+    if (q.length < 4) return null;
+
+    // Nominatim (OpenStreetMap) geocoding. Only used when DB coordinates are missing.
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url).catch(() => null);
+    if (!res) return null;
+
+    const json = await res.json().catch(() => null);
+    if (!Array.isArray(json) || json.length === 0) return null;
+
+    const lat = parseFloat(json[0]?.lat);
+    const lng = parseFloat(json[0]?.lon);
+    return isValidCoord(lat) && isValidCoord(lng) ? { lat, lng } : null;
+}
+
+if (mapEl) {
+    (async function initRiderDeliveryMap() {
+        let destLat = toStore ? storeLat : customerLat;
+        let destLng = toStore ? storeLng : customerLng;
+
+        // If the "toStore/toCustomer" destination coords are missing, try to geocode the address.
+        if (!isValidCoord(destLat) || !isValidCoord(destLng)) {
+            const addressToUse = toStore ? storeAddress : customerAddress;
+            const geo = await geocodeAddress(addressToUse);
+            if (geo) {
+                destLat = geo.lat;
+                destLng = geo.lng;
+            }
+        }
+
+        // Final fallback: if customer coords are missing but store coords exist (or vice versa), show what we can.
+        if (!isValidCoord(destLat) || !isValidCoord(destLng)) {
+            destLat = isValidCoord(storeLat) ? storeLat : customerLat;
+            destLng = isValidCoord(storeLng) ? storeLng : customerLng;
+        }
+
+        if (!isValidCoord(destLat) || !isValidCoord(destLng)) return;
+
+        const map = L.map('rider_delivery_map').setView([destLat, destLng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        L.marker([destLat, destLng]).addTo(map)
+            .bindPopup(toStore ? `Pickup: ${storeAddress}` : `Delivery: ${customerAddress}`);
+
+        let routeLine = null;
 
     function haversineKm(lat1, lon1, lat2, lon2) {
         const R = 6371;
@@ -150,22 +194,23 @@ if (mapEl && destLat && destLng) {
         }).catch(() => {});
     }
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-            const rLat = pos.coords.latitude;
-            const rLng = pos.coords.longitude;
-            L.marker([rLat, rLng]).addTo(map).bindPopup('Your location');
-            drawRouteGuide(rLat, rLng, destLat, destLng);
-            pushRiderLocation(rLat, rLng);
-        });
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const rLat = pos.coords.latitude;
+                const rLng = pos.coords.longitude;
+                L.marker([rLat, rLng]).addTo(map).bindPopup('Your location');
+                drawRouteGuide(rLat, rLng, destLat, destLng);
+                pushRiderLocation(rLat, rLng);
+            });
 
-        if (status === 'to_receive') {
-            navigator.geolocation.watchPosition((pos) => {
-                pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
-                drawRouteGuide(pos.coords.latitude, pos.coords.longitude, destLat, destLng);
-            }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+            if (status === 'to_receive') {
+                navigator.geolocation.watchPosition((pos) => {
+                    pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
+                    drawRouteGuide(pos.coords.latitude, pos.coords.longitude, destLat, destLng);
+                }, () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+            }
         }
-    }
+    })();
 }
 <?php endif; ?>
 </script>

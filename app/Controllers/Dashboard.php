@@ -12,6 +12,7 @@ use App\Models\ShopSettingsModel;
 use App\Libraries\SecurityAuditService;
 use App\Libraries\NotificationService;
 use App\Libraries\ActivityLogger;
+use App\Libraries\EncryptionService;
 use Config\ActivityLogTypes;
 
 class Dashboard extends BaseController
@@ -478,6 +479,12 @@ class Dashboard extends BaseController
 
         foreach ($orders as &$order) {
             $order['customer'] = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+            if (isset($order['shipping_address'])) {
+                $order['shipping_address'] = $this->resolveShipmentDisplayAddress($order);
+            }
+            if (isset($order['contact_number'])) {
+                $order['contact_number'] = $this->resolveShipmentContactNumber($order);
+            }
         }
         unset($order);
 
@@ -512,11 +519,7 @@ class Dashboard extends BaseController
             if ($orderStatus === 'cancelled' || $shipmentStatus === 'cancelled') {
                 $delivery['delivery_status'] = 'cancelled';
             }
-            $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
-            $normalizedContact = $this->normalizeContactNumber((string) ($delivery['contact_number'] ?? ''));
-            $delivery['contact_number'] = $normalizedContact !== ''
-                ? $normalizedContact
-                : (string) (($delivery['customer']['phone'] ?? '') !== '' ? $delivery['customer']['phone'] : 'Not provided');
+            $this->enrichRiderDeliveryRow($delivery);
         }
         unset($delivery);
 
@@ -540,15 +543,96 @@ class Dashboard extends BaseController
         }));
 
         foreach ($deliveries as &$delivery) {
-            $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
-            $normalizedContact = $this->normalizeContactNumber((string) ($delivery['contact_number'] ?? ''));
-            $delivery['contact_number'] = $normalizedContact !== ''
-                ? $normalizedContact
-                : (string) (($delivery['customer']['phone'] ?? '') !== '' ? $delivery['customer']['phone'] : 'Not provided');
+            $this->enrichRiderDeliveryRow($delivery);
         }
         unset($delivery);
 
         return $deliveries;
+    }
+
+    /**
+     * @param array<string, mixed> $delivery
+     */
+    private function enrichRiderDeliveryRow(array &$delivery): void
+    {
+        $delivery['customer'] = $this->getOrderCustomerInfo(isset($delivery['created_by']) ? (int) $delivery['created_by'] : null);
+        $delivery['shipping_address'] = $this->resolveShipmentDisplayAddress($delivery);
+        $delivery['contact_number'] = $this->resolveShipmentContactNumber($delivery);
+    }
+
+    /**
+     * @param array<string, mixed> $delivery
+     */
+    private function resolveShipmentDisplayAddress(array $delivery): string
+    {
+        $raw = trim((string) ($delivery['shipping_address'] ?? ''));
+        $address = $this->decryptSensitiveShipmentValue($raw, 'address');
+        if ($address !== '' && ! $this->looksLikeEncryptedShipmentValue($address)) {
+            return $address;
+        }
+
+        $customer = $delivery['customer'] ?? null;
+        if (is_array($customer)) {
+            $fallback = trim((string) ($customer['address'] ?? ''));
+            if ($fallback !== '' && ! $this->looksLikeEncryptedShipmentValue($fallback)) {
+                return $fallback;
+            }
+        }
+
+        return 'No delivery address provided';
+    }
+
+    /**
+     * @param array<string, mixed> $delivery
+     */
+    private function resolveShipmentContactNumber(array $delivery): string
+    {
+        $raw = trim((string) ($delivery['contact_number'] ?? ''));
+        $contact = $this->decryptSensitiveShipmentValue($raw, 'phone');
+        $normalized = $this->normalizeContactNumber($contact);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+
+        $customer = $delivery['customer'] ?? null;
+        if (is_array($customer)) {
+            $phone = trim((string) ($customer['phone'] ?? ''));
+            if ($phone !== '') {
+                return $phone;
+            }
+        }
+
+        return 'Not provided';
+    }
+
+    private function decryptSensitiveShipmentValue(string $value, string $type = 'address'): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        static $encryption = null;
+        if (! $encryption instanceof EncryptionService) {
+            $encryption = new EncryptionService();
+        }
+
+        return $type === 'phone'
+            ? $encryption->decryptPhoneNumber($value)
+            : $encryption->decryptAddress($value);
+    }
+
+    private function looksLikeEncryptedShipmentValue(string $value): bool
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '' || strlen($trimmed) < 48) {
+            return false;
+        }
+
+        if (preg_match('/\s/', $trimmed) === 1) {
+            return false;
+        }
+
+        return preg_match('/^[A-Za-z0-9+\/=_-]+$/', $trimmed) === 1;
     }
 
     /**
@@ -4170,8 +4254,12 @@ class Dashboard extends BaseController
         $barangay = trim((string) $this->request->getPost('barangay'));
         $province = trim((string) $this->request->getPost('province'));
         $postalCode = trim((string) $this->request->getPost('postal_code'));
+        $deliveryLatitude = $this->parseCoordinate($this->request->getPost('delivery_latitude'));
+        $deliveryLongitude = $this->parseCoordinate($this->request->getPost('delivery_longitude'));
         $newPassword = (string) $this->request->getPost('new_password');
         $confirmPassword = (string) $this->request->getPost('confirm_password');
+
+        $hasAddressText = $addressLine !== '' || $city !== '' || $barangay !== '' || $province !== '' || $postalCode !== '';
 
         $input = [
             'name' => $name,
@@ -4183,9 +4271,17 @@ class Dashboard extends BaseController
             'barangay' => $barangay,
             'province' => $province,
             'postal_code' => $postalCode,
+            'delivery_latitude' => $this->request->getPost('delivery_latitude'),
+            'delivery_longitude' => $this->request->getPost('delivery_longitude'),
             'new_password' => $newPassword,
             'confirm_password' => $confirmPassword,
         ];
+
+        if ($hasAddressText && ($deliveryLatitude === null || $deliveryLongitude === null)) {
+            return redirect()->to('/dashboard/profile')
+                ->withInput()
+                ->with('errors', ['delivery_location' => 'Please pin your delivery location on the map.']);
+        }
 
         $rules = [
             'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
@@ -4223,6 +4319,8 @@ class Dashboard extends BaseController
             'barangay' => $barangay,
             'province' => $province,
             'postal_code' => $postalCode,
+            'delivery_latitude' => $deliveryLatitude,
+            'delivery_longitude' => $deliveryLongitude,
         ];
 
         if ($newPassword !== '') {
@@ -4785,8 +4883,8 @@ class Dashboard extends BaseController
                 return;
             }
 
-            $recordDate = (string) ($order['record_date'] ?? $order['date'] ?? date('Y-m-d'));
-            $recordDateTs = strtotime($recordDate);
+            $placedAt = (string) ($order['created_at'] ?? $order['date'] ?? '');
+            $recordDateTs = strtotime($placedAt !== '' ? $placedAt : date('Y-m-d H:i:s'));
             $normalizedDate = $recordDateTs !== false ? date('Y-m-d', $recordDateTs) : date('Y-m-d');
 
             $deliveryStatus = strtolower((string) ($order['delivery_status'] ?? 'to_pay'));

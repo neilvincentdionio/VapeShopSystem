@@ -492,7 +492,7 @@
                         <div class="form-group">
                             <label for="province">Province</label>
                             <select id="province" name="province" required>
-                                <option value="South Cotabato" selected>South Cotabato</option>
+                                <option value="">Select Province</option>
                             </select>
                         </div>
 
@@ -731,10 +731,192 @@
                 });
             }
 
+            function normalizeLocationText(value) {
+                return String(value || '')
+                    .toLowerCase()
+                    .replace(/\./g, '')
+                    .replace(/\bbrgy\b/g, '')
+                    .replace(/\bbarangay\b/g, '')
+                    .replace(/\bcity\b/g, '')
+                    .replace(/\bpoblacion\b/g, 'pob')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            function normalizeProvinceName(raw) {
+                const norm = normalizeLocationText(raw);
+                if (norm.includes('soccsksargen') || norm.includes('south cotabato') || norm.includes('sarangani')) {
+                    return 'South Cotabato';
+                }
+                if (norm.includes('davao del sur')) return 'Davao del Sur';
+                if (norm.includes('davao del norte')) return 'Davao del Norte';
+                if (norm.includes('davao occidental')) return 'Davao Occidental';
+                if (norm.includes('davao oriental')) return 'Davao Oriental';
+                return String(raw || '').trim();
+            }
+
+            function normalizeCityName(raw) {
+                const norm = normalizeLocationText(raw);
+                if (norm === 'gensan' || norm.includes('general santos')) {
+                    return 'General Santos City';
+                }
+                return String(raw || '').trim();
+            }
+
+            function setSelectValueWithFallback(selectEl, targetValue) {
+                if (!selectEl || !targetValue) {
+                    return false;
+                }
+                const targetNorm = normalizeLocationText(targetValue);
+                let bestValue = '';
+
+                for (const opt of Array.from(selectEl.options)) {
+                    if (!opt.value) {
+                        continue;
+                    }
+                    const optNorm = normalizeLocationText(opt.value);
+                    if (optNorm === targetNorm) {
+                        bestValue = opt.value;
+                        break;
+                    }
+                    if (!bestValue && (optNorm.includes(targetNorm) || targetNorm.includes(optNorm))) {
+                        bestValue = opt.value;
+                    }
+                }
+
+                if (!bestValue) {
+                    const extra = document.createElement('option');
+                    extra.value = targetValue;
+                    extra.textContent = targetValue;
+                    selectEl.appendChild(extra);
+                    bestValue = targetValue;
+                }
+
+                selectEl.value = bestValue;
+                return true;
+            }
+
+            function setBarangayValueFromCandidates(selectEl, candidates) {
+                if (!selectEl) {
+                    return false;
+                }
+                const values = Array.from(selectEl.options)
+                    .map((opt) => opt.value)
+                    .filter(Boolean);
+                if (!values.length) {
+                    return false;
+                }
+
+                const normalizedValues = values.map((name) => ({
+                    original: name,
+                    norm: normalizeLocationText(name)
+                }));
+
+                const list = Array.isArray(candidates) ? candidates : [];
+                for (const candidateRaw of list) {
+                    const candidate = String(candidateRaw || '').trim();
+                    if (!candidate) {
+                        continue;
+                    }
+                    const targetNorm = normalizeLocationText(candidate);
+                    if (!targetNorm) {
+                        continue;
+                    }
+
+                    const exact = normalizedValues.find((v) => v.norm === targetNorm);
+                    if (exact) {
+                        selectEl.value = exact.original;
+                        return true;
+                    }
+
+                    const partial = normalizedValues.find((v) => v.norm.includes(targetNorm) || targetNorm.includes(v.norm));
+                    if (partial) {
+                        selectEl.value = partial.original;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            async function reverseGeocodeRegisterAddress(lat, lng) {
+                const statusEl = document.getElementById('register_map_status');
+                if (statusEl) {
+                    statusEl.textContent = 'Looking up address for your location...';
+                }
+
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`,
+                        { headers: { 'Accept': 'application/json' } }
+                    );
+                    if (!response.ok) {
+                        throw new Error('reverse-geocode-failed');
+                    }
+
+                    const data = await response.json();
+                    const addr = data.address || {};
+                    const street = [addr.house_number, addr.road].filter(Boolean).join(' ').trim()
+                        || addr.pedestrian
+                        || addr.residential
+                        || '';
+                    const city = normalizeCityName(addr.city || addr.town || addr.municipality || addr.county || '');
+                    const province = normalizeProvinceName(addr.state || addr.region || '');
+                    const barangayCandidates = [
+                        addr.suburb,
+                        addr.neighbourhood,
+                        addr.village,
+                        addr.hamlet,
+                        addr.quarter,
+                        addr.city_district
+                    ].filter(Boolean);
+                    let postal = addr.postcode || '';
+
+                    const streetInput = document.getElementById('address_line');
+                    if (street && streetInput) {
+                        streetInput.value = street;
+                    }
+
+                    const provinceSelect = document.getElementById('province');
+                    const citySelect = document.getElementById('city');
+                    const barangaySelect = document.getElementById('barangay');
+
+                    if (province && provinceSelect) {
+                        setSelectValueWithFallback(provinceSelect, province);
+                        provinceSelect.dispatchEvent(new Event('change'));
+                    }
+                    if (city && citySelect) {
+                        setSelectValueWithFallback(citySelect, city);
+                        citySelect.dispatchEvent(new Event('change'));
+                    }
+                    loadBarangays('');
+                    setBarangayValueFromCandidates(barangaySelect, barangayCandidates);
+                    updatePostalCodeByCity();
+
+                    const postalInput = document.getElementById('postal_code');
+                    if (postal && postalInput) {
+                        postalInput.value = postal;
+                    } else if (postalInput && !postalInput.value && city === 'General Santos City') {
+                        postalInput.value = '9500';
+                    }
+
+                    if (statusEl) {
+                        statusEl.textContent = 'Location captured and address autofilled.';
+                    }
+                } catch (error) {
+                    if (statusEl) {
+                        statusEl.textContent = 'Location captured. Adjust address fields if needed.';
+                    }
+                }
+            }
+
+            window.reverseGeocodeRegisterAddress = reverseGeocodeRegisterAddress;
+
             function loadProvinces() {
                 const provinceSelect = document.getElementById('province');
                 if (provinceSelect) {
-                    renderOptions(provinceSelect, ['South Cotabato'], 'Select Province', 'South Cotabato');
+                    const provinces = Object.keys(addressData).sort();
+                    renderOptions(provinceSelect, provinces, 'Select Province', 'South Cotabato');
                 }
             }
 
@@ -859,12 +1041,15 @@
                 if (statusEl) {
                     statusEl.textContent = 'Getting your current location...';
                 }
-                navigator.geolocation.getCurrentPosition((position) => {
-                    setRegisterPin(
-                        position.coords.latitude,
-                        position.coords.longitude,
-                        'Current location saved as your delivery pin.'
-                    );
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    setRegisterPin(lat, lng, 'Getting address details...');
+                    if (typeof window.reverseGeocodeRegisterAddress === 'function') {
+                        await window.reverseGeocodeRegisterAddress(lat, lng);
+                    } else if (statusEl) {
+                        statusEl.textContent = 'Current location saved as your delivery pin.';
+                    }
                 }, () => {
                     if (statusEl) {
                         statusEl.textContent = 'Unable to get location. Please tap the map to set your pin.';
