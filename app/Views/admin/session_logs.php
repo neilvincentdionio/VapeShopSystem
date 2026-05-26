@@ -182,7 +182,7 @@
         .card-value { font-size: 2rem; font-weight: 700; color: #27c56f; }
         .filters {
             display: grid;
-            grid-template-columns: 170px 1fr auto;
+            grid-template-columns: 160px 160px minmax(220px, 1fr) auto;
             gap: .75rem;
             margin-bottom: 1rem;
             align-items: center;
@@ -201,6 +201,8 @@
         
         .table-responsive {
             overflow-x: auto;
+            max-height: 560px;
+            overflow-y: auto;
             border-radius: 10px;
         }
         .table {
@@ -209,6 +211,9 @@
             background: white;
         }
         .table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
             background: #f8f9fa;
             padding: 1rem;
             text-align: left;
@@ -357,6 +362,17 @@
                     <option value="inactive" <?= ($statusFilter ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                     <option value="expired" <?= ($statusFilter ?? '') === 'expired' ? 'selected' : '' ?>>Expired</option>
                 </select>
+                <select id="roleFilter">
+                    <option value="" <?= ($roleFilter ?? '') === '' ? 'selected' : '' ?>>All Roles</option>
+                    <?php foreach (($roleOptions ?? []) as $roleOption): ?>
+                        <?php $roleOption = strtolower(trim((string) $roleOption)); ?>
+                        <?php if ($roleOption !== ''): ?>
+                            <option value="<?= esc($roleOption) ?>" <?= ($roleFilter ?? '') === $roleOption ? 'selected' : '' ?>>
+                                <?= esc(ucwords(str_replace(['_', '-'], ' ', $roleOption))) ?>
+                            </option>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </select>
                 <input type="text" id="userFilter" placeholder="Search by user name or email..." value="<?= esc($userFilter ?? '') ?>">
                 <div class="filter-actions">
                     <button class="btn btn-primary" type="button" onclick="filterSessions()">Filter</button>
@@ -370,6 +386,7 @@
                         <tr>
                             <th>User</th>
                             <th>Email</th>
+                            <th>Role</th>
                             <th>Session ID</th>
                             <th>IP Address</th>
                             <th>Login Time</th>
@@ -382,12 +399,13 @@
                     <tbody>
                         <?php if (empty($sessions)): ?>
                         <tr>
-                            <td colspan="9" style="text-align:center;">No sessions found for current filters.</td>
+                            <td colspan="10" style="text-align:center;">No sessions found for current filters.</td>
                         </tr>
                         <?php else: ?>
                         <?php foreach ($sessions as $session): ?>
                         <?php
                             $status = strtolower((string) ($session['status'] ?? 'inactive'));
+                            $role = strtolower(trim((string) ($session['role_name'] ?? $session['role'] ?? '')));
                             $statusClass = 'badge-secondary';
                             if ($status === 'active') {
                                 $statusClass = 'badge-success';
@@ -395,9 +413,13 @@
                                 $statusClass = 'badge-warning';
                             }
                         ?>
-                        <tr>
+                        <tr class="session-row"
+                            data-status="<?= esc($status) ?>"
+                            data-role="<?= esc($role) ?>"
+                            data-search="<?= esc(strtolower(trim(($session['name'] ?? 'Unknown') . ' ' . ($session['email'] ?? '') . ' ' . ($session['session_id'] ?? '') . ' ' . ($session['ip_address'] ?? '') . ' ' . $role))) ?>">
                             <td><?= esc($session['name'] ?? 'Unknown') ?></td>
                             <td><?= esc((string) ($session['email'] ?? 'N/A')) ?></td>
+                            <td><?= $role !== '' ? esc(ucwords(str_replace(['_', '-'], ' ', $role))) : 'N/A' ?></td>
                             <td><small><code><?= esc((string) ($session['session_id'] ?? '')) ?></code></small></td>
                             <td><?= esc($session['ip_address']) ?></td>
                             <td><?= !empty($session['login_time']) ? esc(date('M j, Y H:i', strtotime((string) $session['login_time']))) : '-' ?></td>
@@ -424,6 +446,9 @@
                             </td>
                         </tr>
                         <?php endforeach; ?>
+                        <tr id="noVisibleSessionsRow" style="display:none;">
+                            <td colspan="10" style="text-align:center;">No sessions match your live filters.</td>
+                        </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -467,11 +492,38 @@
         
         function filterSessions() {
             const status = document.getElementById('statusFilter').value;
+            const role = document.getElementById('roleFilter').value;
             const user = document.getElementById('userFilter').value.trim();
             const params = new URLSearchParams();
             if (status) params.append('status', status);
+            if (role) params.append('role', role);
             if (user) params.append('user', user);
             window.location.href = '<?= site_url('/admin/session-logs') ?>' + (params.toString() ? '?' + params.toString() : '');
+        }
+
+        function applyLiveFilters() {
+            const status = document.getElementById('statusFilter').value;
+            const role = document.getElementById('roleFilter').value;
+            const search = document.getElementById('userFilter').value.trim().toLowerCase();
+            const rows = document.querySelectorAll('.session-row');
+            const emptyRow = document.getElementById('noVisibleSessionsRow');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const matchesStatus = !status || row.dataset.status === status;
+                const matchesRole = !role || row.dataset.role === role;
+                const matchesSearch = !search || (row.dataset.search || '').includes(search);
+                const isVisible = matchesStatus && matchesRole && matchesSearch;
+
+                row.style.display = isVisible ? '' : 'none';
+                if (isVisible) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (emptyRow) {
+                emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+            }
         }
         
         function clearFilters() {
@@ -623,6 +675,24 @@
                 event.target.classList.remove('show');
             }
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusFilter = document.getElementById('statusFilter');
+            const roleFilter = document.getElementById('roleFilter');
+            const userFilter = document.getElementById('userFilter');
+
+            if (statusFilter) {
+                statusFilter.addEventListener('change', applyLiveFilters);
+            }
+            if (roleFilter) {
+                roleFilter.addEventListener('change', applyLiveFilters);
+            }
+            if (userFilter) {
+                userFilter.addEventListener('input', applyLiveFilters);
+            }
+
+            applyLiveFilters();
+        });
     </script>
 </body>
 </html>

@@ -75,14 +75,17 @@ class AdminController extends BaseController
 
         $statusFilter = trim((string) $this->request->getGet('status'));
         $userFilter = trim((string) $this->request->getGet('user'));
+        $roleFilter = strtolower(trim((string) $this->request->getGet('role')));
 
         $data = [
             'title' => 'Session Management',
             'activeSessions' => $this->sessionModel->getActiveSessionCount(),
             'sessionStats' => $this->sessionModel->getSessionStats(),
-            'sessions' => $this->sessionModel->getSessionsForAdmin($statusFilter, $userFilter),
+            'sessions' => $this->sessionModel->getSessionsForAdmin($statusFilter, $userFilter, $roleFilter),
             'statusFilter' => $statusFilter,
             'userFilter' => $userFilter,
+            'roleFilter' => $roleFilter,
+            'roleOptions' => $this->sessionModel->getSessionRoleOptions(),
         ];
 
         return view('admin/session_logs', $data);

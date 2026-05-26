@@ -171,12 +171,13 @@ class UserSessionModel extends Model
     /**
      * Get sessions with optional admin filters.
      */
-    public function getSessionsForAdmin(?string $statusFilter = null, ?string $userFilter = null): array
+    public function getSessionsForAdmin(?string $statusFilter = null, ?string $userFilter = null, ?string $roleFilter = null): array
     {
         $db = \Config\Database::connect();
         $builder = $db->table('user_sessions');
-        $builder->select('user_sessions.*, users.name, users.email');
+        $builder->select('user_sessions.*, users.name, users.email, users.role, roles.name AS role_name');
         $builder->join('users', 'users.id = user_sessions.user_id', 'left');
+        $builder->join('roles', 'roles.id = users.role_id', 'left');
 
         $statusFilter = trim((string) $statusFilter);
         if ($statusFilter !== '' && in_array($statusFilter, ['active', 'inactive', 'expired'], true)) {
@@ -191,9 +192,44 @@ class UserSessionModel extends Model
                 ->groupEnd();
         }
 
+        $roleFilter = strtolower(trim((string) $roleFilter));
+        if ($roleFilter !== '') {
+            $builder->groupStart()
+                ->where('LOWER(roles.name)', $roleFilter)
+                ->orWhere('LOWER(users.role)', $roleFilter)
+                ->groupEnd();
+        }
+
         $builder->orderBy('user_sessions.login_time', 'DESC');
 
         return $builder->get()->getResultArray();
+    }
+
+    /**
+     * Get role names available in session logs.
+     */
+    public function getSessionRoleOptions(): array
+    {
+        $db = \Config\Database::connect();
+        $builder = $db->table('user_sessions');
+        $builder->select('COALESCE(roles.name, users.role) AS role_name', false)
+            ->join('users', 'users.id = user_sessions.user_id', 'left')
+            ->join('roles', 'roles.id = users.role_id', 'left')
+            ->where('COALESCE(roles.name, users.role) IS NOT NULL', null, false)
+            ->groupBy('role_name')
+            ->orderBy('role_name', 'ASC');
+
+        $rows = $builder->get()->getResultArray();
+        $roles = [];
+
+        foreach ($rows as $row) {
+            $role = strtolower(trim((string) ($row['role_name'] ?? '')));
+            if ($role !== '') {
+                $roles[] = $role;
+            }
+        }
+
+        return array_values(array_unique($roles));
     }
 
     /**

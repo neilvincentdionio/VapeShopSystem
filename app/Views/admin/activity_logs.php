@@ -201,12 +201,19 @@
             overflow-x: auto;
             border-radius: 10px;
         }
+        .activity-log-table-wrap {
+            max-height: 560px;
+            overflow-y: auto;
+        }
         .table {
             width: 100%;
             border-collapse: collapse;
             background: white;
         }
         .table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
             background: #f8f9fa;
             padding: 1rem;
             text-align: left;
@@ -630,7 +637,7 @@
                     </button>
                 </div>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive activity-log-table-wrap">
                 <table class="table" id="activityLogsTable">
                     <thead>
                         <tr>

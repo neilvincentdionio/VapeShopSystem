@@ -160,6 +160,70 @@ if (!function_exists('extractGcashReference')) {
         display: grid;
         gap: 1.5rem;
     }
+
+    .orders-filter-panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 1rem;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
+    }
+
+    .orders-filter-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(140px, 180px)) minmax(220px, 1fr) auto;
+        gap: 0.75rem;
+        align-items: end;
+    }
+
+    .orders-filter-field {
+        display: grid;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+
+    .orders-filter-field label {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .orders-filter-field input,
+    .orders-filter-field select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.65rem 0.75rem;
+        background: #ffffff;
+        color: var(--text-main);
+        font: inherit;
+    }
+
+    .orders-filter-field input:focus,
+    .orders-filter-field select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(39, 197, 111, 0.12);
+    }
+
+    .orders-scroll-area {
+        max-height: 560px;
+        overflow-y: auto;
+        padding-right: 0.35rem;
+        scrollbar-gutter: stable;
+    }
+
+    .orders-filter-empty {
+        display: none;
+        text-align: center;
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        color: var(--text-muted);
+    }
     
     .order-card {
         background: var(--surface);
@@ -633,6 +697,10 @@ if (!function_exists('extractGcashReference')) {
             padding: 1.4rem;
         }
 
+        .orders-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
         .order-card {
             padding: 1rem;
         }
@@ -777,9 +845,60 @@ function setProductStarRating(container, rating) {
     }
 }
 
+function applyOrderFilters() {
+    const dateFrom = document.getElementById('orderDateFromFilter')?.value || '';
+    const dateTo = document.getElementById('orderDateToFilter')?.value || '';
+    const status = document.getElementById('orderStatusFilter')?.value || '';
+    const search = (document.getElementById('orderSearchFilter')?.value || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('[data-order-card]');
+    const emptyState = document.getElementById('ordersFilterEmpty');
+    let visibleCount = 0;
+
+    cards.forEach((card) => {
+        const orderDate = card.dataset.orderDate || '';
+        const orderStatus = card.dataset.orderStatus || '';
+        const orderSearch = card.dataset.orderSearch || '';
+        const matchesFrom = !dateFrom || (orderDate && orderDate >= dateFrom);
+        const matchesTo = !dateTo || (orderDate && orderDate <= dateTo);
+        const matchesStatus = !status || orderStatus === status;
+        const matchesSearch = !search || orderSearch.includes(search);
+        const isVisible = matchesFrom && matchesTo && matchesStatus && matchesSearch;
+
+        card.style.display = isVisible ? '' : 'none';
+        if (isVisible) {
+            visibleCount += 1;
+        }
+    });
+
+    if (emptyState) {
+        emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+}
+
+function clearOrderFilters() {
+    const dateFrom = document.getElementById('orderDateFromFilter');
+    const dateTo = document.getElementById('orderDateToFilter');
+    const status = document.getElementById('orderStatusFilter');
+    const search = document.getElementById('orderSearchFilter');
+
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    if (status) status.value = '';
+    if (search) search.value = '';
+
+    applyOrderFilters();
+}
+
 // Start auto-refresh when page loads
 document.addEventListener('DOMContentLoaded', function() {
     startAutoRefresh();
+
+    ['orderDateFromFilter', 'orderDateToFilter', 'orderStatusFilter'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', applyOrderFilters);
+    });
+    document.getElementById('orderSearchFilter')?.addEventListener('input', applyOrderFilters);
+    document.getElementById('clearOrderFilters')?.addEventListener('click', clearOrderFilters);
+    applyOrderFilters();
 
     document.querySelectorAll('[data-star-rating]').forEach((container) => {
         container.querySelectorAll('.star-rating-btn').forEach((button) => {
@@ -877,10 +996,70 @@ window.addEventListener('beforeunload', function() {
     </div>
     
     <?php if (isset($orders) && !empty($orders)): ?>
-        <div class="orders-grid">
+        <?php
+            $statusFilterOptions = [];
+            foreach ($orders as $orderForFilter) {
+                $statusKey = (string) ($orderForFilter['delivery_status'] ?? '');
+                if ($statusKey !== '') {
+                    $statusFilterOptions[$statusKey] = getDeliveryStatusLabel($statusKey, (string) ($orderForFilter['shipment_notes'] ?? ''));
+                }
+            }
+            asort($statusFilterOptions);
+        ?>
+        <div class="orders-filter-panel">
+            <div class="orders-filter-grid">
+                <div class="orders-filter-field">
+                    <label for="orderDateFromFilter">From Date</label>
+                    <input type="date" id="orderDateFromFilter">
+                </div>
+                <div class="orders-filter-field">
+                    <label for="orderDateToFilter">To Date</label>
+                    <input type="date" id="orderDateToFilter">
+                </div>
+                <div class="orders-filter-field">
+                    <label for="orderStatusFilter">Order Status</label>
+                    <select id="orderStatusFilter">
+                        <option value="">All Statuses</option>
+                        <?php foreach ($statusFilterOptions as $statusValue => $statusLabel): ?>
+                            <option value="<?= esc($statusValue) ?>"><?= esc($statusLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="orders-filter-field">
+                    <label for="orderSearchFilter">Search</label>
+                    <input type="search" id="orderSearchFilter" placeholder="Product name, order no., payment...">
+                </div>
+                <button type="button" class="btn btn-secondary" id="clearOrderFilters">Clear</button>
+            </div>
+        </div>
+
+        <div class="orders-scroll-area">
+        <div class="orders-grid" id="ordersGrid">
             <?php foreach ($orders as $order): ?>
-                <?php $isReturnOrder = function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? '')); ?>
-                <div class="order-card">
+                <?php
+                    $isReturnOrder = function_exists('is_return_refund_status') && is_return_refund_status((string) ($order['delivery_status'] ?? ''));
+                    $placedAtFilter = (string) ($order['created_at'] ?? $order['date'] ?? '');
+                    $placedTsFilter = $placedAtFilter !== '' ? strtotime($placedAtFilter) : false;
+                    $orderDateFilter = $placedTsFilter !== false ? date('Y-m-d', $placedTsFilter) : '';
+                    $orderStatusFilter = (string) ($order['delivery_status'] ?? '');
+                    $orderProductNames = [];
+                    foreach (($order['items'] ?? []) as $itemForFilter) {
+                        $orderProductNames[] = (string) ($itemForFilter['name'] ?? '');
+                    }
+                    $orderSearchText = strtolower(trim(implode(' ', [
+                        (string) ($order['reference_number'] ?? ''),
+                        $orderStatusFilter,
+                        getDeliveryStatusLabel($orderStatusFilter, (string) ($order['shipment_notes'] ?? '')),
+                        (string) ($order['payment_method'] ?? ''),
+                        (string) ($order['payment_status'] ?? ''),
+                        implode(' ', $orderProductNames),
+                    ])));
+                ?>
+                <div class="order-card"
+                     data-order-card
+                     data-order-date="<?= esc($orderDateFilter) ?>"
+                     data-order-status="<?= esc($orderStatusFilter) ?>"
+                     data-order-search="<?= esc($orderSearchText) ?>">
                     <div class="order-card-header">
                         <div class="order-reference">
                             <h3><?= esc($order['reference_number']) ?></h3>
@@ -1077,6 +1256,10 @@ window.addEventListener('beforeunload', function() {
                     </div>
                 </div>
             <?php endforeach; ?>
+            <div class="orders-filter-empty" id="ordersFilterEmpty">
+                No orders match your current filters.
+            </div>
+        </div>
         </div>
     <?php else: ?>
         <div class="empty-state">
