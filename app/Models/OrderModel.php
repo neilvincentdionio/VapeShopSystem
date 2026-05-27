@@ -159,14 +159,97 @@ class OrderModel extends Model
      */
     public function getRiderReturnPickups(int $riderId): array
     {
-        return $this->attachItems(
+        helper('return_refund');
+
+        $orders = $this->attachItems(
             $this->baseOrderQuery()
                 ->where('s.assigned_rider_id', $riderId)
-                ->whereIn("COALESCE(s.status, 'to_pay')", ['return_approved', 'return_picked_up'])
+                ->whereIn("COALESCE(s.status, 'to_pay')", ['return_approved', 'return_picked_up', 'return_refund'])
                 ->orderBy('o.updated_at', 'DESC')
                 ->get()
                 ->getResultArray()
         );
+
+        return filter_rider_visible_return_pickups($orders);
+    }
+
+    public function dismissRiderCompletedReturns(int $riderId): int
+    {
+        helper('return_refund');
+
+        $orders = $this->attachItems(
+            $this->baseOrderQuery()
+                ->where('s.assigned_rider_id', $riderId)
+                ->where("COALESCE(s.status, 'to_pay')", 'return_refund')
+                ->get()
+                ->getResultArray()
+        );
+
+        $dismissed = 0;
+        foreach ($orders as $order) {
+            $orderId = (int) ($order['id'] ?? 0);
+            if ($orderId <= 0) {
+                continue;
+            }
+
+            $meta = parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            ) ?? [];
+
+            if (rider_return_list_dismissed($meta)) {
+                continue;
+            }
+
+            $meta = dismiss_rider_return_from_list($meta);
+            $fields = merge_return_meta_shipment_fields(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? ''),
+                $meta
+            );
+
+            if ($this->updateOrder($orderId, [], [], $fields)) {
+                $dismissed++;
+            }
+        }
+
+        return $dismissed;
+    }
+
+    public function dismissRiderCompletedDeliveries(int $riderId): int
+    {
+        helper('rider_list');
+
+        $orders = $this->attachItems(
+            $this->baseOrderQuery()
+                ->where('s.assigned_rider_id', $riderId)
+                ->where("COALESCE(s.status, 'to_pay')", 'completed')
+                ->get()
+                ->getResultArray()
+        );
+
+        $dismissed = 0;
+        foreach ($orders as $order) {
+            $orderId = (int) ($order['id'] ?? 0);
+            if ($orderId <= 0) {
+                continue;
+            }
+
+            $shipmentNotes = (string) ($order['shipment_notes'] ?? '');
+            $meta = parse_rider_list_meta($shipmentNotes) ?? [];
+            if (rider_delivery_list_dismissed($meta)) {
+                continue;
+            }
+
+            $meta = dismiss_rider_delivery_from_list($meta);
+            $updatedNotes = merge_rider_list_meta($shipmentNotes, $meta);
+
+            if ($this->updateOrder($orderId, [], [], ['notes' => $updatedNotes])) {
+                $dismissed++;
+            }
+        }
+
+        return $dismissed;
     }
 
     public function getOrder(int $orderId): ?array

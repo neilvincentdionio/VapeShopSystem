@@ -35,7 +35,8 @@ try {
     if ($hasVariants) {
         $itemsStmt = $db->prepare(
             'SELECT ci.product_id, ci.variant_id, ci.quantity,
-                    p.name AS product_name, COALESCE(pv.price, p.price) AS unit_price,
+                    p.name AS product_name,
+                    COALESCE(pv.price, p.selling_price, p.price) AS unit_price,
                     p.category, COALESCE(pv.puffs, p.puffs) AS puffs, pv.flavor AS flavor_name
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id
@@ -46,7 +47,8 @@ try {
     } else {
         $itemsStmt = $db->prepare(
             'SELECT ci.product_id, ci.variant_id, ci.quantity,
-                    p.name AS product_name, p.price AS unit_price,
+                    p.name AS product_name,
+                    COALESCE(p.selling_price, p.price) AS unit_price,
                     p.category, p.puffs, NULL AS flavor_name
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id

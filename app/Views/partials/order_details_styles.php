@@ -372,6 +372,46 @@
     z-index: 1;
 }
 
+.order-details-shell #rider_delivery_map {
+    height: 320px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(15, 118, 110, .08);
+}
+
+.order-details-shell .rider-contact-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .65rem;
+    margin: .35rem 0 0;
+}
+
+.order-details-shell .rider-contact-value {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1.02rem;
+    user-select: all;
+    cursor: pointer;
+}
+
+.order-details-shell .rider-copy-contact-btn {
+    border: 1px solid #99f6e4;
+    background: #ecfdf5;
+    color: #0f766e;
+    border-radius: 999px;
+    padding: .3rem .75rem;
+    font-size: .82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+.order-details-shell .rider-copy-contact-btn:hover {
+    background: #d1fae5;
+}
+
 .order-details-shell .map-meta {
     display: grid;
     gap: .35rem;

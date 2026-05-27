@@ -2,7 +2,9 @@
 <script>
 (() => {
     const path = window.location.pathname.toLowerCase();
-    const shouldWatch = path.includes('/rider/dashboard') || path.includes('/rider/deliveries');
+    const shouldWatch = path.includes('/rider/dashboard')
+        || path.includes('/rider/deliveries')
+        || path.includes('/rider/returns');
     if (!shouldWatch) {
         return;
     }

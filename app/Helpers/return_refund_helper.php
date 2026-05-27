@@ -464,6 +464,47 @@ if (! function_exists('rider_accepted_return_pickup')) {
     }
 }
 
+if (! function_exists('rider_return_list_dismissed')) {
+    /**
+     * @param array<string, mixed> $meta
+     */
+    function rider_return_list_dismissed(array $meta): bool
+    {
+        return trim((string) ($meta['rider_list_dismissed_at'] ?? '')) !== '';
+    }
+}
+
+if (! function_exists('dismiss_rider_return_from_list')) {
+    /**
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    function dismiss_rider_return_from_list(array $meta): array
+    {
+        $meta['rider_list_dismissed_at'] = date('Y-m-d H:i:s');
+
+        return $meta;
+    }
+}
+
+if (! function_exists('filter_rider_visible_return_pickups')) {
+    /**
+     * @param array<int, array<string, mixed>> $orders
+     * @return array<int, array<string, mixed>>
+     */
+    function filter_rider_visible_return_pickups(array $orders): array
+    {
+        return array_values(array_filter($orders, static function (array $order): bool {
+            $meta = parse_return_meta(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? '')
+            ) ?? [];
+
+            return ! rider_return_list_dismissed($meta);
+        }));
+    }
+}
+
 if (! function_exists('return_payout_summary')) {
     /**
      * @param array<string, mixed> $meta
@@ -617,6 +658,75 @@ if (! function_exists('format_refund_payout_reference_display')) {
         }
 
         return $reference;
+    }
+}
+
+if (! function_exists('validate_admin_refund_payout_reference')) {
+    /**
+     * Validates GCash/Maya transaction reference on admin refund completion.
+     * Allows "QWERTY" for testing only. Rejects QuickPuff message codes (QP…).
+     *
+     * @return array{valid: bool, message: string, normalized: string}
+     */
+    function validate_admin_refund_payout_reference(string $reference, int $orderId, string $pendingRef = ''): array
+    {
+        $reference = trim($reference);
+        if ($reference === '') {
+            return [
+                'valid' => false,
+                'message' => 'Enter or paste the GCash/Maya transaction reference from your send confirmation.',
+                'normalized' => '',
+            ];
+        }
+
+        $upper = strtoupper($reference);
+        if ($upper === 'QWERTY') {
+            return ['valid' => true, 'message' => '', 'normalized' => 'QWERTY'];
+        }
+
+        $pendingNorm = strtoupper(trim($pendingRef));
+        if ($pendingNorm !== '' && $upper === $pendingNorm) {
+            return [
+                'valid' => false,
+                'message' => 'Use the transaction reference from GCash/Maya after sending—not the QuickPuff message code (QP…).',
+                'normalized' => '',
+            ];
+        }
+
+        if ($orderId > 0 && preg_match('/^QP' . preg_quote((string) $orderId, '/') . '[A-F0-9]{6}$/i', $reference) === 1) {
+            return [
+                'valid' => false,
+                'message' => 'The QP code is only for the payment message. Paste the transaction reference from GCash/Maya after you send.',
+                'normalized' => '',
+            ];
+        }
+
+        if (preg_match('/^QP\d+[A-F0-9]{6,}$/i', $reference) === 1) {
+            return [
+                'valid' => false,
+                'message' => 'QuickPuff message codes (QP…) cannot be used as a transaction reference.',
+                'normalized' => '',
+            ];
+        }
+
+        $digitsOnly = preg_replace('/\D+/', '', $reference) ?? '';
+        $compact = preg_replace('/\s+/', '', $reference) ?? '';
+
+        if ($digitsOnly !== '' && preg_match('/^\d{10,13}$/', $digitsOnly) === 1) {
+            return ['valid' => true, 'message' => '', 'normalized' => $digitsOnly];
+        }
+
+        if (preg_match('/^[A-Z0-9-]{8,24}$/i', $compact) === 1
+            && preg_match('/\d/', $compact) === 1
+            && ! preg_match('/^QP\d/i', $compact)) {
+            return ['valid' => true, 'message' => '', 'normalized' => strtoupper($compact)];
+        }
+
+        return [
+            'valid' => false,
+            'message' => 'Enter a valid GCash/Maya transaction reference (10–13 digits from your send confirmation). For testing only, use QWERTY.',
+            'normalized' => '',
+        ];
     }
 }
 

@@ -10,8 +10,8 @@ require_post();
 $email = normalize_email((string) ($_POST['email'] ?? ''));
 $orderId = (int) ($_POST['order_id'] ?? 0);
 $deliveryNotes = trim((string) ($_POST['delivery_notes'] ?? ''));
-$finalLat = mobile_parse_coordinate($_POST['final_rider_latitude'] ?? null);
-$finalLng = mobile_parse_coordinate($_POST['final_rider_longitude'] ?? null);
+$finalLat = mobile_parse_latitude($_POST['final_rider_latitude'] ?? null);
+$finalLng = mobile_parse_longitude($_POST['final_rider_longitude'] ?? null);
 
 if ($orderId <= 0) {
     json_response(false, 'order_id is required.', null, 400);

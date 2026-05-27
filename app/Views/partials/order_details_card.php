@@ -205,7 +205,16 @@ $mapId = (string) ($map_element_id ?? 'order_details_map');
                     <p><strong><?= $isReturnFlow ? 'Pickup Address:' : 'Shipping Address:' ?></strong> <?= esc($order['shipping_address']) ?></p>
                 <?php endif; ?>
                 <?php if (! empty($order['contact_number'])): ?>
-                    <p><strong>Contact Number:</strong> <?= esc($order['contact_number']) ?></p>
+                    <?php $contactNumber = (string) $order['contact_number']; ?>
+                    <p class="rider-contact-row">
+                        <strong>Contact Number:</strong>
+                        <span class="rider-contact-value" id="rider_contact_number"><?= esc($contactNumber) ?></span>
+                        <?php if ($audience === 'rider'): ?>
+                            <button type="button" class="rider-copy-contact-btn" data-copy-text="<?= esc($contactNumber, 'attr') ?>" title="Copy number">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        <?php endif; ?>
+                    </p>
                 <?php endif; ?>
                 <?= view('partials/delivery_reschedule_notice', [
                     'shipmentNotes' => (string) ($order['shipment_notes'] ?? ''),

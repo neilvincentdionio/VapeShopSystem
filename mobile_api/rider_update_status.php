@@ -30,8 +30,8 @@ try {
 
     $current = (string) ($order['delivery_status'] ?? 'to_pay');
     $now = date('Y-m-d H:i:s');
-    $lat = mobile_parse_coordinate($_POST['rider_latitude'] ?? null);
-    $lng = mobile_parse_coordinate($_POST['rider_longitude'] ?? null);
+    $lat = mobile_parse_latitude($_POST['rider_latitude'] ?? null);
+    $lng = mobile_parse_longitude($_POST['rider_longitude'] ?? null);
     $loc = [];
     if ($lat !== null && $lng !== null) {
         $loc = ['rider_latitude' => $lat, 'rider_longitude' => $lng, 'last_location_updated_at' => $now];

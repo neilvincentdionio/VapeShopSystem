@@ -26,7 +26,7 @@ try {
     $userId = (int) $user['id'];
 
     $productStmt = $db->prepare(
-        'SELECT id, name, category, puffs, price, stock_qty, is_active
+        'SELECT id, name, category, puffs, price, selling_price, stock_qty, is_active
          FROM products
          WHERE LOWER(name) = LOWER(:name)
          LIMIT 1'
@@ -44,7 +44,10 @@ try {
 
     $productId = (int) $product['id'];
     $category = trim((string) ($product['category'] ?? ''));
-    $unitPrice = (float) ($product['price'] ?? 0);
+    $unitPrice = mobile_effective_product_price(
+        (float) ($product['selling_price'] ?? 0),
+        (float) ($product['price'] ?? 0)
+    );
     $availableStock = (int) ($product['stock_qty'] ?? 0);
     $selectedVariant = null;
 
@@ -90,7 +93,12 @@ try {
                 json_response(false, 'Invalid flavor selected.', null, 422);
             }
 
-            $unitPrice = (float) ($selectedVariant['price'] ?? $unitPrice);
+            $variantPrice = isset($selectedVariant['price']) ? (float) $selectedVariant['price'] : null;
+            $unitPrice = mobile_effective_variant_price(
+                $variantPrice,
+                (float) ($product['selling_price'] ?? 0),
+                (float) ($product['price'] ?? 0)
+            );
             $availableStock = (int) ($selectedVariant['stock_qty'] ?? 0);
         }
     }

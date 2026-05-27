@@ -75,15 +75,20 @@ $defaultDamaged = $requestType === 'damaged_item';
         <i class="fas fa-paper-plane"></i> Send via <?= esc($ewalletLabel) ?>
     </button>
 
+    <?php if ($pendingRef !== ''): ?>
+        <p class="refund-panel-compact__hint">Message code for <?= esc($ewalletLabel) ?> note: <strong><?= esc($pendingRef) ?></strong> (not the transaction ref).</p>
+    <?php endif; ?>
+
     <label class="refund-panel-compact__label" for="refund-ref-<?= $orderId ?>">Transaction reference</label>
     <div class="refund-panel-compact__ref-row">
         <input type="text"
                id="refund-ref-<?= $orderId ?>"
                class="js-refund-payout-ref"
-               value="<?= esc($pendingRef) ?>"
-               placeholder="GCash/Maya ref number"
+               value=""
+               placeholder="Paste GCash/Maya txn ref after sending"
                autocomplete="off"
-               spellcheck="false">
+               spellcheck="false"
+               inputmode="numeric">
         <button type="button" class="btn btn-outline btn-sm js-paste-ewallet-ref" title="Paste from clipboard">Paste</button>
     </div>
 

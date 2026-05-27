@@ -406,6 +406,7 @@ class Dashboard extends BaseController
         }
 
         $deliveries = $this->getRiderDashboardDeliveries();
+        $returns = $this->getRiderReturnPickups();
         $today = date('Y-m-d');
 
         $stats = [
@@ -413,6 +414,8 @@ class Dashboard extends BaseController
             'to_ship' => 0,
             'to_receive' => 0,
             'completed_today' => 0,
+            'return_pickups' => 0,
+            'return_picked_up' => 0,
         ];
 
         foreach ($deliveries as $delivery) {
@@ -431,9 +434,20 @@ class Dashboard extends BaseController
             }
         }
 
+        foreach ($returns as $returnOrder) {
+            $status = (string) ($returnOrder['delivery_status'] ?? '');
+            if ($status === 'return_approved') {
+                $stats['return_pickups']++;
+            }
+            if ($status === 'return_picked_up') {
+                $stats['return_picked_up']++;
+            }
+        }
+
         return view('rider/dashboard', $this->getRiderPageData('Rider Dashboard', 'dashboard', [
             'stats' => $stats,
             'deliveries' => array_slice($deliveries, 0, 5),
+            'returns' => array_slice($returns, 0, 5),
         ]));
     }
 
@@ -467,6 +481,64 @@ class Dashboard extends BaseController
         return view('rider/returns', $this->getRiderPageData('Return Pickups', 'returns', [
             'returns' => $this->getRiderReturnPickups(),
         ]));
+    }
+
+    /**
+     * Remove completed return/refund rows from the rider pickup list (soft dismiss).
+     */
+    public function riderDismissCompletedReturns()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $riderId = (int) $this->session->get('user_id');
+        $count = $this->orderModel->dismissRiderCompletedReturns($riderId);
+
+        return $this->riderDismissCompletedJsonResponse(
+            $count,
+            'return',
+            'Completed returns cleared from your list.',
+            'No completed returns to clear.'
+        );
+    }
+
+    /**
+     * Remove completed delivery rows from the rider delivery list (soft dismiss).
+     */
+    public function riderDismissCompletedDeliveries()
+    {
+        $accessCheck = $this->checkRiderAccess();
+        if ($accessCheck !== true) {
+            return $accessCheck;
+        }
+
+        $riderId = (int) $this->session->get('user_id');
+        $count = $this->orderModel->dismissRiderCompletedDeliveries($riderId);
+
+        return $this->riderDismissCompletedJsonResponse(
+            $count,
+            'delivery',
+            'Completed deliveries cleared from your list.',
+            'No completed deliveries to clear.'
+        );
+    }
+
+    private function riderDismissCompletedJsonResponse(int $count, string $type, string $successMsg, string $emptyMsg)
+    {
+        $message = $count > 0 ? $successMsg : $emptyMsg;
+
+        if ($this->request->isAJAX() || $this->request->getHeaderLine('X-Requested-With') === 'XMLHttpRequest') {
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => $message,
+                'dismissed' => $count,
+                'type' => $type,
+            ]);
+        }
+
+        return redirect()->to(site_url('rider/profile'))->with('success', $message);
     }
 
     /**
@@ -523,7 +595,9 @@ class Dashboard extends BaseController
         }
         unset($delivery);
 
-        return $deliveries;
+        helper('rider_list');
+
+        return filter_rider_visible_deliveries($deliveries);
     }
 
     /**
@@ -4187,9 +4261,26 @@ class Dashboard extends BaseController
         }
 
         if ($userRole === 'rider') {
-            $riderAccount = $this->userModel->find((int) $this->session->get('user_id'));
+            $riderId = (int) $this->session->get('user_id');
+            helper(['return_refund', 'rider_list']);
+            $riderAccount = $this->userModel->find($riderId);
+            $completedDeliveryCount = 0;
+            $completedReturnCount = 0;
+            foreach ($this->getRiderDeliveries() as $row) {
+                if ((string) ($row['delivery_status'] ?? '') === 'completed') {
+                    $completedDeliveryCount++;
+                }
+            }
+            foreach ($this->orderModel->getRiderReturnPickups($riderId) as $row) {
+                if ((string) ($row['delivery_status'] ?? '') === 'return_refund') {
+                    $completedReturnCount++;
+                }
+            }
+
             return view('rider/profile', $this->getRiderPageData('Profile', 'profile', [
                 'rider_account' => $riderAccount,
+                'completed_delivery_count' => $completedDeliveryCount,
+                'completed_return_count' => $completedReturnCount,
             ]));
         }
 
@@ -5499,6 +5590,21 @@ class Dashboard extends BaseController
                     'success' => false,
                     'message' => 'Enter or paste the GCash/Maya reference, or use Send via GCash to auto-fill.',
                 ]);
+            }
+
+            if (return_refund_requires_payout((string) ($returnMeta['type'] ?? 'return_and_refund')) && $refundPayoutReference !== '') {
+                $refValidation = validate_admin_refund_payout_reference(
+                    $refundPayoutReference,
+                    $orderId,
+                    trim((string) ($returnMeta['pending_refund_reference'] ?? ''))
+                );
+                if (! $refValidation['valid']) {
+                    return $this->response->setStatusCode(422)->setJSON([
+                        'success' => false,
+                        'message' => $refValidation['message'],
+                    ]);
+                }
+                $refundPayoutReference = $refValidation['normalized'];
             }
 
             $db = \Config\Database::connect();

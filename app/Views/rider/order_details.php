@@ -216,4 +216,53 @@ if (mapEl) {
 </script>
 <?php endif; ?>
 
+<script>
+(function () {
+    function copyText(text) {
+        const value = (text || '').trim();
+        if (!value) {
+            alert('No contact number to copy.');
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () {
+                alert('Contact number copied.');
+            }).catch(function () {
+                fallbackCopy(value);
+            });
+            return;
+        }
+        fallbackCopy(value);
+    }
+
+    function fallbackCopy(value) {
+        const area = document.createElement('textarea');
+        area.value = value;
+        document.body.appendChild(area);
+        area.select();
+        try {
+            document.execCommand('copy');
+            alert('Contact number copied.');
+        } catch (e) {
+            alert('Unable to copy. Select the number manually.');
+        }
+        document.body.removeChild(area);
+    }
+
+    document.querySelectorAll('.rider-copy-contact-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            copyText(btn.getAttribute('data-copy-text') || '');
+        });
+    });
+
+    const contactEl = document.getElementById('rider_contact_number');
+    if (contactEl) {
+        contactEl.addEventListener('dblclick', function () {
+            copyText(contactEl.textContent || '');
+        });
+        contactEl.title = 'Double-click to copy';
+    }
+})();
+</script>
+
 <?= $this->include('rider/partials/footer') ?>

@@ -11,8 +11,8 @@ require_fields($input, ['email', 'order_id', 'rider_latitude', 'rider_longitude'
 
 $email = normalize_email((string) $input['email']);
 $orderId = (int) $input['order_id'];
-$lat = mobile_parse_coordinate($input['rider_latitude'] ?? null);
-$lng = mobile_parse_coordinate($input['rider_longitude'] ?? null);
+$lat = mobile_parse_latitude($input['rider_latitude'] ?? null);
+$lng = mobile_parse_longitude($input['rider_longitude'] ?? null);
 
 if ($lat === null || $lng === null) {
     json_response(false, 'Valid coordinates are required.', null, 400);

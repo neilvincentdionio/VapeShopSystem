@@ -529,7 +529,7 @@ function mobile_distance_meters(float $lat1, float $lng1, float $lat2, float $ln
     return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
 }
 
-function mobile_parse_coordinate(mixed $value): ?float
+function mobile_parse_latitude(mixed $value): ?float
 {
     if ($value === null || $value === '') {
         return null;
@@ -540,6 +540,25 @@ function mobile_parse_coordinate(mixed $value): ?float
     $f = (float) $value;
 
     return $f >= -90 && $f <= 90 ? $f : null;
+}
+
+function mobile_parse_longitude(mixed $value): ?float
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if (! is_numeric($value)) {
+        return null;
+    }
+    $f = (float) $value;
+
+    return $f >= -180 && $f <= 180 ? $f : null;
+}
+
+/** @deprecated Use mobile_parse_latitude() or mobile_parse_longitude() */
+function mobile_parse_coordinate(mixed $value): ?float
+{
+    return mobile_parse_latitude($value);
 }
 
 function mobile_rider_has_active_delivery(PDO $db, int $riderId, int $excludeOrderId = 0): bool

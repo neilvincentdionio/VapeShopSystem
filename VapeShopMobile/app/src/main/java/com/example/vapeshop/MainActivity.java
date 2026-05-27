@@ -8,6 +8,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -51,9 +52,11 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -66,11 +69,14 @@ import org.json.JSONObject;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -80,6 +86,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -125,24 +132,67 @@ public class MainActivity extends AppCompatActivity {
     private boolean isLoggedIn = false;
     private String currentUserRole = "customer";
     private int currentUserId = 0;
-    private int pendingProofOrderId = 0;
-    private final ActivityResultLauncher<String> deliveryProofPickerLauncher =
-        registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-            if (uri != null && pendingProofOrderId > 0) {
-                submitRiderProofToServer(pendingProofOrderId, uri, new SimpleCallback() {
-                    @Override
-                    public void onSuccess(String message) {
-                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
-                        loadFragment(new RiderDeliveriesFragment());
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-                    }
-                });
+    private int pendingProofDialogOrderId = 0;
+    private Uri pendingProofUriForDialog = null;
+    private TextView pendingProofFileNameView = null;
+    private Runnable pendingProofDialogRefresh = null;
+    private boolean riderProofPickerInProgress = false;
+    private int pendingReturnQrOrderId = 0;
+    private Runnable pendingReturnQrRefresh;
+    private AlertDialog pendingReturnQrDialog = null;
+    private EditText pendingReturnQrManualInput = null;
+    private int riderLocationOrderId = 0;
+    private static final long RIDER_LOCATION_PUSH_MS = 20000L;
+    private final ActivityResultLauncher<String> returnQrCameraPermissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            if (Boolean.TRUE.equals(granted)) {
+                openReturnQrScannerActivity();
+            } else {
+                Toast.makeText(
+                    MainActivity.this,
+                    "Camera permission is required to scan the return QR code.",
+                    Toast.LENGTH_LONG
+                ).show();
             }
-            pendingProofOrderId = 0;
+        });
+    private final ActivityResultLauncher<ScanOptions> returnQrScannerLauncher =
+        registerForActivityResult(new ScanContract(), result -> {
+            if (pendingReturnQrOrderId <= 0) {
+                return;
+            }
+            if (result.getContents() == null || result.getContents().trim().isEmpty()) {
+                return;
+            }
+            final int orderId = pendingReturnQrOrderId;
+            final Runnable refresh = pendingReturnQrRefresh;
+            final String code = result.getContents().trim();
+            applyScannedReturnQrAndSubmit(orderId, code, refresh);
+        });
+    private Uri pendingDeliveryProofPhotoUri = null;
+    private final ActivityResultLauncher<String> deliveryProofCameraPermissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            if (Boolean.TRUE.equals(granted)) {
+                launchDeliveryProofCamera();
+            } else {
+                riderProofPickerInProgress = false;
+                Toast.makeText(
+                    this,
+                    "Camera permission is required to take delivery proof.",
+                    Toast.LENGTH_LONG
+                ).show();
+            }
+        });
+    private final ActivityResultLauncher<Uri> deliveryProofCameraLauncher =
+        registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+            riderProofPickerInProgress = false;
+            if (!Boolean.TRUE.equals(success) || pendingProofDialogOrderId <= 0) {
+                return;
+            }
+            Uri uri = pendingDeliveryProofPhotoUri;
+            if (uri == null) {
+                return;
+            }
+            onDeliveryProofPhotoReady(uri);
         });
     private final LinkedHashMap<String, CartItem> cartItems = new LinkedHashMap<>();
     private final Map<Integer, ProductCatalogEntry> productCatalogById = new HashMap<>();
@@ -152,11 +202,13 @@ public class MainActivity extends AppCompatActivity {
     private static final long MESSAGE_AUTO_REFRESH_MS = 4000L;
     private static final long MESSAGE_BADGE_POLL_MS = 12000L;
     private int supportUnreadCount = 0;
+    private int notificationUnreadCount = 0;
     private boolean messageBadgePollingActive = false;
     private final Runnable messageBadgePollRunnable = new Runnable() {
         @Override
         public void run() {
             pollSupportUnreadCount();
+            pollNotificationUnreadCount();
             if (messageBadgePollingActive) {
                 mainHandler.postDelayed(this, MESSAGE_BADGE_POLL_MS);
             }
@@ -495,7 +547,7 @@ public class MainActivity extends AppCompatActivity {
         void onError(String message);
     }
 
-    private interface SimpleCallback {
+    public interface SimpleCallback {
         void onSuccess(String message);
         void onError(String message);
     }
@@ -538,7 +590,15 @@ public class MainActivity extends AppCompatActivity {
         });
 
         setupNavigation();
-        restoreSessionIfPossible();
+        setupRiderNavigation();
+        try {
+            restoreSessionIfPossible();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Startup failed", e);
+            isLoggedIn = false;
+            currentUserRole = "customer";
+            loadFragment(new LoginFragment());
+        }
     }
 
     private void restoreSessionIfPossible() {
@@ -584,6 +644,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopMessageBadgePolling();
+        stopRiderLocationPush();
         super.onDestroy();
         networkExecutor.shutdownNow();
     }
@@ -617,6 +678,32 @@ public class MainActivity extends AppCompatActivity {
             loadFragment(new SettingsFragment()));
     }
 
+    private void setupRiderNavigation() {
+        findViewById(R.id.nav_rider_dashboard).setOnClickListener(v ->
+            loadRiderFragment(new RiderDashboardFragment()));
+        findViewById(R.id.nav_rider_deliveries).setOnClickListener(v ->
+            loadRiderFragment(new RiderDeliveriesFragment()));
+        findViewById(R.id.nav_rider_returns).setOnClickListener(v ->
+            loadRiderFragment(new RiderReturnsFragment()));
+        findViewById(R.id.nav_rider_messages).setOnClickListener(v -> {
+            if (!isUserLoggedIn()) {
+                Toast.makeText(this, "Please login first", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            loadRiderFragment(MessagesFragment.newInstance("", "", false));
+        });
+        findViewById(R.id.nav_rider_profile).setOnClickListener(v ->
+            loadRiderFragment(new RiderProfileFragment()));
+    }
+
+    public void loadRiderFragment(Fragment fragment) {
+        loadFragment(fragment);
+    }
+
+    public void openRiderOrderDetail(JSONObject order) {
+        loadRiderFragment(RiderOrderDetailFragment.newInstance(order));
+    }
+
     private void loadFragment(Fragment fragment) {
         if (fragment == null || !isActivityAlive()) {
             return;
@@ -647,7 +734,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void routeAfterLogin() {
         setRoleNavigationVisible(isCustomerRole());
-        if (isCustomerRole()) {
+        setRiderNavigationVisible(isRiderRole());
+        if (isCustomerRole() || isRiderRole()) {
             startMessageBadgePolling();
         } else {
             stopMessageBadgePolling();
@@ -657,7 +745,7 @@ public class MainActivity extends AppCompatActivity {
         if (isAdminRole()) {
             loadFragment(new AdminOrdersFragment());
         } else if (isRiderRole()) {
-            loadFragment(new RiderDeliveriesFragment());
+            loadRiderFragment(new RiderDashboardFragment());
         } else {
             loadFragment(new HomeFragment());
         }
@@ -679,10 +767,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void setRoleNavigationVisible(boolean visible) {
         int vis = visible ? View.VISIBLE : View.GONE;
-        findViewById(R.id.nav_home).setVisibility(vis);
-        findViewById(R.id.nav_cart).setVisibility(vis);
-        findViewById(R.id.nav_messages_wrap).setVisibility(vis);
-        findViewById(R.id.nav_my_purchase).setVisibility(vis);
+        findViewById(R.id.customer_bottom_nav).setVisibility(vis);
+    }
+
+    private void setRiderNavigationVisible(boolean visible) {
+        int vis = visible ? View.VISIBLE : View.GONE;
+        findViewById(R.id.rider_bottom_nav).setVisibility(vis);
+    }
+
+    public String getStoredPassword() {
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_USER_PASSWORD, "");
     }
 
     public int getCurrentUserId() {
@@ -1746,17 +1840,26 @@ public class MainActivity extends AppCompatActivity {
             loadFragment(new LoginFragment());
             return;
         }
-        if (getCartItemCount() == 0) {
-            Toast.makeText(this, "Your cart is empty", Toast.LENGTH_SHORT).show();
-            return;
-        }
 
-        if (hasCorruptedSavedAddress()) {
-            refreshSavedAddressFromServer(() -> openCheckoutDialog(callback));
-            return;
-        }
+        loadCartFromServer(new CartLoadCallback() {
+            @Override
+            public void onSuccess() {
+                if (getCartItemCount() == 0) {
+                    Toast.makeText(MainActivity.this, "Your cart is empty", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (hasCorruptedSavedAddress()) {
+                    refreshSavedAddressFromServer(() -> openCheckoutDialog(callback));
+                    return;
+                }
+                openCheckoutDialog(callback);
+            }
 
-        openCheckoutDialog(callback);
+            @Override
+            public void onError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void openCheckoutDialog(SimpleCallback callback) {
@@ -1902,7 +2005,7 @@ public class MainActivity extends AppCompatActivity {
 
             Map<String, String> params = new HashMap<>();
             params.put("email", getRegisteredEmail());
-            params.put("total_amount", String.format(Locale.US, "%.2f", cartTotal));
+            params.put("total_amount", String.format(Locale.US, "%.2f", getCartTotal()));
             params.put("payment_method", paymentMethod);
             params.put("contact_number", getRegisteredPhone());
             params.put("phone", getRegisteredPhone());
@@ -2626,7 +2729,16 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     JSONObject root = new JSONObject(responseBody);
                     if (!root.optBoolean("success", false)) {
-                        callback.onError(root.optString("message", "Checkout failed"));
+                        String message = root.optString("message", "Checkout failed");
+                        JSONObject data = root.optJSONObject("data");
+                        if (data != null && data.has("expected_total")) {
+                            message = message + String.format(
+                                Locale.US,
+                                " Please refresh cart. Server total: ₱%.2f.",
+                                data.optDouble("expected_total", 0)
+                            );
+                        }
+                        callback.onError(message);
                         return;
                     }
                     callback.onSuccess(root.optString("message", "Checkout successful"));
@@ -2904,7 +3016,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void startMessageBadgePolling() {
-        if (!isUserLoggedIn() || !isCustomerRole()) {
+        if (!isUserLoggedIn() || (!isCustomerRole() && !isRiderRole())) {
             return;
         }
         if (messageBadgePollingActive) {
@@ -2921,16 +3033,215 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void refreshMessageBadges() {
-        mainHandler.post(() -> applyUnreadBadge(findViewById(R.id.nav_messages_badge)));
+        mainHandler.post(() -> {
+            applyUnreadBadge(findViewById(R.id.nav_messages_badge));
+            applyUnreadBadge(findViewById(R.id.nav_rider_messages_badge));
+        });
+    }
+
+    public void refreshNotificationBadges() {
+        mainHandler.post(() -> applyUnreadBadge(findViewById(R.id.rider_dashboard_notif_badge), notificationUnreadCount));
+    }
+
+    public void setNotificationUnreadCount(int count) {
+        notificationUnreadCount = Math.max(0, count);
+    }
+
+    public int getNotificationUnreadCount() {
+        return notificationUnreadCount;
+    }
+
+    public void openNotificationsScreen() {
+        if (isRiderRole()) {
+            loadRiderFragment(new NotificationsFragment());
+        } else {
+            loadFragment(new NotificationsFragment());
+        }
+    }
+
+    public void navigateBackFromNotifications() {
+        if (isRiderRole()) {
+            loadRiderFragment(new RiderDashboardFragment());
+        } else {
+            loadFragment(new HomeFragment());
+        }
+    }
+
+    public void pollNotificationUnreadCount() {
+        if (!isUserLoggedIn()) {
+            return;
+        }
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("notifications_list.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    notificationUnreadCount = data != null
+                        ? Math.max(0, data.optInt("unread_count", 0))
+                        : 0;
+                    refreshNotificationBadges();
+                } catch (Exception ignored) {
+                    // keep previous count
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                // silent poll
+            }
+        });
+    }
+
+    public void fetchNotificationsList(SimpleCallback callback) {
+        if (!isUserLoggedIn()) {
+            callback.onError("Please login first.");
+            return;
+        }
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("notifications_list.php", params, callback);
+    }
+
+    public void markNotificationRead(int notificationId, Runnable onDone) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("notification_id", String.valueOf(notificationId));
+        apiPost("notifications_mark_read.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String body) {
+                try {
+                    JSONObject root = new JSONObject(body);
+                    JSONObject data = root.optJSONObject("data");
+                    if (data != null) {
+                        notificationUnreadCount = Math.max(0, data.optInt("unread_count", 0));
+                    }
+                    refreshNotificationBadges();
+                } catch (Exception ignored) {
+                    pollNotificationUnreadCount();
+                }
+                if (onDone != null) {
+                    onDone.run();
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                if (onDone != null) {
+                    onDone.run();
+                }
+            }
+        });
+    }
+
+    public void markAllNotificationsRead(Runnable onDone) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("notifications_mark_all_read.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String body) {
+                notificationUnreadCount = 0;
+                refreshNotificationBadges();
+                if (onDone != null) {
+                    onDone.run();
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                RiderOrderUi.toast(MainActivity.this, message);
+            }
+        });
+    }
+
+    public void handleNotificationNavigation(JSONObject item) {
+        if (item == null) {
+            return;
+        }
+        String target = item.optString("mobile_target", "none");
+        int orderId = item.optInt("order_id", 0);
+        if ("messages".equals(target)) {
+            if (isRiderRole()) {
+                loadRiderFragment(new MessagesFragment());
+            } else {
+                loadFragment(new MessagesFragment());
+            }
+            return;
+        }
+        if (isRiderRole()) {
+            if ("deliveries".equals(target)) {
+                loadRiderFragment(new RiderDeliveriesFragment());
+                return;
+            }
+            if ("returns".equals(target)) {
+                loadRiderFragment(new RiderReturnsFragment());
+                return;
+            }
+            if ("order_detail".equals(target) && orderId > 0) {
+                openRiderOrderById(orderId);
+            }
+        }
+    }
+
+    private void openRiderOrderById(int orderId) {
+        fetchRiderOrders("active", new SimpleCallback() {
+            @Override
+            public void onSuccess(String body) {
+                JSONObject found = findOrderInList(RiderOrderUi.parseOrders(body), orderId);
+                if (found != null) {
+                    openRiderOrderDetail(found);
+                    return;
+                }
+                fetchRiderOrders("returns", new SimpleCallback() {
+                    @Override
+                    public void onSuccess(String body2) {
+                        JSONObject foundReturn = findOrderInList(RiderOrderUi.parseOrders(body2), orderId);
+                        if (foundReturn != null) {
+                            openRiderOrderDetail(foundReturn);
+                        } else {
+                            RiderOrderUi.toast(MainActivity.this, "Order not found in your assignments.");
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        RiderOrderUi.toast(MainActivity.this, message);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String message) {
+                RiderOrderUi.toast(MainActivity.this, message);
+            }
+        });
+    }
+
+    private static JSONObject findOrderInList(List<JSONObject> orders, int orderId) {
+        for (JSONObject order : orders) {
+            if (order.optInt("order_id", 0) == orderId) {
+                return order;
+            }
+        }
+        return null;
     }
 
     private void applyUnreadBadge(TextView badge) {
+        applyUnreadBadge(badge, supportUnreadCount);
+    }
+
+    private void applyUnreadBadge(TextView badge, int count) {
         if (badge == null) {
             return;
         }
-        if (supportUnreadCount > 0) {
+        if (count > 0) {
             badge.setVisibility(View.VISIBLE);
-            badge.setText(supportUnreadCount > 99 ? "99+" : String.valueOf(supportUnreadCount));
+            badge.setText(count > 99 ? "99+" : String.valueOf(count));
         } else {
             badge.setVisibility(View.GONE);
         }
@@ -3142,10 +3453,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void setupLiveTrackingWebView(WebView webView) {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        webView.loadUrl("file:///android_asset/live_tracking_map.html");
+        if (webView == null) {
+            return;
+        }
+        try {
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            webView.loadUrl("file:///android_asset/live_tracking_map.html");
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Live tracking map init failed", e);
+        }
     }
 
     public void startLiveTracking(int orderId, WebView webView, TextView statusView, TextView metaView) {
@@ -3240,9 +3558,17 @@ public class MainActivity extends AppCompatActivity {
             }
 
             final String trackingJson = tracking.toString();
-            liveTrackingWebView.post(() ->
-                liveTrackingWebView.evaluateJavascript("updateTracking(" + trackingJson + ")", null)
-            );
+            final WebView mapView = liveTrackingWebView;
+            mapView.post(() -> {
+                if (mapView != liveTrackingWebView || liveTrackingOrderId <= 0) {
+                    return;
+                }
+                try {
+                    mapView.evaluateJavascript("updateTracking(" + trackingJson + ")", null);
+                } catch (Exception ignored) {
+                    // WebView may be destroyed while rider detail is closing
+                }
+            });
 
             String status = tracking.optString("status", "");
             String phase = tracking.optString("phase", "");
@@ -3287,6 +3613,12 @@ public class MainActivity extends AppCompatActivity {
             }
 
             notifyOrderDetailsUiFromTracking(responseBody);
+
+            if (isRiderRole() && liveTrackingOrderId > 0 && hasRiderGps) {
+                fetchFreshGpsForRider((lat, lng) ->
+                    riderUpdateLocationToServer(liveTrackingOrderId, lat, lng, null)
+                );
+            }
         } catch (Exception e) {
             if (liveTrackingStatusView != null) {
                 liveTrackingStatusView.setText("Unable to load tracking.");
@@ -3329,6 +3661,18 @@ public class MainActivity extends AppCompatActivity {
         apiPost("rider_orders_list.php", params, callback);
     }
 
+    public void dismissRiderCompletedReturns(SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("rider_dismiss_completed_returns.php", params, callback);
+    }
+
+    public void dismissRiderCompletedDeliveries(SimpleCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        apiPost("rider_dismiss_completed_deliveries.php", params, callback);
+    }
+
     public void riderUpdateStatus(int orderId, String status, Map<String, String> extra, SimpleCallback callback) {
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
@@ -3340,17 +3684,637 @@ public class MainActivity extends AppCompatActivity {
         apiPost("rider_update_status.php", params, wrapJsonCallback(callback));
     }
 
-    public void openDeliveryProofPicker(int orderId) {
-        pendingProofOrderId = orderId;
-        deliveryProofPickerLauncher.launch("image/*");
+    public interface GpsCallback {
+        void onGps(double lat, double lng);
     }
 
-    public void submitRiderProofToServer(int orderId, Uri proofUri, SimpleCallback callback) {
+    @SuppressLint("MissingPermission")
+    public void fetchFreshGpsForRider(GpsCallback callback) {
+        if (callback == null) {
+            return;
+        }
+        if (!hasCheckoutLocationPermission()) {
+            callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
+            return;
+        }
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager == null) {
+            callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
+            return;
+        }
+        Location cached = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        if (cached == null) {
+            cached = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+        }
+        if (cached != null) {
+            lastCheckoutGpsLat = cached.getLatitude();
+            lastCheckoutGpsLng = cached.getLongitude();
+            callback.onGps(lastCheckoutGpsLat, lastCheckoutGpsLng);
+            return;
+        }
+        callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
+    }
+
+    public void riderUpdateStatusWithGps(int orderId, String status, Map<String, String> extra, SimpleCallback callback) {
+        fetchFreshGpsForRider((lat, lng) -> {
+            Map<String, String> merged = extra != null ? new HashMap<>(extra) : new HashMap<>();
+            merged.put("rider_latitude", String.format(Locale.US, "%.6f", lat));
+            merged.put("rider_longitude", String.format(Locale.US, "%.6f", lng));
+            riderUpdateStatus(orderId, status, merged, callback);
+        });
+    }
+
+    public void riderUpdateLocationToServer(int orderId, double lat, double lng, SimpleCallback callback) {
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
         params.put("order_id", String.valueOf(orderId));
-        params.put("final_rider_latitude", String.format(Locale.US, "%.6f", getRegisteredLatitude()));
-        params.put("final_rider_longitude", String.format(Locale.US, "%.6f", getRegisteredLongitude()));
+        params.put("rider_latitude", String.format(Locale.US, "%.6f", lat));
+        params.put("rider_longitude", String.format(Locale.US, "%.6f", lng));
+        apiPost("rider_update_location.php", params, callback != null ? wrapJsonCallback(callback) : new SimpleCallback() {
+            @Override public void onSuccess(String responseBody) {}
+            @Override public void onError(String message) {}
+        });
+    }
+
+    public void startReturnQrScan(int orderId, Runnable refresh) {
+        showReturnQrScanDialog(orderId, refresh);
+    }
+
+    public void showReturnQrScanDialog(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive() || orderId <= 0) {
+            return;
+        }
+        try {
+            View form = LayoutInflater.from(this).inflate(R.layout.dialog_rider_return_scan, null);
+            EditText manualInput = form.findViewById(R.id.rider_return_qr_manual);
+            View openScanner = form.findViewById(R.id.rider_return_open_scanner);
+
+            AlertDialog dialog = riderDialogBuilder()
+                .setTitle("Scan Return QR")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Use Code", null)
+                .create();
+
+            pendingReturnQrDialog = dialog;
+            pendingReturnQrManualInput = manualInput;
+            dialog.setOnDismissListener(d -> clearReturnQrDialogRefs());
+
+            openScanner.setOnClickListener(v -> {
+                pendingReturnQrOrderId = orderId;
+                pendingReturnQrRefresh = onRefresh;
+                launchReturnQrScanner();
+            });
+
+            dialog.setOnShowListener(d -> {
+                Button submit = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if (submit == null) {
+                    return;
+                }
+                submit.setOnClickListener(v -> {
+                    String code = manualInput.getText() != null
+                        ? manualInput.getText().toString().trim() : "";
+                    if (code.isEmpty()) {
+                        Toast.makeText(this, "Enter or scan the return QR code.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    dialog.dismiss();
+                    submitReturnQrPickup(orderId, code, onRefresh);
+                });
+            });
+            dialog.show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Return scan dialog failed", e);
+            Toast.makeText(this, "Unable to open return QR scanner.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void launchReturnQrScanner() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED) {
+            returnQrCameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            return;
+        }
+        openReturnQrScannerActivity();
+    }
+
+    private void openReturnQrScannerActivity() {
+        if (pendingReturnQrOrderId <= 0) {
+            return;
+        }
+        try {
+            ScanOptions options = new ScanOptions();
+            options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
+            options.setPrompt("Scan the customer's return QR code");
+            options.setBeepEnabled(true);
+            options.setOrientationLocked(false);
+            options.setCaptureActivity(com.journeyapps.barcodescanner.CaptureActivity.class);
+            returnQrScannerLauncher.launch(options);
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "QR scanner launch failed", e);
+            Toast.makeText(this, "Unable to open camera scanner.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void clearReturnQrDialogRefs() {
+        pendingReturnQrDialog = null;
+        pendingReturnQrManualInput = null;
+    }
+
+    private void applyScannedReturnQrAndSubmit(int orderId, String code, Runnable onRefresh) {
+        if (orderId <= 0 || code == null || code.trim().isEmpty()) {
+            return;
+        }
+        final String trimmed = code.trim();
+        runOnUiThreadIfAlive(() -> {
+            if (pendingReturnQrManualInput != null) {
+                pendingReturnQrManualInput.setText(trimmed);
+                pendingReturnQrManualInput.setSelection(trimmed.length());
+            }
+            mainHandler.postDelayed(() -> runOnUiThreadIfAlive(() -> {
+                Toast.makeText(this, "QR scanned. Submitting...", Toast.LENGTH_SHORT).show();
+                if (pendingReturnQrDialog != null && pendingReturnQrDialog.isShowing()) {
+                    pendingReturnQrDialog.dismiss();
+                }
+                clearReturnQrDialogRefs();
+                pendingReturnQrOrderId = 0;
+                pendingReturnQrRefresh = null;
+                submitReturnQrPickup(orderId, trimmed, onRefresh);
+            }), 350);
+        });
+    }
+
+    private void submitReturnQrPickup(int orderId, String qrCode, Runnable onRefresh) {
+        Map<String, String> extra = new HashMap<>();
+        extra.put("return_qr_scan", qrCode);
+        riderUpdateStatusWithGps(orderId, "return_picked_up", extra, new SimpleCallback() {
+            @Override
+            public void onSuccess(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                safeRiderRefresh(onRefresh).run();
+            }
+
+            @Override
+            public void onError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private Runnable safeRiderRefresh(Runnable onRefresh) {
+        return () -> runOnUiThreadIfAlive(() -> {
+            if (onRefresh != null) {
+                onRefresh.run();
+            }
+        });
+    }
+
+    public RiderOrderUi.RiderActionHandler createRiderActionHandler(Runnable onRefresh) {
+        final Runnable refresh = safeRiderRefresh(onRefresh);
+        return new RiderOrderUi.RiderActionHandler() {
+            @Override
+            public void onStatusUpdate(int orderId, String status, Map<String, String> extra) {
+                riderUpdateStatusWithGps(orderId, status, extra, new SimpleCallback() {
+                    @Override
+                    public void onSuccess(String message) {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        refresh.run();
+                        if ("accept_return_pickup".equals(status)) {
+                            mainHandler.postDelayed(
+                                () -> showReturnQrScanDialog(orderId, refresh),
+                                450
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onDelivered(int orderId) {
+                showRiderDeliveredFlow(orderId, refresh);
+            }
+
+            @Override
+            public void onReschedule(int orderId) {
+                showRiderRescheduleDialog(orderId, refresh);
+            }
+
+            @Override
+            public void onCancel(int orderId) {
+                showRiderCancelFlow(orderId, refresh);
+            }
+
+            @Override
+            public void onScanReturnQr(int orderId) {
+                startReturnQrScan(orderId, refresh);
+            }
+
+            @Override
+            public void onOpenDetail(JSONObject order) {
+                openRiderOrderDetail(order);
+            }
+
+            @Override
+            public void onRefresh() {
+                refresh.run();
+            }
+        };
+    }
+
+    private final Runnable riderLocationPushRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (riderLocationOrderId <= 0 || !isRiderRole()) {
+                return;
+            }
+            final int orderId = riderLocationOrderId;
+            fetchFreshGpsForRider((lat, lng) -> {
+                riderUpdateLocationToServer(orderId, lat, lng, null);
+                if (riderLocationOrderId == orderId) {
+                    mainHandler.postDelayed(riderLocationPushRunnable, RIDER_LOCATION_PUSH_MS);
+                }
+            });
+        }
+    };
+
+    public void startRiderLocationPush(int orderId) {
+        riderLocationOrderId = orderId;
+        mainHandler.removeCallbacks(riderLocationPushRunnable);
+        mainHandler.post(riderLocationPushRunnable);
+    }
+
+    public void stopRiderLocationPush() {
+        riderLocationOrderId = 0;
+        mainHandler.removeCallbacks(riderLocationPushRunnable);
+    }
+
+    public void startRiderTrackingForOrder(int orderId, WebView webView, TextView metaView) {
+        startLiveTracking(orderId, webView, metaView, metaView);
+        startRiderLocationPush(orderId);
+    }
+
+    public void stopRiderTracking() {
+        stopLiveTracking();
+        stopRiderLocationPush();
+    }
+
+    private MaterialAlertDialogBuilder riderDialogBuilder() {
+        return new MaterialAlertDialogBuilder(this);
+    }
+
+    public void showRiderDeliveredFlow(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive()) {
+            return;
+        }
+        try {
+            riderDialogBuilder()
+                .setTitle("Proof of Delivery")
+                .setMessage("Mark this order as delivered?\n\nYou will take a delivery proof photo in the next step.")
+                .setPositiveButton("Continue", (dialog, which) ->
+                    mainHandler.post(() -> showRiderProofDialog(orderId, onRefresh)))
+                .setNegativeButton("Cancel", null)
+                .show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Delivered flow failed", e);
+            showRiderProofDialog(orderId, onRefresh);
+        }
+    }
+
+    public void showRiderProofDialog(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive()) {
+            return;
+        }
+        try {
+            View form = LayoutInflater.from(this).inflate(R.layout.dialog_rider_delivery_proof, null);
+            View takePhotoBtn = form.findViewById(R.id.rider_proof_choose_photo);
+            TextView fileName = form.findViewById(R.id.rider_proof_file_name);
+            EditText notesField = form.findViewById(R.id.rider_proof_notes);
+
+            pendingProofDialogOrderId = orderId;
+            pendingProofDialogRefresh = onRefresh;
+            pendingProofFileNameView = fileName;
+            riderProofPickerInProgress = false;
+            if (pendingProofUriForDialog != null) {
+                fileName.setText("Delivery photo captured");
+            } else {
+                pendingProofUriForDialog = null;
+                fileName.setText("No photo taken yet");
+            }
+
+            takePhotoBtn.setOnClickListener(v -> startDeliveryProofCapture());
+
+            AlertDialog dialog = riderDialogBuilder()
+                .setTitle("Proof of Delivery")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Submit Proof", null)
+                .create();
+            dialog.setCanceledOnTouchOutside(false);
+            dialog.setOnDismissListener(d -> {
+                if (riderProofPickerInProgress) {
+                    return;
+                }
+                if (pendingProofDialogOrderId == orderId) {
+                    clearRiderProofDialogState();
+                }
+            });
+            dialog.setOnShowListener(d -> {
+                Button submit = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if (submit == null) {
+                    return;
+                }
+                submit.setOnClickListener(v -> {
+                    if (pendingProofUriForDialog == null) {
+                        Toast.makeText(this, "Please take a delivery proof photo first.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    String notes = notesField.getText() != null ? notesField.getText().toString().trim() : "";
+                    Uri proofUri = pendingProofUriForDialog;
+                    Runnable refresh = pendingProofDialogRefresh;
+                    riderProofPickerInProgress = false;
+                    clearRiderProofDialogState();
+                    dialog.dismiss();
+                    fetchFreshGpsForRider((lat, lng) -> submitRiderProofToServer(
+                        orderId, proofUri, lat, lng, notes, riderProofCallback(refresh)));
+                });
+            });
+            dialog.show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Proof dialog failed", e);
+            Toast.makeText(this, "Unable to open delivery proof dialog.", Toast.LENGTH_LONG).show();
+            clearRiderProofDialogState();
+        }
+    }
+
+    public void showRiderRescheduleDialog(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive()) {
+            return;
+        }
+        try {
+            View form = LayoutInflater.from(this).inflate(R.layout.dialog_rider_reschedule, null);
+            TextView pickDateBtn = form.findViewById(R.id.rider_reschedule_pick_date);
+            EditText reasonField = form.findViewById(R.id.rider_reschedule_reason);
+
+            Calendar defaultCal = Calendar.getInstance();
+            defaultCal.add(Calendar.DAY_OF_MONTH, 1);
+            final String[] selectedDate = {formatIsoDate(
+                defaultCal.get(Calendar.YEAR),
+                defaultCal.get(Calendar.MONTH),
+                defaultCal.get(Calendar.DAY_OF_MONTH)
+            )};
+            pickDateBtn.setText(selectedDate[0]);
+
+            pickDateBtn.setOnClickListener(v -> {
+                Calendar cal = Calendar.getInstance();
+                parseIsoDateIntoCalendar(selectedDate[0], cal);
+                new DatePickerDialog(
+                    this,
+                    (view, year, month, dayOfMonth) -> {
+                        selectedDate[0] = formatIsoDate(year, month, dayOfMonth);
+                        pickDateBtn.setText(selectedDate[0]);
+                    },
+                    cal.get(Calendar.YEAR),
+                    cal.get(Calendar.MONTH),
+                    cal.get(Calendar.DAY_OF_MONTH)
+                ).show();
+            });
+
+            riderDialogBuilder()
+                .setTitle("Reschedule Delivery")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save Reschedule", (d, w) -> {
+                    Map<String, String> extra = new HashMap<>();
+                    extra.put("reschedule_at", selectedDate[0]);
+                    String reason = reasonField.getText() != null ? reasonField.getText().toString().trim() : "";
+                    extra.put("reschedule_reason", reason.isEmpty() ? "No reason provided" : reason);
+                    riderUpdateStatusWithGps(orderId, "reschedule_delivery", extra, riderStatusCallback(onRefresh));
+                })
+                .show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Reschedule dialog failed", e);
+            Toast.makeText(this, "Unable to open reschedule dialog.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void showRiderCancelFlow(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive()) {
+            return;
+        }
+        try {
+            riderDialogBuilder()
+                .setTitle("Cancel at Delivery")
+                .setMessage(
+                    "Did the customer refuse or cancel this order face-to-face?\n\n"
+                        + "The order will be fully cancelled and stock will be restored."
+                )
+                .setPositiveButton("Yes, Continue", (d, w) ->
+                    mainHandler.post(() -> showRiderCancelNotesDialog(orderId, onRefresh)))
+                .setNegativeButton("No", null)
+                .show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Cancel flow failed", e);
+            Toast.makeText(this, "Unable to open cancel dialog.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void showRiderCancelNotesDialog(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive()) {
+            return;
+        }
+        try {
+            View form = LayoutInflater.from(this).inflate(R.layout.dialog_rider_cancel, null);
+            EditText notesField = form.findViewById(R.id.rider_cancel_notes);
+            notesField.setText("Customer cancelled at delivery location.");
+
+            riderDialogBuilder()
+                .setTitle("Cancel Order")
+                .setView(form)
+                .setNegativeButton("Back", null)
+                .setPositiveButton("Submit", (d, w) -> {
+                    Map<String, String> extra = new HashMap<>();
+                    String notes = notesField.getText() != null ? notesField.getText().toString().trim() : "";
+                    if (!notes.isEmpty()) {
+                        extra.put("cancel_reason", notes);
+                    }
+                    riderUpdateStatusWithGps(
+                        orderId, "customer_cancelled_at_delivery", extra, riderStatusCallback(onRefresh));
+                })
+                .show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Cancel notes dialog failed", e);
+            Toast.makeText(this, "Unable to open cancel dialog.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void clearRiderProofDialogState() {
+        pendingProofDialogOrderId = 0;
+        pendingProofUriForDialog = null;
+        pendingDeliveryProofPhotoUri = null;
+        pendingProofFileNameView = null;
+        pendingProofDialogRefresh = null;
+        riderProofPickerInProgress = false;
+    }
+
+    private void startDeliveryProofCapture() {
+        if (pendingProofDialogOrderId <= 0) {
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED) {
+            riderProofPickerInProgress = true;
+            deliveryProofCameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            return;
+        }
+        launchDeliveryProofCamera();
+    }
+
+    private void launchDeliveryProofCamera() {
+        try {
+            File photoFile = createDeliveryProofImageFile();
+            pendingDeliveryProofPhotoUri = FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                photoFile
+            );
+            riderProofPickerInProgress = true;
+            deliveryProofCameraLauncher.launch(pendingDeliveryProofPhotoUri);
+        } catch (Exception e) {
+            riderProofPickerInProgress = false;
+            android.util.Log.e("QuickPuff", "Camera launch failed", e);
+            Toast.makeText(this, "Unable to open camera. Please try again.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private File createDeliveryProofImageFile() throws IOException {
+        File dir = new File(getCacheDir(), "delivery_proofs");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Cannot create photo folder");
+        }
+        return new File(dir, "delivery_proof_" + System.currentTimeMillis() + ".jpg");
+    }
+
+    private void onDeliveryProofPhotoReady(Uri uri) {
+        pendingProofUriForDialog = uri;
+        final int orderId = pendingProofDialogOrderId;
+        final Runnable refresh = pendingProofDialogRefresh;
+        if (pendingProofFileNameView != null && pendingProofFileNameView.isAttachedToWindow()) {
+            pendingProofFileNameView.setText("Delivery photo captured");
+            Toast.makeText(this, "Photo captured", Toast.LENGTH_SHORT).show();
+        } else {
+            pendingProofFileNameView = null;
+            runOnUiThreadIfAlive(() -> showRiderProofDialog(orderId, refresh));
+        }
+    }
+
+    private SimpleCallback riderStatusCallback(Runnable onRefresh) {
+        final Runnable refresh = safeRiderRefresh(onRefresh);
+        return new SimpleCallback() {
+            @Override
+            public void onSuccess(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                refresh.run();
+            }
+
+            @Override
+            public void onError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        };
+    }
+
+    private SimpleCallback riderProofCallback(Runnable onRefresh) {
+        final Runnable refresh = onRefresh != null
+            ? safeRiderRefresh(onRefresh)
+            : () -> runOnUiThreadIfAlive(() -> loadRiderFragment(new RiderDeliveriesFragment()));
+        return new SimpleCallback() {
+            @Override
+            public void onSuccess(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                refresh.run();
+            }
+
+            @Override
+            public void onError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        };
+    }
+
+    private String formatIsoDate(int year, int month, int dayOfMonth) {
+        return String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth);
+    }
+
+    private void parseIsoDateIntoCalendar(String isoDate, Calendar target) {
+        try {
+            String[] parts = isoDate.split("-");
+            if (parts.length == 3) {
+                target.set(
+                    Integer.parseInt(parts[0]),
+                    Integer.parseInt(parts[1]) - 1,
+                    Integer.parseInt(parts[2])
+                );
+            }
+        } catch (Exception ignored) {
+            // keep current calendar values
+        }
+    }
+
+    private String resolveUriDisplayName(Uri uri) {
+        if (uri == null) {
+            return "No file chosen";
+        }
+        String name = null;
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0) {
+                    name = cursor.getString(idx);
+                }
+            }
+        } catch (Exception ignored) {
+            // fallback below
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = uri.getLastPathSegment();
+        }
+        return name != null && !name.trim().isEmpty() ? name.trim() : "Photo selected";
+    }
+
+    public void submitRiderProofToServer(int orderId, Uri proofUri, SimpleCallback callback) {
+        submitRiderProofToServer(
+            orderId, proofUri, getRegisteredLatitude(), getRegisteredLongitude(), "", callback);
+    }
+
+    public void submitRiderProofToServer(
+        int orderId,
+        Uri proofUri,
+        double lat,
+        double lng,
+        SimpleCallback callback
+    ) {
+        submitRiderProofToServer(orderId, proofUri, lat, lng, "", callback);
+    }
+
+    public void submitRiderProofToServer(
+        int orderId,
+        Uri proofUri,
+        double lat,
+        double lng,
+        String deliveryNotes,
+        SimpleCallback callback
+    ) {
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("order_id", String.valueOf(orderId));
+        params.put("final_rider_latitude", String.format(Locale.US, "%.6f", lat));
+        params.put("final_rider_longitude", String.format(Locale.US, "%.6f", lng));
+        params.put("delivery_notes", deliveryNotes == null ? "" : deliveryNotes);
         List<Uri> files = new ArrayList<>();
         files.add(proofUri);
         apiPostMultipart("rider_submit_proof.php", params, files, "delivery_proof", new SimpleCallback() {
@@ -4267,6 +5231,7 @@ public class MainActivity extends AppCompatActivity {
         currentUserRole = "customer";
         currentUserId = 0;
         setRoleNavigationVisible(true);
+        setRiderNavigationVisible(false);
         loadFragment(new LoginFragment());
         Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
     }
@@ -4636,8 +5601,7 @@ public class MainActivity extends AppCompatActivity {
             }
             View notificationsAction = view.findViewById(R.id.action_notifications);
             if (notificationsAction != null) {
-                notificationsAction.setOnClickListener(v ->
-                    activity.loadFragment(new NotificationsFragment()));
+                notificationsAction.setOnClickListener(v -> activity.openNotificationsScreen());
             }
         }
 
@@ -4994,7 +5958,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            Button sendButton = view.findViewById(R.id.btn_send_message);
+            View sendButton = view.findViewById(R.id.btn_send_message);
             LinearLayout quickActions = view.findViewById(R.id.messages_quick_actions);
             setupMessageQuickActions(quickActions, input, () -> sendButton.performClick());
 
@@ -5294,24 +6258,6 @@ public class MainActivity extends AppCompatActivity {
 
         private int dpToPx(int dp) {
             return Math.round(dp * requireContext().getResources().getDisplayMetrics().density);
-        }
-    }
-
-    public static class NotificationsFragment extends Fragment {
-        @Override
-        public View onCreateView(LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
-            View view = inflater.inflate(R.layout.fragment_notifications, container, false);
-            TextView status = view.findViewById(R.id.notifications_status);
-
-            view.findViewById(R.id.btn_back_from_notifications).setOnClickListener(v ->
-                ((MainActivity) requireActivity()).loadFragment(new HomeFragment()));
-
-            view.findViewById(R.id.btn_clear_notifications).setOnClickListener(v -> {
-                status.setText("No new notifications.");
-                Toast.makeText(requireContext(), "Notifications cleared", Toast.LENGTH_SHORT).show();
-            });
-
-            return view;
         }
     }
 
@@ -6912,140 +7858,6 @@ public class MainActivity extends AppCompatActivity {
                     int riderId = riders.get(which).optInt("id", 0);
                     activity.adminAssignRider(orderId, riderId, simpleRefresh(activity));
                 })
-                .show();
-        }
-    }
-
-    public static class RiderDeliveriesFragment extends Fragment {
-        @Override
-        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-            View view = inflater.inflate(R.layout.fragment_role_dashboard, container, false);
-            MainActivity activity = (MainActivity) requireActivity();
-            ((TextView) view.findViewById(R.id.role_dashboard_title)).setText("Rider — Deliveries");
-            ((TextView) view.findViewById(R.id.role_dashboard_subtitle)).setText("Accept, pickup, deliver, and return pickups");
-            LinearLayout containerLayout = view.findViewById(R.id.role_orders_container);
-            view.findViewById(R.id.btn_role_logout).setOnClickListener(v -> activity.onLogout());
-            view.findViewById(R.id.btn_role_refresh).setOnClickListener(v -> loadDeliveries(activity, containerLayout));
-            loadDeliveries(activity, containerLayout);
-            return view;
-        }
-
-        private void loadDeliveries(MainActivity activity, LinearLayout containerLayout) {
-            activity.fetchRiderOrders("active", new SimpleCallback() {
-                @Override
-                public void onSuccess(String responseBody) {
-                    containerLayout.removeAllViews();
-                    try {
-                        JSONObject root = new JSONObject(responseBody);
-                        JSONArray orders = root.optJSONObject("data") != null
-                            ? root.optJSONObject("data").optJSONArray("orders") : null;
-                        if (orders == null || orders.length() == 0) {
-                            TextView empty = new TextView(requireContext());
-                            empty.setText("No assigned deliveries.");
-                            containerLayout.addView(empty);
-                            return;
-                        }
-                        for (int i = 0; i < orders.length(); i++) {
-                            JSONObject order = orders.optJSONObject(i);
-                            if (order != null) {
-                                containerLayout.addView(buildRiderRow(activity, order));
-                            }
-                        }
-                    } catch (Exception e) {
-                        Toast.makeText(requireContext(), "Invalid response", Toast.LENGTH_SHORT).show();
-                    }
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                }
-            });
-        }
-
-        private View buildRiderRow(MainActivity activity, JSONObject order) {
-            View row = getLayoutInflater().inflate(R.layout.item_role_order, null);
-            int orderId = order.optInt("order_id", 0);
-            String status = order.optString("delivery_status", "");
-            ((TextView) row.findViewById(R.id.role_order_reference)).setText(order.optString("reference_number", ""));
-            ((TextView) row.findViewById(R.id.role_order_status)).setText(MyPurchaseFragment.getDeliveryStatusLabel(status));
-            ((TextView) row.findViewById(R.id.role_order_customer)).setText(
-                "Customer: " + order.optString("customer_name", "")
-            );
-            JSONObject shipment = order.optJSONObject("shipment");
-            String addr = shipment != null ? shipment.optString("shipping_address", "") : "";
-            ((TextView) row.findViewById(R.id.role_order_address)).setText(addr);
-            LinearLayout actions = row.findViewById(R.id.role_order_actions);
-            SimpleCallback refresh = new SimpleCallback() {
-                @Override
-                public void onSuccess(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                    activity.loadFragment(new RiderDeliveriesFragment());
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                }
-            };
-            if ("ready_for_pickup".equals(status)) {
-                addRiderBtn(actions, "Accept Delivery", () ->
-                    activity.riderUpdateStatus(orderId, "accepted_by_rider", null, refresh));
-            }
-            if ("accepted_by_rider".equals(status)) {
-                addRiderBtn(actions, "Picked Up from Store", () ->
-                    activity.riderUpdateStatus(orderId, "delivered_to_rider", null, refresh));
-            }
-            if ("delivered_to_rider".equals(status) || "failed_delivery".equals(status)) {
-                addRiderBtn(actions, "Start Delivery", () ->
-                    activity.riderUpdateStatus(orderId, "to_receive", null, refresh));
-            }
-            if ("to_receive".equals(status)) {
-                addRiderBtn(actions, "Submit Delivery Proof", () -> activity.openDeliveryProofPicker(orderId));
-                addRiderBtn(actions, "Reschedule", () -> {
-                    Map<String, String> extra = new HashMap<>();
-                    extra.put("reschedule_at", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date()));
-                    extra.put("reschedule_reason", "Rescheduled from mobile app");
-                    activity.riderUpdateStatus(orderId, "reschedule_delivery", extra, refresh);
-                });
-                addRiderBtn(actions, "Failed Delivery", () -> {
-                    Map<String, String> extra = new HashMap<>();
-                    extra.put("cancel_reason", "Unable to deliver");
-                    activity.riderUpdateStatus(orderId, "failed_delivery", extra, refresh);
-                });
-            }
-            if ("return_approved".equals(status)) {
-                addRiderBtn(actions, "Accept Return Pickup", () ->
-                    activity.riderUpdateStatus(orderId, "accept_return_pickup", null, refresh));
-                addRiderBtn(actions, "Scan Return QR", () -> promptReturnQr(activity, orderId, refresh));
-            }
-            return row;
-        }
-
-        private void addRiderBtn(LinearLayout parent, String label, Runnable action) {
-            Button btn = new Button(requireContext());
-            btn.setText(label);
-            btn.setAllCaps(false);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.topMargin = 6;
-            btn.setLayoutParams(lp);
-            btn.setOnClickListener(v -> action.run());
-            parent.addView(btn);
-        }
-
-        private void promptReturnQr(MainActivity activity, int orderId, SimpleCallback refresh) {
-            EditText input = new EditText(requireContext());
-            input.setHint("Paste or scan QR payload");
-            new AlertDialog.Builder(requireContext())
-                .setTitle("Return QR")
-                .setView(input)
-                .setPositiveButton("Submit", (d, w) -> {
-                    Map<String, String> extra = new HashMap<>();
-                    extra.put("return_qr_scan", input.getText().toString().trim());
-                    activity.riderUpdateStatus(orderId, "return_picked_up", extra, refresh);
-                })
-                .setNegativeButton("Cancel", null)
                 .show();
         }
     }

@@ -94,7 +94,10 @@ function mobile_build_product_payload(array $row, array $variants, array $review
     $category = trim((string) ($row['category'] ?? ''));
     $puffs = (int) ($row['puffs'] ?? 0);
     $stockQty = (int) ($row['stock_qty'] ?? 0);
-    $price = (float) ($row['price'] ?? 0);
+    $price = mobile_effective_product_price(
+        (float) ($row['selling_price'] ?? 0),
+        (float) ($row['price'] ?? 0)
+    );
 
     if ($variants !== []) {
         $stockQty = 0;
@@ -137,7 +140,8 @@ try {
 
     if ($productId > 0) {
         $stmt = $db->prepare(
-            "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity, price, stock_qty, is_active
+            "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity,
+                    price, selling_price, stock_qty, is_active
              FROM products
              WHERE id = :id AND is_active = 1
              LIMIT 1"
@@ -161,7 +165,8 @@ try {
     }
 
     $stmt = $db->query(
-        "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity, price, stock_qty, is_active
+        "SELECT id, name, category, puffs, nicotine_level, expires_at, battery_capacity, eliquid_capacity,
+                price, selling_price, stock_qty, is_active
          FROM products
          WHERE is_active = 1
          ORDER BY id ASC"

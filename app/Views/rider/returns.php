@@ -68,6 +68,14 @@
         border-color: #4caf50;
     }
 
+    .status-badge.is-complete {
+        background: #e3f2fd;
+        color: #1565c0;
+        border-color: #42a5f5;
+    }
+
+    tr.is-complete-row { opacity: .92; }
+
     .action-stack { display: flex; flex-wrap: wrap; gap: .5rem; }
     .action-btn {
         border: 0;
@@ -146,7 +154,7 @@
 
 <section class="page-header">
     <h1>Return Pickups</h1>
-    <p>Accept the pickup first, then view the map and scan the customer return QR code. GCash/e-wallet for refund is provided by the customer when they submit the request.</p>
+    <p>Accept the pickup first, then view the map and scan the customer return QR code. Completed refunds stay here until you clear them from Profile.</p>
 </section>
 
 <section class="returns-panel">
@@ -177,8 +185,9 @@
                             (string) ($item['delivery_notes'] ?? '')
                         ) ?? [];
                         $riderAccepted = rider_accepted_return_pickup($returnMeta);
+                        $isComplete = $status === 'return_refund';
                     ?>
-                    <tr id="return-<?= $orderId ?>" class="<?= $highlightOrderId === $orderId ? 'is-highlighted' : '' ?>">
+                    <tr id="return-<?= $orderId ?>" class="<?= $highlightOrderId === $orderId ? 'is-highlighted' : '' ?><?= $isComplete ? ' is-complete-row' : '' ?>">
                         <td>
                             <strong><?= esc($item['reference_number'] ?? ('Order #' . $orderId)) ?></strong>
                             <div class="muted"><?= esc(date('M d, Y', strtotime((string) ($item['created_at'] ?? 'now')))) ?></div>
@@ -189,8 +198,10 @@
                         </td>
                         <td class="muted"><?= esc($address) ?></td>
                         <td>
-                            <span class="status-badge <?= $status === 'return_picked_up' ? 'is-done' : '' ?>">
-                                <?php if ($status === 'return_picked_up'): ?>
+                            <span class="status-badge <?= $isComplete ? 'is-complete' : ($status === 'return_picked_up' ? 'is-done' : '') ?>">
+                                <?php if ($isComplete): ?>
+                                    Complete
+                                <?php elseif ($status === 'return_picked_up'): ?>
                                     Picked Up
                                 <?php elseif ($riderAccepted): ?>
                                     Ready to Scan QR
@@ -201,9 +212,11 @@
                         </td>
                         <td>
                             <div class="action-stack">
-                                <button type="button" class="action-btn btn-outline" onclick="openReturnMap(<?= $orderId ?>)">
-                                    <i class="fas fa-map"></i> View Map
-                                </button>
+                                <?php if (! $isComplete): ?>
+                                    <button type="button" class="action-btn btn-outline" onclick="openReturnMap(<?= $orderId ?>)">
+                                        <i class="fas fa-map"></i> View Map
+                                    </button>
+                                <?php endif; ?>
                                 <a class="action-btn btn-outline" href="<?= site_url('rider/order-details/' . $orderId) ?>">
                                     <i class="fas fa-eye"></i> Details
                                 </a>
@@ -215,8 +228,10 @@
                                     <button type="button" class="action-btn btn-scan" onclick="openReturnScanModal(<?= $orderId ?>)">
                                         <i class="fas fa-qrcode"></i> Scan QR &amp; Pick Up
                                     </button>
-                                <?php else: ?>
-                                    <span class="muted"><i class="fas fa-check-circle"></i> Waiting for admin refund</span>
+                                <?php elseif ($status === 'return_picked_up'): ?>
+                                    <span class="muted"><i class="fas fa-hourglass-half"></i> Waiting for admin refund</span>
+                                <?php elseif ($isComplete): ?>
+                                    <span class="muted"><i class="fas fa-check-circle"></i> Refund completed</span>
                                 <?php endif; ?>
                             </div>
                         </td>

@@ -53,15 +53,29 @@ try {
     }
 
     $cartId = (int) $cart['id'];
-    $itemsStmt = $db->prepare(
-        'SELECT ci.id, ci.product_id, ci.quantity, p.name AS product_name,
-                p.unit_price AS product_unit_price,
-                COALESCE(p.selling_price, p.price) AS selling_price,
-                p.stock_qty, p.is_active
-         FROM cart_items ci
-         INNER JOIN products p ON p.id = ci.product_id
-         WHERE ci.cart_id = :cart_id'
-    );
+    $hasVariants = mobile_has_variant_table($db);
+    if ($hasVariants) {
+        $itemsStmt = $db->prepare(
+            'SELECT ci.id, ci.product_id, ci.variant_id, ci.quantity, p.name AS product_name,
+                    p.unit_price AS product_unit_price,
+                    COALESCE(pv.price, p.selling_price, p.price) AS selling_price,
+                    p.stock_qty, p.is_active
+             FROM cart_items ci
+             INNER JOIN products p ON p.id = ci.product_id
+             LEFT JOIN product_variants pv ON pv.id = ci.variant_id
+             WHERE ci.cart_id = :cart_id'
+        );
+    } else {
+        $itemsStmt = $db->prepare(
+            'SELECT ci.id, ci.product_id, ci.quantity, p.name AS product_name,
+                    p.unit_price AS product_unit_price,
+                    COALESCE(p.selling_price, p.price) AS selling_price,
+                    p.stock_qty, p.is_active
+             FROM cart_items ci
+             INNER JOIN products p ON p.id = ci.product_id
+             WHERE ci.cart_id = :cart_id'
+        );
+    }
     $itemsStmt->execute([':cart_id' => $cartId]);
     $cartItems = $itemsStmt->fetchAll();
 

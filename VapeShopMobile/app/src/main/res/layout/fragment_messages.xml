@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#F3F4F6"
@@ -131,16 +132,17 @@
                 android:textColor="#111827"
                 android:textSize="14sp" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/btn_send_message"
-                android:layout_width="52dp"
+                android:layout_width="48dp"
                 android:layout_height="44dp"
                 android:layout_marginStart="8dp"
-                android:backgroundTint="#16A34A"
-                android:text="➤"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp" />
+                android:background="@drawable/bg_messages_send_btn"
+                android:contentDescription="Send message"
+                android:padding="10dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_send_white"
+                app:tint="@null" />
         </LinearLayout>
 
         <TextView

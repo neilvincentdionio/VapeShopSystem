@@ -411,6 +411,28 @@ if (!function_exists('mobile_build_spec')) {
     }
 }
 
+if (!function_exists('mobile_effective_product_price')) {
+    function mobile_effective_product_price(float $sellingPrice, float $legacyPrice): float
+    {
+        if ($sellingPrice > 0) {
+            return round($sellingPrice, 2);
+        }
+
+        return round(max(0.0, $legacyPrice), 2);
+    }
+}
+
+if (!function_exists('mobile_effective_variant_price')) {
+    function mobile_effective_variant_price(?float $variantPrice, float $sellingPrice, float $legacyPrice): float
+    {
+        if ($variantPrice !== null && $variantPrice > 0) {
+            return round($variantPrice, 2);
+        }
+
+        return mobile_effective_product_price($sellingPrice, $legacyPrice);
+    }
+}
+
 if (!function_exists('compute_mobile_order_line')) {
     /**
      * @return array{quantity:int,unit_price:float,selling_price:float,subtotal:float,profit:float}

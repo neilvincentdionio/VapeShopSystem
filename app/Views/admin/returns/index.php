@@ -399,7 +399,60 @@ function copyRefundSendDetails(panel) {
     return Promise.resolve();
 }
 
-function extractEwalletReference(rawText, pendingRef) {
+function validateAdminRefundPayoutRef(reference, orderId, pendingRef) {
+    const ref = (reference || '').trim();
+    if (!ref) {
+        return {
+            valid: false,
+            message: 'Enter or paste the GCash/Maya transaction reference from your send confirmation.',
+        };
+    }
+
+    const upper = ref.toUpperCase();
+    if (upper === 'QWERTY') {
+        return { valid: true, normalized: 'QWERTY' };
+    }
+
+    const pendingNorm = (pendingRef || '').trim().toUpperCase();
+    if (pendingNorm && upper === pendingNorm) {
+        return {
+            valid: false,
+            message: 'Use the transaction reference from GCash/Maya after sending—not the QuickPuff message code (QP…).',
+        };
+    }
+
+    const qpOrderPattern = new RegExp('^QP' + String(orderId) + '[A-F0-9]{6}$', 'i');
+    if (qpOrderPattern.test(ref)) {
+        return {
+            valid: false,
+            message: 'The QP code is only for the payment message. Paste the transaction reference from GCash/Maya after you send.',
+        };
+    }
+
+    if (/^QP\d+[A-F0-9]{6,}$/i.test(ref)) {
+        return {
+            valid: false,
+            message: 'QuickPuff message codes (QP…) cannot be used as a transaction reference.',
+        };
+    }
+
+    const digitsOnly = ref.replace(/\D/g, '');
+    if (/^\d{10,13}$/.test(digitsOnly)) {
+        return { valid: true, normalized: digitsOnly };
+    }
+
+    const compact = ref.replace(/\s+/g, '');
+    if (/^[A-Z0-9-]{8,24}$/i.test(compact) && /\d/.test(compact) && !/^QP\d/i.test(compact)) {
+        return { valid: true, normalized: compact.toUpperCase() };
+    }
+
+    return {
+        valid: false,
+        message: 'Enter a valid GCash/Maya transaction reference (10–13 digits from your send confirmation). For testing only, use QWERTY.',
+    };
+}
+
+function extractEwalletReference(rawText) {
     const raw = (rawText || '').trim();
     if (!raw || /QuickPuff|Return Refund|Send to:|Send via:/i.test(raw)) {
         return '';
@@ -412,16 +465,13 @@ function extractEwalletReference(rawText, pendingRef) {
     for (let i = lines.length - 1; i >= 0; i -= 1) {
         const line = lines[i];
         const refMatch = line.match(/(?:ref(?:erence)?|txn|transaction)[:\s#-]*([A-Z0-9-]{6,32})/i);
-        if (refMatch) {
+        if (refMatch && !/^QP\d/i.test(refMatch[1])) {
             return refMatch[1];
-        }
-        if (/^QP\d+[A-Z0-9]+$/i.test(line)) {
-            return line;
         }
         if (/^\d{10,13}$/.test(line.replace(/\D/g, ''))) {
             return line.replace(/\D/g, '');
         }
-        if (/^[A-Z0-9]{8,24}$/i.test(line) && !/quickpuff/i.test(line)) {
+        if (/^[A-Z0-9]{8,24}$/i.test(line) && !/quickpuff/i.test(line) && !/^QP\d/i.test(line) && /\d/.test(line)) {
             return line;
         }
     }
@@ -432,11 +482,11 @@ function extractEwalletReference(rawText, pendingRef) {
     }
 
     const compact = raw.replace(/\s+/g, '');
-    if (/^QP\d+[A-Z0-9]+$/i.test(compact)) {
+    if (/^[A-Z0-9-]{8,24}$/i.test(compact) && !/^QP\d/i.test(compact) && /\d/.test(compact)) {
         return compact;
     }
 
-    return pendingRef || '';
+    return '';
 }
 
 document.querySelectorAll('.js-send-ewallet').forEach(function (button) {
@@ -448,11 +498,6 @@ document.querySelectorAll('.js-send-ewallet').forEach(function (button) {
 
         const method = (panel.dataset.payoutMethod || 'gcash').toLowerCase();
         const label = method === 'maya' ? 'Maya' : 'GCash';
-        const pendingRef = panel.dataset.pendingRef || '';
-        const input = panel.querySelector('.js-refund-payout-ref');
-        if (input && pendingRef) {
-            input.value = pendingRef;
-        }
 
         copyRefundSendDetails(panel).then(function () {
             const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -479,14 +524,19 @@ document.querySelectorAll('.js-paste-ewallet-ref').forEach(function (button) {
         }
 
         const applyText = function (text) {
-            const ref = extractEwalletReference(text, panel.dataset.pendingRef || '');
-            if (!ref) {
-                refundFeedback(panel, 'Paste only the GCash/Maya transaction reference.', 'error');
+            const ref = extractEwalletReference(text);
+            const check = validateAdminRefundPayoutRef(
+                ref,
+                parseInt(panel.dataset.orderId || '0', 10),
+                panel.dataset.pendingRef || ''
+            );
+            if (!check.valid) {
+                refundFeedback(panel, check.message || 'Paste only the GCash/Maya transaction reference.', 'error');
                 return;
             }
             const input = panel.querySelector('.js-refund-payout-ref');
             if (input) {
-                input.value = ref;
+                input.value = check.normalized || ref;
             }
             refundFeedback(panel, 'Reference updated.', 'ok');
         };
@@ -542,11 +592,17 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
 
         if (action === 'complete_refund') {
             const payoutRef = panel.querySelector('.js-refund-payout-ref')?.value?.trim() || '';
-            if (!payoutRef) {
-                alert('Enter the GCash/e-wallet reference number used when you sent the refund.');
+            const refCheck = validateAdminRefundPayoutRef(
+                payoutRef,
+                orderId,
+                panel.dataset.pendingRef || ''
+            );
+            if (!refCheck.valid) {
+                alert(refCheck.message || 'Enter a valid GCash/Maya transaction reference.');
+                refundFeedback(panel, refCheck.message || '', 'error');
                 return;
             }
-            payload.refund_payout_reference = payoutRef;
+            payload.refund_payout_reference = refCheck.normalized || payoutRef;
             payload.damaged_items = Array.from(panel.querySelectorAll('.js-damaged-item:checked')).map(function (input) {
                 return input.value;
             });

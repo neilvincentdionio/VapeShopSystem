@@ -171,6 +171,39 @@
         white-space: nowrap;
     }
 
+    .status-badge.is-return {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+    }
+
+    .status-badge.is-return-done {
+        border-color: #4caf50;
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .delivery-type-tag {
+        display: inline-block;
+        margin-bottom: .35rem;
+        padding: .15rem .45rem;
+        border-radius: 6px;
+        background: #fff3cd;
+        color: #856404;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+    }
+
+    .delivery-panel + .delivery-panel {
+        margin-top: 1.5rem;
+    }
+
+    .stat-value.is-return {
+        color: #d97706;
+    }
+
     .empty-state {
         padding: 2rem;
         text-align: center;
@@ -192,17 +225,25 @@
 </style>
 
 <?php
+    helper('return_refund');
+
     $statusLabels = [
         'to_ship' => 'For Pickup',
         'to_receive' => 'Out for Delivery',
         'completed' => 'Delivered',
         'failed_delivery' => 'Failed Delivery',
+        'ready_for_pickup' => 'Ready for Pickup',
+        'accepted_by_rider' => 'Accepted by Rider',
+        'delivered_to_rider' => 'Picked Up from Store',
+        'delivered' => 'Delivered (Confirm)',
     ];
+
+    $returns = $returns ?? [];
 ?>
 
 <section class="welcome-section">
     <h1>Welcome back, <?= esc($user_name ?? 'Rider') ?>!</h1>
-    <p>You are logged in as a rider. Track active delivery work and review the orders ready for fulfillment.</p>
+    <p>You are logged in as a rider. Track active deliveries and return/refund pickups assigned to you.</p>
 </section>
 
 <section class="stats-grid">
@@ -221,6 +262,14 @@
     <div class="stat-card">
         <div class="stat-label">Delivered Today</div>
         <div class="stat-value"><?= number_format((int) ($stats['completed_today'] ?? 0)) ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Return Pickups</div>
+        <div class="stat-value is-return"><?= number_format((int) ($stats['return_pickups'] ?? 0)) ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Returns Picked Up</div>
+        <div class="stat-value is-return"><?= number_format((int) ($stats['return_picked_up'] ?? 0)) ?></div>
     </div>
 </section>
 
@@ -315,6 +364,69 @@
             <div class="empty-state" id="deliveryFilterEmpty" style="display:none;">No deliveries match your current filters.</div>
         </div>
         </div>
+    <?php endif; ?>
+</section>
+
+<section class="delivery-panel">
+    <div class="panel-header">
+        <h2>Recent Return / Refund Pickups</h2>
+        <a href="<?= site_url('rider/returns') ?>">View all</a>
+    </div>
+
+    <?php if ($returns === []): ?>
+        <div class="empty-state">No return/refund pickups assigned to you right now.</div>
+    <?php else: ?>
+        <div class="delivery-scroll-area">
+            <div class="delivery-list">
+                <?php foreach ($returns as $returnOrder): ?>
+                    <?php
+                        $orderId = (int) ($returnOrder['id'] ?? 0);
+                        $status = (string) ($returnOrder['delivery_status'] ?? '');
+                        $returnMeta = parse_return_meta(
+                            (string) ($returnOrder['shipment_notes'] ?? ''),
+                            (string) ($returnOrder['delivery_notes'] ?? '')
+                        ) ?? [];
+                        $riderAccepted = rider_accepted_return_pickup($returnMeta);
+                        if ($status === 'return_refund') {
+                            $returnStatusLabel = 'Complete';
+                            $badgeClass = 'is-return-done';
+                        } elseif ($status === 'return_picked_up') {
+                            $returnStatusLabel = 'Picked Up';
+                            $badgeClass = 'is-return-done';
+                        } elseif ($riderAccepted) {
+                            $returnStatusLabel = 'Ready to Scan QR';
+                            $badgeClass = 'is-return';
+                        } else {
+                            $returnStatusLabel = 'Awaiting Your Approval';
+                            $badgeClass = 'is-return';
+                        }
+                        $address = trim((string) ($returnOrder['shipping_address'] ?? ''));
+                        if ($address === '') {
+                            $address = 'No pickup address provided';
+                        }
+                    ?>
+                    <article class="delivery-item">
+                        <div>
+                            <span class="delivery-type-tag">Return / Refund</span>
+                            <div class="delivery-ref">
+                                <a href="<?= site_url('rider/order-details/' . $orderId) ?>" style="color:inherit;text-decoration:none;">
+                                    <?= esc($returnOrder['reference_number'] ?? ('Order #' . $orderId)) ?>
+                                </a>
+                            </div>
+                            <div class="delivery-meta"><?= esc($returnOrder['customer']['name'] ?? 'Customer') ?></div>
+                        </div>
+                        <div>
+                            <div class="delivery-address"><?= esc($address) ?></div>
+                            <div class="delivery-meta"><?= esc($returnOrder['contact_number'] ?? '') ?></div>
+                        </div>
+                        <div class="status-badge <?= esc($badgeClass) ?>"><?= esc($returnStatusLabel) ?></div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <p style="margin-top:1rem;font-size:.88rem;color:#666;">
+            Open <a href="<?= site_url('rider/returns') ?>" style="color:#27c56f;font-weight:600;">Return Pickups</a> to accept pickup, view map, and scan the customer QR code.
+        </p>
     <?php endif; ?>
 </section>
 

@@ -1,4 +1,5 @@
 <?= $this->include('rider/partials/header') ?>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
     .profile-card h1 {
@@ -108,6 +109,57 @@
     }
 
     .validation-errors ul { margin: .4rem 0 0 1.1rem; }
+
+    .profile-clear-card {
+        margin-top: 1.25rem;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        background: #f8f9fa;
+    }
+
+    .profile-clear-card h2 {
+        font-size: 1.05rem;
+        margin: 0 0 .35rem;
+        color: #333333;
+    }
+
+    .profile-clear-card p {
+        margin: 0 0 .85rem;
+        font-size: .88rem;
+        color: #666666;
+    }
+
+    .profile-clear-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .6rem;
+    }
+
+    .profile-clear-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: .55rem 1rem;
+        font-size: .85rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: #fee2e2;
+        color: #b91c1c;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+    }
+
+    .profile-clear-btn:hover { background: #fecaca; }
+
+    .profile-flash-success {
+        margin-bottom: .9rem;
+        padding: .75rem 1rem;
+        border-radius: 10px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+    }
 </style>
 
 <section class="panel profile-card">
@@ -117,6 +169,10 @@
     ?>
     <h1>Rider Profile</h1>
     <p>Manage your rider account details and keep your contact information updated.</p>
+
+    <?php if (session()->getFlashdata('success')): ?>
+        <div class="profile-flash-success"><?= esc((string) session()->getFlashdata('success')) ?></div>
+    <?php endif; ?>
 
     <?php if (session()->getFlashdata('errors')): ?>
         <div class="validation-errors">
@@ -192,6 +248,21 @@
             <button type="submit" class="profile-save-btn">Save Profile</button>
         </div>
     </form>
+
+    <div class="profile-clear-card">
+        <h2>Clear completed lists</h2>
+        <p>Remove completed items from My Deliveries and Return Pickups. This only hides them from your rider lists; order records stay in the system.</p>
+        <div class="profile-clear-actions">
+            <button type="button" class="profile-clear-btn" id="btnDismissCompletedDeliveries">
+                <i class="fas fa-trash-alt"></i>
+                Delete All Completed Deliveries<?= ($completed_delivery_count ?? 0) > 0 ? ' (' . (int) $completed_delivery_count . ')' : '' ?>
+            </button>
+            <button type="button" class="profile-clear-btn" id="btnDismissCompletedReturns">
+                <i class="fas fa-trash-alt"></i>
+                Delete All Completed Returns<?= ($completed_return_count ?? 0) > 0 ? ' (' . (int) $completed_return_count . ')' : '' ?>
+            </button>
+        </div>
+    </div>
 </section>
 
 <script>
@@ -213,6 +284,43 @@
             btn.addEventListener('click', function() {
                 alert('Role can only be changed by admin.');
             });
+        });
+
+        function dismissCompleted(url, confirmText) {
+            if (!confirm(confirmText)) {
+                return;
+            }
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    '<?= csrf_header() ?>': '<?= csrf_hash() ?>'
+                }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                alert(data.message || 'Done');
+                if (data.success) {
+                    window.location.reload();
+                }
+            })
+            .catch(function() {
+                alert('Unable to clear completed items.');
+            });
+        }
+
+        document.getElementById('btnDismissCompletedDeliveries')?.addEventListener('click', function() {
+            dismissCompleted(
+                '<?= site_url('rider/deliveries/dismiss-completed') ?>',
+                'Remove all completed deliveries from your list?'
+            );
+        });
+
+        document.getElementById('btnDismissCompletedReturns')?.addEventListener('click', function() {
+            dismissCompleted(
+                '<?= site_url('rider/returns/dismiss-completed') ?>',
+                'Remove all completed returns from your list?'
+            );
         });
     })();
 </script>

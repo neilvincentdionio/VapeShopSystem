@@ -101,6 +101,82 @@ function mobile_merge_return_meta_shipment_fields(string $shipmentNotes, string 
     ];
 }
 
+function mobile_rider_return_list_dismissed(array $meta): bool
+{
+    return trim((string) ($meta['rider_list_dismissed_at'] ?? '')) !== '';
+}
+
+function mobile_dismiss_rider_return_from_list(array $meta): array
+{
+    $meta['rider_list_dismissed_at'] = date('Y-m-d H:i:s');
+
+    return $meta;
+}
+
+function mobile_filter_rider_visible_returns(array $orders): array
+{
+    return array_values(array_filter($orders, static function (array $order): bool {
+        $meta = mobile_parse_return_meta(
+            (string) ($order['shipment_notes'] ?? ''),
+            (string) ($order['delivery_notes'] ?? '')
+        ) ?? [];
+
+        return ! mobile_rider_return_list_dismissed($meta);
+    }));
+}
+
+function mobile_dismiss_rider_completed_returns(PDO $db, int $riderId): int
+{
+    $stmt = $db->prepare(
+        'SELECT o.id, s.notes AS shipment_notes, s.delivery_notes
+         FROM orders o
+         INNER JOIN order_shipments s ON s.order_id = o.id
+         WHERE s.assigned_rider_id = :rider_id
+           AND s.status = \'return_refund\''
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    $dismissed = 0;
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (! is_array($row)) {
+            continue;
+        }
+        $orderId = (int) ($row['id'] ?? 0);
+        if ($orderId <= 0) {
+            continue;
+        }
+
+        $meta = mobile_parse_return_meta(
+            (string) ($row['shipment_notes'] ?? ''),
+            (string) ($row['delivery_notes'] ?? '')
+        ) ?? [];
+
+        if (mobile_rider_return_list_dismissed($meta)) {
+            continue;
+        }
+
+        $meta = mobile_dismiss_rider_return_from_list($meta);
+        $fields = mobile_merge_return_meta_shipment_fields(
+            (string) ($row['shipment_notes'] ?? ''),
+            (string) ($row['delivery_notes'] ?? ''),
+            $meta
+        );
+
+        $update = $db->prepare(
+            'UPDATE order_shipments SET notes = :notes, delivery_notes = :delivery_notes WHERE order_id = :order_id'
+        );
+        if ($update->execute([
+            ':notes' => $fields['notes'],
+            ':delivery_notes' => $fields['delivery_notes'],
+            ':order_id' => $orderId,
+        ])) {
+            $dismissed++;
+        }
+    }
+
+    return $dismissed;
+}
+
 function mobile_return_refund_requires_payout(string $type): bool
 {
     return in_array($type, ['refund', 'return_and_refund', 'damaged_item'], true);
