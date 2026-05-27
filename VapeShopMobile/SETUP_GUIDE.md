@@ -71,11 +71,7 @@ The app tries multiple local addresses (USB reverse, emulator, LAN), including:
 
 ## 4) Device Connectivity (Important)
 
-For a physical Android device connected by USB:
-
-```powershell
-adb reverse tcp:8080 tcp:80
-```
+For a physical Android device connected by USB, run **`connect-phone.bat`** (or `adb reverse tcp:8080 tcp:80`).
 
 This allows the phone to reach your local Apache server via `127.0.0.1:8080`.
 
@@ -190,13 +186,41 @@ Output format:
 - Changed files
 - Test cases (Postman/curl)
 ```
-//Run terminal para gumana sa app every time mag tangal ng usb 
-& "C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb.exe" reverse tcp:8080 tcp:80
-& "C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb.exe" reverse --list**
+### USB tunnel (run after every unplug / phone reboot)
 
+**Preferred:** double-click `VapeShopMobile/connect-phone.bat`  
+(Phone must be plugged in, unlocked, USB debugging allowed *before* or right when the script runs.)
 
-//for power shell
+**If the `.bat` fails but PowerShell works**, use the same commands manually:
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" kill-server
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" start-server
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse --remove tcp:8080
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:8080 tcp:80
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse --list
+```
+
+Why manual sometimes works but double-click did not:
+- Phone was not **authorized** yet when the old script hit `wait-for-device` (window looked stuck).
+- Old script hid errors (`>nul`); device showed `unauthorized` or `offline`.
+- ADB needed `kill-server` / `start-server` first.
+
+Also start **XAMPP Apache** before testing the app.
+
+### Firewall (LAN access without USB reverse)
+
+```powershell
 netsh advfirewall firewall add rule name="VapeShop Apache 80 In" dir=in action=allow protocol=TCP localport=80 profile=private
 netsh advfirewall firewall add rule name="VapeShop Apache 80 Out" dir=out action=allow protocol=TCP localport=80 profile=private
 
 // ipconfig
+
+
+& 
+"C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb
+.exe" reverse tcp:8080 tcp:80
+& 
+"C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb
+.exe" reverse --list**

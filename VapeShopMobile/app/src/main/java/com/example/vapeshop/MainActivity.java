@@ -25,6 +25,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.inputmethod.EditorInfo;
 import android.util.DisplayMetrics;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -69,6 +70,7 @@ import org.json.JSONObject;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
+import com.google.android.material.snackbar.Snackbar;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
 
@@ -1534,6 +1536,40 @@ public class MainActivity extends AppCompatActivity {
                     callback.onError("Invalid server response");
                 }
             }
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    public void syncCartQuantityToServer(int productId, Integer variantId, int quantity, SimpleCallback callback) {
+        if (!isUserLoggedIn()) {
+            callback.onError("Please login first before updating cart");
+            return;
+        }
+        Map<String, String> params = new HashMap<>();
+        params.put("email", getRegisteredEmail());
+        params.put("product_id", String.valueOf(productId));
+        params.put("quantity", String.valueOf(Math.max(0, quantity)));
+        if (variantId != null && variantId > 0) {
+            params.put("variant_id", String.valueOf(variantId));
+        }
+        apiPost("cart_update.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Unable to update cart"));
+                        return;
+                    }
+                    callback.onSuccess(root.optString("message", "Cart updated."));
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
             @Override
             public void onError(String message) {
                 callback.onError(message);
@@ -7463,28 +7499,257 @@ public class MainActivity extends AppCompatActivity {
                 TextView name = row.findViewById(R.id.cart_item_name);
                 TextView details = row.findViewById(R.id.cart_item_details);
                 TextView price = row.findViewById(R.id.cart_item_price);
-                TextView quantity = row.findViewById(R.id.cart_item_quantity);
+                EditText quantity = row.findViewById(R.id.cart_item_quantity);
 
                 image.setImageResource(item.imageResId);
                 name.setText(item.name);
                 details.setText(item.details);
                 price.setText(String.format(Locale.US, "₱%.2f", item.price));
                 quantity.setText(String.valueOf(item.quantity));
+                quantity.setOnEditorActionListener((v, actionId, event) -> {
+                    if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO) {
+                        commitTypedCartQuantity(
+                            quantity,
+                            item,
+                            activity,
+                            inflater,
+                            cartContainer,
+                            itemCount,
+                            totalAmount,
+                            emptyState
+                        );
+                        return true;
+                    }
+                    return false;
+                });
+                quantity.setOnFocusChangeListener((v, hasFocus) -> {
+                    if (!hasFocus) {
+                        commitTypedCartQuantity(
+                            quantity,
+                            item,
+                            activity,
+                            inflater,
+                            cartContainer,
+                            itemCount,
+                            totalAmount,
+                            emptyState
+                        );
+                    }
+                });
 
                 row.findViewById(R.id.btn_cart_minus).setOnClickListener(v -> {
-                    activity.updateCartQuantity(item.cartKey, -1);
-                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                    int targetQty = Math.max(0, item.quantity - 1);
+                    activity.syncCartQuantityToServer(item.productId, item.variantId, targetQty, new SimpleCallback() {
+                        @Override
+                        public void onSuccess(String message) {
+                            activity.loadCartFromServer(new CartLoadCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                    Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 });
                 row.findViewById(R.id.btn_cart_plus).setOnClickListener(v -> {
-                    activity.updateCartQuantity(item.cartKey, 1);
-                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                    int targetQty = item.quantity + 1;
+                    activity.syncCartQuantityToServer(item.productId, item.variantId, targetQty, new SimpleCallback() {
+                        @Override
+                        public void onSuccess(String message) {
+                            activity.loadCartFromServer(new CartLoadCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                    Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 });
+                bindSwipeToDelete(row, item, activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
 
                 cartContainer.addView(row);
             }
 
             itemCount.setText(activity.getCartItemCount() + " item(s)");
             totalAmount.setText(String.format(Locale.US, "₱%.2f", activity.getCartTotal()));
+        }
+
+        private void bindSwipeToDelete(
+            View row,
+            CartItem item,
+            MainActivity activity,
+            LayoutInflater inflater,
+            LinearLayout cartContainer,
+            TextView itemCount,
+            TextView totalAmount,
+            TextView emptyState
+        ) {
+            final float[] downX = {0f};
+            final float[] downY = {0f};
+            row.setOnTouchListener((v, event) -> {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downX[0] = event.getRawX();
+                        downY[0] = event.getRawY();
+                        return false;
+                    case MotionEvent.ACTION_MOVE: {
+                        float dx = event.getRawX() - downX[0];
+                        float dy = event.getRawY() - downY[0];
+                        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > dpToPx(48f)) {
+                            v.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                        return false;
+                    }
+                    case MotionEvent.ACTION_UP: {
+                        float dx = event.getRawX() - downX[0];
+                        float dy = event.getRawY() - downY[0];
+                        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > dpToPx(96f)) {
+                            int previousQty = item.quantity;
+                            v.animate().translationX(dx > 0 ? v.getWidth() : -v.getWidth()).setDuration(120).withEndAction(() -> {
+                                activity.syncCartQuantityToServer(item.productId, item.variantId, 0, new SimpleCallback() {
+                                    @Override
+                                    public void onSuccess(String message) {
+                                        activity.loadCartFromServer(new CartLoadCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                                Snackbar.make(cartContainer, item.name + " removed", Snackbar.LENGTH_LONG)
+                                                    .setAction("UNDO", undoView ->
+                                                        activity.syncCartQuantityToServer(
+                                                            item.productId,
+                                                            item.variantId,
+                                                            previousQty,
+                                                            new SimpleCallback() {
+                                                                @Override
+                                                                public void onSuccess(String undoMessage) {
+                                                                    activity.loadCartFromServer(new CartLoadCallback() {
+                                                                        @Override
+                                                                        public void onSuccess() {
+                                                                            renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                                                        }
+
+                                                                        @Override
+                                                                        public void onError(String error) {
+                                                                            renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                                                            Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+                                                                        }
+                                                                    });
+                                                                }
+
+                                                                @Override
+                                                                public void onError(String errorMessage) {
+                                                                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
+                                                                }
+                                                            }
+                                                        )
+                                                    )
+                                                    .show();
+                                            }
+
+                                            @Override
+                                            public void onError(String error) {
+                                                renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                                                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+                                            }
+                                        });
+                                    }
+
+                                    @Override
+                                    public void onError(String errorMessage) {
+                                        v.animate().translationX(0f).setDuration(120).start();
+                                        Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }).start();
+                            return true;
+                        }
+                        v.animate().translationX(0f).setDuration(120).start();
+                        return false;
+                    }
+                    case MotionEvent.ACTION_CANCEL:
+                        v.animate().translationX(0f).setDuration(120).start();
+                        return false;
+                    default:
+                        return false;
+                }
+            });
+        }
+
+        private float dpToPx(float dp) {
+            return dp * requireContext().getResources().getDisplayMetrics().density;
+        }
+
+        private void commitTypedCartQuantity(
+            EditText quantityInput,
+            CartItem item,
+            MainActivity activity,
+            LayoutInflater inflater,
+            LinearLayout cartContainer,
+            TextView itemCount,
+            TextView totalAmount,
+            TextView emptyState
+        ) {
+            int typedQty;
+            try {
+                typedQty = Integer.parseInt(quantityInput.getText().toString().trim());
+            } catch (Exception ignored) {
+                typedQty = item.quantity;
+            }
+
+            typedQty = Math.max(1, typedQty);
+            if (typedQty == item.quantity) {
+                quantityInput.setText(String.valueOf(item.quantity));
+                quantityInput.setSelection(quantityInput.getText().length());
+                return;
+            }
+
+            int targetQty = typedQty;
+            activity.syncCartQuantityToServer(item.productId, item.variantId, targetQty, new SimpleCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    activity.loadCartFromServer(new CartLoadCallback() {
+                        @Override
+                        public void onSuccess() {
+                            renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            renderCartItems(activity, inflater, cartContainer, itemCount, totalAmount, emptyState);
+                            Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(String message) {
+                    quantityInput.setText(String.valueOf(item.quantity));
+                    quantityInput.setSelection(quantityInput.getText().length());
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                }
+            });
         }
 
     }
