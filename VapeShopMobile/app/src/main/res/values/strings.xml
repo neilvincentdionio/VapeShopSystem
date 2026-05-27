@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Vape Shop</string>
+    <string name="app_name">QuickPuff App</string>
     <string-array name="register_country_options">
         <item>Philippines</item>
     </string-array>

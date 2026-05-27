@@ -5492,7 +5492,9 @@ public class MainActivity extends AppCompatActivity {
             if (Arrays.asList("delivered_to_rider", "delivered", "to_receive").contains(status)) {
                 return "to_receive";
             }
-            if (Arrays.asList("return_requested", "return_approved", "return_picked_up").contains(status)) {
+            if (Arrays.asList(
+                "return_requested", "return_approved", "return_picked_up", "return_refund"
+            ).contains(status)) {
                 return "return_refund";
             }
             if (PURCHASE_TABS.containsKey(status)) {
@@ -5583,16 +5585,25 @@ public class MainActivity extends AppCompatActivity {
                 refundInfo.setVisibility(order.refundRequested ? View.VISIBLE : View.GONE);
 
                 if (order.refundRequested) {
-                    refundStatus.setText("Return request submitted. Show QR to rider during pickup.");
+                    refundStatus.setText(getCustomerReturnStatusNotice(order.deliveryStatus));
                     String methodLabel = order.refundMethod == null ? "" : order.refundMethod.toUpperCase(Locale.US);
                     refundTo.setText("Refund to: " + methodLabel + " - " + order.refundAccount);
-                    String qrData = order.qrPayload != null && !order.qrPayload.isEmpty()
-                        ? order.qrPayload
-                        : order.returnCode;
-                    returnCode.setText("Return QR: " + (order.returnCode.isEmpty() ? "Ready" : order.returnCode));
-                    Bitmap qrBitmap = createQrBitmap(qrData, 220);
-                    if (qrBitmap != null) {
-                        returnQr.setImageBitmap(qrBitmap);
+                    boolean showReturnQr = shouldShowReturnQr(order.deliveryStatus);
+                    if (showReturnQr) {
+                        String qrData = order.qrPayload != null && !order.qrPayload.isEmpty()
+                            ? order.qrPayload
+                            : order.returnCode;
+                        returnCode.setVisibility(View.VISIBLE);
+                        returnCode.setText("Return QR: " + (order.returnCode.isEmpty() ? "Ready" : order.returnCode));
+                        returnQr.setVisibility(View.VISIBLE);
+                        Bitmap qrBitmap = createQrBitmap(qrData, 220);
+                        if (qrBitmap != null) {
+                            returnQr.setImageBitmap(qrBitmap);
+                        }
+                    } else {
+                        returnQr.setVisibility(View.GONE);
+                        returnQr.setImageDrawable(null);
+                        returnCode.setVisibility(View.GONE);
                     }
                 }
 
@@ -5711,7 +5722,11 @@ public class MainActivity extends AppCompatActivity {
             Spinner methodSpinner = dialogView.findViewById(R.id.refund_method_spinner);
             EditText accountInput = dialogView.findViewById(R.id.refund_account_input);
             EditText accountNameInput = dialogView.findViewById(R.id.refund_account_name_input);
-            orderReference.setText("Order: " + (order.referenceNumber == null || order.referenceNumber.isEmpty() ? "N/A" : order.referenceNumber));
+            Button cancelButton = dialogView.findViewById(R.id.refund_btn_cancel);
+            Button submitButton = dialogView.findViewById(R.id.refund_btn_submit);
+            orderReference.setText(order.referenceNumber == null || order.referenceNumber.isEmpty()
+                ? "N/A"
+                : order.referenceNumber);
 
             final List<Uri> attachmentUris = new ArrayList<>();
             chooseFilesButton.setOnClickListener(v ->
@@ -5739,86 +5754,88 @@ public class MainActivity extends AppCompatActivity {
                 })
             );
 
-            List<String> methods = Arrays.asList("GCash", "Maya");
-            ArrayAdapter<String> methodAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, methods);
-            methodAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            methodSpinner.setAdapter(methodAdapter);
-
             MainActivity activity = (MainActivity) requireActivity();
+            activity.bindCheckoutSpinner(methodSpinner, Arrays.asList("GCash", "Maya"));
+            MyPurchaseFragment.clearActionButtonTint(chooseFilesButton);
+            MyPurchaseFragment.clearActionButtonTint(cancelButton);
+            MyPurchaseFragment.clearActionButtonTint(submitButton);
+
             AlertDialog dialog = new AlertDialog.Builder(requireContext())
-                .setTitle("Request Return/Refund")
                 .setView(dialogView)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Submit Request", null)
                 .create();
-            dialog.setOnShowListener(d -> {
-                Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-                positive.setOnClickListener(v -> {
-                    String reason = reasonInput.getText() == null ? "" : reasonInput.getText().toString().trim();
-                    String account = accountInput.getText() == null ? "" : accountInput.getText().toString().trim();
-                    String accountName = accountNameInput.getText() == null ? "" : accountNameInput.getText().toString().trim();
-                    if (reason.length() < 10) {
-                        Toast.makeText(requireContext(), "Please enter at least 10 characters for reason.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (attachmentUris.isEmpty()) {
-                        Toast.makeText(requireContext(), "Please attach at least 1 evidence file.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (account.isEmpty()) {
-                        Toast.makeText(requireContext(), "Please provide GCash/Maya number.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (accountName.isEmpty()) {
-                        Toast.makeText(requireContext(), "Please provide account name.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    String methodLabel = String.valueOf(methodSpinner.getSelectedItem());
-                    String payoutMethod = methodLabel.toLowerCase(Locale.US).contains("maya") ? "maya" : "gcash";
-                    positive.setEnabled(false);
-                    positive.setText("Submitting...");
-                    activity.submitReturnRefundToServer(
-                        order.orderId,
-                        order.referenceNumber,
-                        reason,
-                        payoutMethod,
-                        account,
-                        accountName,
-                        attachmentUris,
-                        new SimpleCallback() {
-                            @Override
-                            public void onSuccess(String message) {
-                                order.refundRequested = true;
-                                order.deliveryStatus = "return_requested";
-                                order.refundReason = reason;
-                                order.refundMethod = payoutMethod;
-                                order.refundAccount = account + " (" + accountName + ")";
-                                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                                activity.fetchOrdersFromServer(new OrdersCallback() {
-                                    @Override
-                                    public void onSuccess(List<OrderInfo> orders) {
-                                        allOrders.clear();
-                                        allOrders.addAll(orders);
-                                        refreshPurchaseUi();
-                                    }
+            if (dialog.getWindow() != null) {
+                android.view.Window window = dialog.getWindow();
+                window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                int width = (int) (getResources().getDisplayMetrics().widthPixels * 0.94f);
+                window.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
 
-                                    @Override
-                                    public void onError(String msg) {
-                                        refreshPurchaseUi();
-                                    }
-                                });
-                                dialog.dismiss();
-                            }
+            cancelButton.setOnClickListener(v -> dialog.dismiss());
+            submitButton.setOnClickListener(v -> {
+                String reason = reasonInput.getText() == null ? "" : reasonInput.getText().toString().trim();
+                String account = accountInput.getText() == null ? "" : accountInput.getText().toString().trim();
+                String accountName = accountNameInput.getText() == null ? "" : accountNameInput.getText().toString().trim();
+                if (reason.length() < 10) {
+                    Toast.makeText(requireContext(), "Please enter at least 10 characters for reason.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (attachmentUris.isEmpty()) {
+                    Toast.makeText(requireContext(), "Please attach at least 1 evidence file.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (account.isEmpty()) {
+                    Toast.makeText(requireContext(), "Please provide GCash/Maya number.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (accountName.isEmpty()) {
+                    Toast.makeText(requireContext(), "Please provide account name.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String methodLabel = String.valueOf(methodSpinner.getSelectedItem());
+                String payoutMethod = methodLabel.toLowerCase(Locale.US).contains("maya") ? "maya" : "gcash";
+                submitButton.setEnabled(false);
+                submitButton.setText("Submitting...");
+                activity.submitReturnRefundToServer(
+                    order.orderId,
+                    order.referenceNumber,
+                    reason,
+                    payoutMethod,
+                    account,
+                    accountName,
+                    attachmentUris,
+                    new SimpleCallback() {
+                        @Override
+                        public void onSuccess(String message) {
+                            order.refundRequested = true;
+                            order.deliveryStatus = "return_requested";
+                            order.refundReason = reason;
+                            order.refundMethod = payoutMethod;
+                            order.refundAccount = account + " (" + accountName + ")";
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                            activity.fetchOrdersFromServer(new OrdersCallback() {
+                                @Override
+                                public void onSuccess(List<OrderInfo> orders) {
+                                    allOrders.clear();
+                                    allOrders.addAll(orders);
+                                    refreshPurchaseUi();
+                                }
 
-                            @Override
-                            public void onError(String message) {
-                                positive.setEnabled(true);
-                                positive.setText("Submit Request");
-                                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                            }
+                                @Override
+                                public void onError(String msg) {
+                                    refreshPurchaseUi();
+                                }
+                            });
+                            dialog.dismiss();
                         }
-                    );
-                });
+
+                        @Override
+                        public void onError(String message) {
+                            submitButton.setEnabled(true);
+                            submitButton.setText("Submit Request");
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                );
             });
             dialog.show();
         }
@@ -5917,6 +5934,32 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        static boolean shouldShowReturnQr(String deliveryStatus) {
+            if (deliveryStatus == null) {
+                return false;
+            }
+            String normalized = deliveryStatus.trim().toLowerCase(Locale.US);
+            return "return_requested".equals(normalized) || "return_approved".equals(normalized);
+        }
+
+        static String getCustomerReturnStatusNotice(String deliveryStatus) {
+            if (deliveryStatus == null) {
+                return "Return/refund in progress.";
+            }
+            switch (deliveryStatus.trim().toLowerCase(Locale.US)) {
+                case "return_requested":
+                    return "Your return request was submitted. Please wait for admin approval.";
+                case "return_approved":
+                    return "Return approved. Show your return QR code to the rider when they arrive for pickup.";
+                case "return_picked_up":
+                    return "Your return was picked up. Please wait for the admin to send your refund.";
+                case "return_refund":
+                    return "Your refund has been processed. Thank you for your patience.";
+                default:
+                    return "Return/refund in progress.";
+            }
+        }
+
         static String getDeliveryStatusLabel(String status) {
             if (status == null || status.trim().isEmpty()) {
                 return "To Pay";
@@ -5976,6 +6019,7 @@ public class MainActivity extends AppCompatActivity {
         private static final String ARG_REFUND_METHOD = "refund_method";
         private static final String ARG_REFUND_ACCOUNT = "refund_account";
         private static final String ARG_RETURN_CODE = "return_code";
+        private static final String ARG_RETURN_TOKEN = "return_token";
         private static final String ARG_ORDER_ID = "order_id";
         private static final String ARG_CAN_PAY = "can_pay";
         private static final String ARG_CAN_CANCEL = "can_cancel";
@@ -6018,6 +6062,7 @@ public class MainActivity extends AppCompatActivity {
             args.putString(ARG_RETURN_CODE, order.qrPayload != null && !order.qrPayload.isEmpty()
                 ? order.qrPayload
                 : order.returnCode);
+            args.putString(ARG_RETURN_TOKEN, order.returnCode);
             fragment.setArguments(args);
             return fragment;
         }
@@ -6041,6 +6086,7 @@ public class MainActivity extends AppCompatActivity {
             String refundMethod = args != null ? args.getString(ARG_REFUND_METHOD, "GCash") : "GCash";
             String refundAccount = args != null ? args.getString(ARG_REFUND_ACCOUNT, "") : "";
             String returnCode = args != null ? args.getString(ARG_RETURN_CODE, "") : "";
+            String returnToken = args != null ? args.getString(ARG_RETURN_TOKEN, "") : "";
             orderId = args != null ? args.getInt(ARG_ORDER_ID, 0) : 0;
             canPay = args != null && args.getBoolean(ARG_CAN_PAY, false);
             canCancel = args != null && args.getBoolean(ARG_CAN_CANCEL, false);
@@ -6139,19 +6185,32 @@ public class MainActivity extends AppCompatActivity {
             );
 
             androidx.cardview.widget.CardView refundCard = view.findViewById(R.id.od_refund_card);
-            if (refundRequested && returnCode != null && !returnCode.isEmpty()) {
+            if (refundRequested) {
                 refundCard.setVisibility(View.VISIBLE);
+                ((TextView) view.findViewById(R.id.od_refund_title)).setText(
+                    MyPurchaseFragment.getCustomerReturnStatusNotice(status)
+                );
                 ((TextView) view.findViewById(R.id.od_refund_reason)).setText(
                     "Reason: " + (refundReason == null || refundReason.isEmpty() ? "Not specified" : refundReason)
                 );
                 ((TextView) view.findViewById(R.id.od_refund_to)).setText(
                     "Refund to: " + refundMethod + " - " + refundAccount
                 );
-                ((TextView) view.findViewById(R.id.od_return_code)).setText("Return QR - " + returnCode);
                 ImageView refundQr = view.findViewById(R.id.od_return_qr);
-                Bitmap qrBitmap = createQrBitmap(returnCode, 280);
-                if (qrBitmap != null) {
-                    refundQr.setImageBitmap(qrBitmap);
+                TextView returnCodeView = view.findViewById(R.id.od_return_code);
+                if (MyPurchaseFragment.shouldShowReturnQr(status) && returnCode != null && !returnCode.isEmpty()) {
+                    String tokenLabel = returnToken == null || returnToken.isEmpty() ? returnCode : returnToken;
+                    returnCodeView.setVisibility(View.VISIBLE);
+                    returnCodeView.setText("Return QR - " + tokenLabel);
+                    refundQr.setVisibility(View.VISIBLE);
+                    Bitmap qrBitmap = createQrBitmap(returnCode, 280);
+                    if (qrBitmap != null) {
+                        refundQr.setImageBitmap(qrBitmap);
+                    }
+                } else {
+                    refundQr.setVisibility(View.GONE);
+                    refundQr.setImageDrawable(null);
+                    returnCodeView.setVisibility(View.GONE);
                 }
             } else {
                 refundCard.setVisibility(View.GONE);

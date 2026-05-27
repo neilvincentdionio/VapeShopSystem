@@ -4,7 +4,7 @@
  *
  * @var array<string, mixed>|null $returnMeta
  * @var array<string, mixed>|null $order
- * @var string $audience admin|customer|rider — payout & QR hidden for rider
+ * @var string $audience admin|customer|rider — QR is customer-only (see return_refund_view); payout hidden for rider
  */
 helper('return_refund');
 
@@ -66,10 +66,17 @@ $hasPayout = $needsPayout
         $orderReference = (string) ($order['reference_number'] ?? ('#' . $orderId));
         $deliveryStatus = (string) ($order['delivery_status'] ?? '');
         $qrPayload = return_refund_resolve_qr_payload($returnMeta, $orderId, $orderReference);
-        $showQr = $showSensitive && $qrPayload !== '' && $deliveryStatus !== 'return_refund';
+        $showQr = $audience === 'customer'
+            && $qrPayload !== ''
+            && in_array($deliveryStatus, ['return_requested', 'return_approved'], true);
         $refundRefDisplay = format_refund_payout_reference_display((string) ($returnMeta['refund_payout_reference'] ?? ''));
         $pendingRefDisplay = format_refund_payout_reference_display((string) ($returnMeta['pending_refund_reference'] ?? ''));
     ?>
+    <?php if ($audience === 'admin' && $qrPayload !== '' && in_array($deliveryStatus, ['return_requested', 'return_approved'], true)): ?>
+        <p style="margin:.75rem 0 0;font-size:.88rem;color:#92400e;">
+            <i class="fas fa-qrcode"></i> The customer shows their <strong>return QR</strong> on their order page for the rider to scan at pickup. QR is not shown here.
+        </p>
+    <?php endif; ?>
     <?php if ($showQr): ?>
         <div style="margin:.75rem 0;text-align:center;">
             <strong style="display:block;margin-bottom:.4rem;font-size:.88rem;">Return pickup QR</strong>

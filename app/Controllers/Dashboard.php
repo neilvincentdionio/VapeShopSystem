@@ -4060,7 +4060,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Download return pickup QR as PNG (customer and admin only).
+     * Download return pickup QR as PNG (customer only).
      */
     public function downloadReturnQrPng($orderId)
     {
@@ -4082,15 +4082,11 @@ class Dashboard extends BaseController
         $role = (string) $this->session->get('user_role');
         $userId = (int) $this->session->get('user_id');
 
-        if ($role === 'rider') {
+        if ($role !== 'customer') {
             return $this->response->setStatusCode(403)->setBody('QR download is available to the customer only');
         }
 
-        if ($role === 'customer') {
-            if ((int) ($order['created_by'] ?? 0) !== $userId) {
-                return $this->response->setStatusCode(403)->setBody('Access denied');
-            }
-        } elseif ($role !== 'admin') {
+        if ((int) ($order['created_by'] ?? 0) !== $userId) {
             return $this->response->setStatusCode(403)->setBody('Access denied');
         }
 
