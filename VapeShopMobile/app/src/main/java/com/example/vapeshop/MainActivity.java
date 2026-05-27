@@ -604,10 +604,20 @@ public class MainActivity extends AppCompatActivity {
     private void restoreSessionIfPossible() {
         if (hasRegisteredAccount()) {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            currentUserRole = prefs.getString(KEY_USER_ROLE, "customer");
-            if (currentUserRole == null) {
+            String storedRole = prefs.getString(KEY_USER_ROLE, "customer");
+            if (isAdminOrStaffRole(storedRole)) {
+                prefs.edit()
+                    .putString(KEY_USER_ROLE, "customer")
+                    .putInt(KEY_USER_ID, 0)
+                    .apply();
                 currentUserRole = "customer";
+                currentUserId = 0;
+                isLoggedIn = false;
+                loadFragment(new LoginFragment());
+                Toast.makeText(this, "Admin accounts are web-only. Please use web dashboard.", Toast.LENGTH_LONG).show();
+                return;
             }
+            currentUserRole = sanitizeMobileRole(storedRole);
             currentUserId = prefs.getInt(KEY_USER_ID, 0);
             isLoggedIn = true;
             routeAfterLogin();
@@ -742,9 +752,7 @@ public class MainActivity extends AppCompatActivity {
             supportUnreadCount = 0;
             refreshMessageBadges();
         }
-        if (isAdminRole()) {
-            loadFragment(new AdminOrdersFragment());
-        } else if (isRiderRole()) {
+        if (isRiderRole()) {
             loadRiderFragment(new RiderDashboardFragment());
         } else {
             loadFragment(new HomeFragment());
@@ -759,6 +767,25 @@ public class MainActivity extends AppCompatActivity {
     public boolean isAdminRole() {
         String role = currentUserRole == null ? "" : currentUserRole.toLowerCase(Locale.US);
         return "admin".equals(role) || "staff".equals(role);
+    }
+
+    private boolean isAdminOrStaffRole(String role) {
+        if (role == null) {
+            return false;
+        }
+        String normalized = role.trim().toLowerCase(Locale.US);
+        return "admin".equals(normalized) || "staff".equals(normalized);
+    }
+
+    private String sanitizeMobileRole(String role) {
+        if (role == null) {
+            return "customer";
+        }
+        String normalized = role.trim().toLowerCase(Locale.US);
+        if ("rider".equals(normalized)) {
+            return "rider";
+        }
+        return "customer";
     }
 
     public boolean isRiderRole() {
@@ -1117,7 +1144,11 @@ public class MainActivity extends AppCompatActivity {
                     double longitude = data != null ? data.optDouble("longitude", 125.1716) : 125.1716;
                     String role = data != null ? data.optString("role", "customer") : "customer";
                     int userId = data != null ? data.optInt("user_id", 0) : 0;
-                    currentUserRole = role == null || role.isEmpty() ? "customer" : role;
+                    if (isAdminOrStaffRole(role)) {
+                        callback.onError("Admin accounts are web-only. Please login on the web dashboard.");
+                        return;
+                    }
+                    currentUserRole = sanitizeMobileRole(role);
                     currentUserId = userId;
                     saveAccountLocally(
                         fullName, savedEmail, password, phone, street, city, barangay, postalCode, province, country, latitude, longitude
@@ -3624,34 +3655,6 @@ public class MainActivity extends AppCompatActivity {
                 liveTrackingStatusView.setText("Unable to load tracking.");
             }
         }
-    }
-
-    public void fetchAdminOrders(SimpleCallback callback) {
-        Map<String, String> params = new HashMap<>();
-        params.put("email", getRegisteredEmail());
-        apiPost("admin_orders_list.php", params, callback);
-    }
-
-    public void fetchRidersList(SimpleCallback callback) {
-        Map<String, String> params = new HashMap<>();
-        params.put("email", getRegisteredEmail());
-        apiPost("admin_riders_list.php", params, callback);
-    }
-
-    public void adminAssignRider(int orderId, int riderId, SimpleCallback callback) {
-        Map<String, String> params = new HashMap<>();
-        params.put("email", getRegisteredEmail());
-        params.put("order_id", String.valueOf(orderId));
-        params.put("rider_id", String.valueOf(riderId));
-        apiPost("admin_assign_rider.php", params, wrapJsonCallback(callback));
-    }
-
-    public void adminUpdateDeliveryStatus(int orderId, String status, SimpleCallback callback) {
-        Map<String, String> params = new HashMap<>();
-        params.put("email", getRegisteredEmail());
-        params.put("order_id", String.valueOf(orderId));
-        params.put("status", status);
-        apiPost("admin_update_delivery_status.php", params, wrapJsonCallback(callback));
     }
 
     public void fetchRiderOrders(String listType, SimpleCallback callback) {
@@ -7706,159 +7709,6 @@ public class MainActivity extends AppCompatActivity {
         private int dpToPx(int dp) {
             float density = requireContext().getResources().getDisplayMetrics().density;
             return Math.round(dp * density);
-        }
-    }
-
-    public static class AdminOrdersFragment extends Fragment {
-        private final List<JSONObject> riders = new ArrayList<>();
-
-        @Override
-        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-            View view = inflater.inflate(R.layout.fragment_role_dashboard, container, false);
-            MainActivity activity = (MainActivity) requireActivity();
-            ((TextView) view.findViewById(R.id.role_dashboard_title)).setText("Admin — Orders");
-            ((TextView) view.findViewById(R.id.role_dashboard_subtitle)).setText("Assign riders and update delivery status");
-            LinearLayout containerLayout = view.findViewById(R.id.role_orders_container);
-            view.findViewById(R.id.btn_role_logout).setOnClickListener(v -> activity.onLogout());
-            view.findViewById(R.id.btn_role_refresh).setOnClickListener(v -> loadOrders(activity, containerLayout));
-            loadRiders(activity);
-            loadOrders(activity, containerLayout);
-            return view;
-        }
-
-        private void loadRiders(MainActivity activity) {
-            activity.fetchRidersList(new SimpleCallback() {
-                @Override
-                public void onSuccess(String responseBody) {
-                    riders.clear();
-                    try {
-                        JSONObject root = new JSONObject(responseBody);
-                        JSONObject data = root.optJSONObject("data");
-                        JSONArray arr = data != null ? data.optJSONArray("riders") : null;
-                        if (arr != null) {
-                            for (int i = 0; i < arr.length(); i++) {
-                                JSONObject r = arr.optJSONObject(i);
-                                if (r != null) {
-                                    riders.add(r);
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-
-        private void loadOrders(MainActivity activity, LinearLayout containerLayout) {
-            activity.fetchAdminOrders(new SimpleCallback() {
-                @Override
-                public void onSuccess(String responseBody) {
-                    containerLayout.removeAllViews();
-                    try {
-                        JSONObject root = new JSONObject(responseBody);
-                        JSONObject data = root.optJSONObject("data");
-                        JSONArray orders = data != null ? data.optJSONArray("orders") : null;
-                        if (orders == null || orders.length() == 0) {
-                            TextView empty = new TextView(requireContext());
-                            empty.setText("No orders found.");
-                            containerLayout.addView(empty);
-                            return;
-                        }
-                        for (int i = 0; i < orders.length(); i++) {
-                            JSONObject order = orders.optJSONObject(i);
-                            if (order != null) {
-                                containerLayout.addView(buildOrderRow(activity, order));
-                            }
-                        }
-                    } catch (Exception e) {
-                        Toast.makeText(requireContext(), "Invalid response", Toast.LENGTH_SHORT).show();
-                    }
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                }
-            });
-        }
-
-        private View buildOrderRow(MainActivity activity, JSONObject order) {
-            View row = getLayoutInflater().inflate(R.layout.item_role_order, null);
-            int orderId = order.optInt("order_id", 0);
-            String status = order.optString("delivery_status", "");
-            ((TextView) row.findViewById(R.id.role_order_reference)).setText(order.optString("reference_number", "#" + orderId));
-            ((TextView) row.findViewById(R.id.role_order_status)).setText(MyPurchaseFragment.getDeliveryStatusLabel(status));
-            ((TextView) row.findViewById(R.id.role_order_customer)).setText(
-                "Customer: " + order.optString("customer_name", "") + " | Payment: " + order.optString("payment_status", "")
-            );
-            JSONObject shipment = order.optJSONObject("shipment");
-            String addr = shipment != null ? shipment.optString("shipping_address", "") : "";
-            ((TextView) row.findViewById(R.id.role_order_address)).setText(addr.isEmpty() ? "No address" : addr);
-            LinearLayout actions = row.findViewById(R.id.role_order_actions);
-            if ("to_pay".equals(status)) {
-                addActionButton(actions, "Mark To Ship", () ->
-                    activity.adminUpdateDeliveryStatus(orderId, "to_ship", simpleRefresh(activity)));
-            }
-            addActionButton(actions, "Assign Rider", () -> showAssignRiderDialog(activity, orderId, actions));
-            if ("to_ship".equals(status) || "ready_for_pickup".equals(status)) {
-                addActionButton(actions, "Ready for Pickup", () ->
-                    activity.adminUpdateDeliveryStatus(orderId, "ready_for_pickup", simpleRefresh(activity)));
-            }
-            if ("delivered".equals(status)) {
-                addActionButton(actions, "Confirm Completed", () ->
-                    activity.adminUpdateDeliveryStatus(orderId, "completed", simpleRefresh(activity)));
-            }
-            return row;
-        }
-
-        private void addActionButton(LinearLayout parent, String label, Runnable action) {
-            Button btn = new Button(requireContext());
-            btn.setText(label);
-            btn.setAllCaps(false);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.topMargin = 6;
-            btn.setLayoutParams(lp);
-            btn.setOnClickListener(v -> action.run());
-            parent.addView(btn);
-        }
-
-        private SimpleCallback simpleRefresh(MainActivity activity) {
-            return new SimpleCallback() {
-                @Override
-                public void onSuccess(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                    activity.loadFragment(new AdminOrdersFragment());
-                }
-
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                }
-            };
-        }
-
-        private void showAssignRiderDialog(MainActivity activity, int orderId, LinearLayout ignored) {
-            if (riders.isEmpty()) {
-                Toast.makeText(requireContext(), "No riders available.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            String[] names = new String[riders.size()];
-            for (int i = 0; i < riders.size(); i++) {
-                names[i] = riders.get(i).optString("name", "Rider");
-            }
-            new AlertDialog.Builder(requireContext())
-                .setTitle("Select rider")
-                .setItems(names, (d, which) -> {
-                    int riderId = riders.get(which).optInt("id", 0);
-                    activity.adminAssignRider(orderId, riderId, simpleRefresh(activity));
-                })
-                .show();
         }
     }
 
