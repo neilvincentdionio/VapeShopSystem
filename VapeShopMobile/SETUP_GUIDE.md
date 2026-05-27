@@ -218,9 +218,6 @@ netsh advfirewall firewall add rule name="VapeShop Apache 80 Out" dir=out action
 // ipconfig
 
 
-& 
-"C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb
-.exe" reverse tcp:8080 tcp:80
-& 
-"C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb
-.exe" reverse --list**
+
+& "C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb.exe" reverse --list**
+& "C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb.exe" reverse tcp:8080 tcp:80 8080

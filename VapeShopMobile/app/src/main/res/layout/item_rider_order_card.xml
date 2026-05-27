@@ -56,6 +56,16 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/rider_card_amount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="₱0.00"
+            android:textColor="#059669"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/rider_card_customer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

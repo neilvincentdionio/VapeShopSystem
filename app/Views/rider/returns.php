@@ -167,6 +167,7 @@
                     <th>Order</th>
                     <th>Customer</th>
                     <th>Pickup Address</th>
+                    <th>Amount</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -197,6 +198,9 @@
                             <div class="muted"><?= esc($item['contact_number'] ?? ($item['customer']['phone'] ?? '')) ?></div>
                         </td>
                         <td class="muted"><?= esc($address) ?></td>
+                        <td>
+                            ₱<?= number_format((float) ($item['total_amount'] ?? 0), 2) ?>
+                        </td>
                         <td>
                             <span class="status-badge <?= $isComplete ? 'is-complete' : ($status === 'return_picked_up' ? 'is-done' : '') ?>">
                                 <?php if ($isComplete): ?>

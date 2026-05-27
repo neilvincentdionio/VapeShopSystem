@@ -294,6 +294,11 @@ public final class RiderOrderUi {
 
         ((TextView) card.findViewById(R.id.rider_card_reference)).setText(
             order.optString("reference_number", "Order #" + orderId));
+        double amount = order.optDouble("total_amount", 0);
+        TextView amountView = card.findViewById(R.id.rider_card_amount);
+        if (amountView != null) {
+            amountView.setText(String.format(Locale.US, "₱%.2f", amount));
+        }
         TextView statusView = card.findViewById(R.id.rider_card_status);
         statusView.setText(isReturnList ? getReturnStatusLabel(order, status) : getStatusLabel(status));
         applyStatusBadge(context, statusView, status, isReturnList, order);
