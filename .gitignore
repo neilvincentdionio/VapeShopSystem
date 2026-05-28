@@ -63,7 +63,21 @@ writable/uploads/*
 writable/debugbar/*
 !writable/debugbar/index.html
 
+writable/backups/*
+!writable/backups/.gitkeep
+
+writable/reports/
+writable/*.log
+
 php_errors.log
+
+#-------------------------
+# Android (Gradle build output)
+#-------------------------
+VapeShopMobile/.gradle/
+VapeShopMobile/**/build/
+!VapeShopMobile/**/build.gradle.kts
+!VapeShopMobile/build.gradle.kts
 
 #-------------------------
 # User Guide Temp Files
