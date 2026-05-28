@@ -102,7 +102,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="+63 9365879409"
+                android:text="+63 9850640073"
                 android:textColor="#0369A1"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -116,6 +116,7 @@
                 android:background="#FFFFFF"
                 android:contentDescription="GCash QR code"
                 android:padding="6dp"
+                android:src="@drawable/gcash_real_qr"
                 android:scaleType="fitCenter" />
 
             <Button

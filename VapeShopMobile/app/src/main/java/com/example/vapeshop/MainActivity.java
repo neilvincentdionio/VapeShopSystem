@@ -127,8 +127,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USER_ROLE = "user_role";
     private static final String KEY_USER_ID = "user_id";
     private static final String[] API_BASE_URLS = {
-        // Public tunnel URL (works for Android phones outside local network)
-        "https://interesting-production-selling-elder.trycloudflare.com/VapeShopSystem/mobile_api/",
+        // Active public tunnel URL (works for Android phones outside local network)
+        "https://reaches-choose-anymore-richmond.trycloudflare.com/VapeShopSystem/mobile_api/",
+        // Previous tunnel URL kept as fallback
+        "https://recorder-configure-provinces-kentucky.trycloudflare.com/VapeShopSystem/mobile_api/",
         // Physical device via USB + adb reverse (run: adb reverse tcp:8080 tcp:80)
         "http://127.0.0.1:8080/VapeShopSystem/mobile_api/",
         // Localhost fallback (if reverse is mapped directly to port 80)
@@ -1760,6 +1762,7 @@ public class MainActivity extends AppCompatActivity {
         Spinner puffSpinner = dialogView.findViewById(R.id.dialog_puff_spinner);
         Spinner flavorSpinner = dialogView.findViewById(R.id.dialog_flavor_spinner);
         TextView stockInfo = dialogView.findViewById(R.id.dialog_flavor_stock);
+        stockInfo.setVisibility(View.VISIBLE);
 
         title.setText(product.name);
         subtitle.setText("Choose puff and flavor before adding this product to cart.");
@@ -1938,7 +1941,7 @@ public class MainActivity extends AppCompatActivity {
         return details.toString();
     }
 
-    private static final String GCASH_MERCHANT_NUMBER = "+639365879409";
+    private static final String GCASH_MERCHANT_NUMBER = "+639850640073";
     private static final String GCASH_MERCHANT_NAME = "QuickPuff VapeShop";
     private final Map<String, List<String>> checkoutProvinceCityMap = new HashMap<>();
     private final Map<String, List<String>> checkoutCityBarangayMap = new HashMap<>();
@@ -2026,10 +2029,7 @@ public class MainActivity extends AppCompatActivity {
         final double[] deliveryLng = {getRegisteredLongitude()};
 
         Runnable refreshGcashQr = () -> {
-            Bitmap qr = createQrBitmap(buildGcashQrPayload(cartTotal), 420);
-            if (qr != null) {
-                gcashQrImage.setImageBitmap(qr);
-            }
+            gcashQrImage.setImageResource(R.drawable.gcash_real_qr);
         };
 
         Runnable refreshAddressMode = () -> {
@@ -2145,8 +2145,8 @@ public class MainActivity extends AppCompatActivity {
 
             if (paymentMethod.equals("gcash")) {
                 String ref = gcashReference.getText().toString().trim();
-                if (ref.length() < 6) {
-                    checkoutError.setText("Enter a valid GCash reference number (at least 6 characters).");
+                if (!isValidGcashReference(ref)) {
+                    checkoutError.setText("Enter a valid GCash reference number.");
                     checkoutError.setVisibility(View.VISIBLE);
                     return;
                 }
@@ -2354,6 +2354,11 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "GCash app not found. Install GCash or pay using the QR code.", Toast.LENGTH_LONG).show();
             }
         }
+    }
+
+    private boolean isValidGcashReference(String ref) {
+        String normalized = ref == null ? "" : ref.trim();
+        return "QWERTY".equalsIgnoreCase(normalized) || normalized.matches("^\\d{10,13}$");
     }
 
     private void applyCheckoutMapPin(WebView mapWebView, double lat, double lng) {

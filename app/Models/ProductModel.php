@@ -743,21 +743,27 @@ class ProductModel extends Model
             $quantity = (int) $item['quantity'];
 
             if ($variantId !== null) {
-                $this->db->table('product_variants')
+                $variantUpdated = $this->db->table('product_variants')
                     ->where('id', $variantId)
                     ->where('product_id', $productId)
+                    ->where('stock_qty >=', $quantity)
                     ->set('stock_qty', 'stock_qty - ' . $quantity, false)
                     ->set('updated_at', $now)
                     ->update();
+
+                if (! $variantUpdated || $this->db->affectedRows() < 1) {
+                    return false;
+                }
             }
 
-            $this->db->table('products')
+            $productUpdated = $this->db->table('products')
                 ->where('id', $productId)
+                ->where('stock_qty >=', $quantity)
                 ->set('stock_qty', 'stock_qty - ' . $quantity, false)
                 ->set('updated_at', $now)
                 ->update();
 
-            if ($this->db->affectedRows() < 0) {
+            if (! $productUpdated || $this->db->affectedRows() < 1) {
                 return false;
             }
         }

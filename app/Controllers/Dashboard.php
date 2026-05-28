@@ -1474,6 +1474,24 @@ class Dashboard extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Shipment not found']);
         }
 
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+        }
+
+        $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+        $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+        $orderNotes = (string) ($order['notes'] ?? '');
+        $isGcashOrder = $paymentMethod === 'gcash'
+            || str_contains($orderNotes, 'PAYMENT_METHOD:GCASH')
+            || str_contains($orderNotes, 'GCASH_REF:');
+        if ($isGcashOrder && $paymentStatus !== 'paid') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Approve GCash payment first before assigning a rider.',
+            ]);
+        }
+
         $currentStatus = (string) ($shipment['status'] ?? 'to_pay');
         if (in_array($currentStatus, ['completed', 'cancelled', 'return_refund'], true)) {
             return $this->response->setJSON(['success' => false, 'message' => 'Completed/cancelled/refunded orders cannot be reassigned']);
@@ -1489,7 +1507,6 @@ class Dashboard extends BaseController
         if (! $updated) {
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign rider']);
         }
-        $order = $this->orderModel->getOrder($orderId);
         if ($order) {
             $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
             $this->notificationService->notifyUsers([$riderId], [
@@ -1522,6 +1539,80 @@ class Dashboard extends BaseController
         );
 
         return $this->response->setJSON(['success' => true, 'message' => 'Rider assigned successfully']);
+    }
+
+    public function approveOrderPayment()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+
+        if (! $this->hasAdminPanelAccess()) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
+        }
+
+        $payload = $this->request->getJSON(true) ?? [];
+        $orderId = (int) ($payload['order_id'] ?? $this->request->getPost('order_id'));
+        if ($orderId <= 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order is required']);
+        }
+
+        $order = $this->orderModel->getOrder($orderId);
+        if (! $order) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+        }
+
+        $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+        $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+        $orderNotes = (string) ($order['notes'] ?? '');
+        $isGcashOrder = $paymentMethod === 'gcash'
+            || str_contains($orderNotes, 'PAYMENT_METHOD:GCASH')
+            || str_contains($orderNotes, 'GCASH_REF:');
+
+        if (! $isGcashOrder) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Payment approval is only required for GCash orders.',
+            ]);
+        }
+
+        if ($paymentStatus === 'paid') {
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Payment already approved.',
+            ]);
+        }
+
+        $totalAmount = round((float) ($order['total_amount'] ?? 0), 2);
+        $updated = $this->orderModel->updateOrder($orderId, [], [
+            'method' => 'gcash',
+            'status' => 'paid',
+            'amount' => $totalAmount,
+            'amount_received' => $totalAmount,
+            'change_amount' => 0.00,
+            'paid_at' => date('Y-m-d H:i:s'),
+        ], []);
+
+        if (! $updated) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Unable to approve payment.',
+            ]);
+        }
+
+        $this->syncOrderToRecord($orderId);
+        $this->logOrderActivity(
+            'Approved GCash payment for order',
+            ActivityLogTypes::ORDER_PAID,
+            $orderId,
+            $order
+        );
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'GCash payment approved successfully.',
+        ]);
     }
 
     /**
@@ -2392,22 +2483,23 @@ class Dashboard extends BaseController
             $shipmentData = array_merge($shipmentData, $this->getStoreShipmentData());
         } elseif ($paymentMethod === 'gcash') {
             $gcashReference = trim((string) ($this->request->getPost('gcash_reference') ?? ''));
-            if ($gcashReference === '' || strlen($gcashReference) < 6) {
-                return redirect()->to('/customer/products')->with('error', 'Please enter a valid GCash reference number after payment.');
+            $isSampleRef = strtoupper($gcashReference) === 'QWERTY';
+            if (! $isSampleRef && ! preg_match('/^\d{10,13}$/', $gcashReference)) {
+                return redirect()->to('/customer/products')->with('error', 'Please enter a valid GCash reference number.');
             }
 
             $orderData['title'] = 'GCash Payment Order';
             $orderData['description'] = 'Customer order with GCash payment.';
             $orderData['status'] = 'pending';
-            $orderData['notes'] = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639365879409;GCASH_REF:' . $gcashReference;
+            $orderData['notes'] = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639850640073;GCASH_REF:' . $gcashReference;
 
             $paymentData = [
                 'method' => 'gcash',
-                'status' => 'paid',
+                'status' => 'unpaid',
                 'amount' => round($total, 2),
-                'amount_received' => round($total, 2),
-                'change_amount' => 0.00,
-                'paid_at' => date('Y-m-d H:i:s'),
+                'amount_received' => null,
+                'change_amount' => null,
+                'paid_at' => null,
             ];
 
             $shipmentData = $this->buildCustomerShipmentData($customer, [
@@ -2459,7 +2551,7 @@ class Dashboard extends BaseController
             $redirectTab = 'to_ship';
             $successMessage = $paymentMethod === 'cash_on_delivery'
                 ? 'Order placed successfully. COD payment is pending.'
-                : 'GCash transaction successful. Your order is marked as paid.';
+                : 'GCash payment submitted. Waiting for admin approval before rider assignment.';
             $order = $this->orderModel->getOrder((int) $orderId);
             if ($order) {
                 $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
@@ -4205,7 +4297,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Ensure GCash orders are always reflected as gcash + paid in admin views.
+     * Normalize payment method/status in admin views.
      *
      * @param array<string, mixed> $order
      * @return array{method:string,status:string}
@@ -4218,7 +4310,6 @@ class Dashboard extends BaseController
 
         if (str_contains($notes, 'PAYMENT_METHOD:GCASH') || str_contains($notes, 'GCASH_REF:')) {
             $method = 'gcash';
-            $status = 'paid';
         }
 
         return [

@@ -15,14 +15,14 @@ if (!window.__leaflet_loaded__) {
     document.head.appendChild(lJs);
     window.__leaflet_loaded__ = true;
 }
-const gcashMerchantNumber = '+639365879409';
+const gcashMerchantNumber = '+639850640073';
 const gcashMerchantName = 'QuickPuff VapeShop';
 const checkoutTotal = <?= json_encode($checkoutTotalValue) ?>;
+const gcashQrImageUrl = <?= json_encode(base_url('public/assets/img/gcash_real_qr.png?v=20260528b')) ?>;
 const savedDeliveryAddress = <?= json_encode((string) ($customer_delivery_address ?? '')) ?>;
 const savedDeliveryLatitude = <?= json_encode(isset($customer_delivery_latitude) ? (float) $customer_delivery_latitude : null) ?>;
 const savedDeliveryLongitude = <?= json_encode(isset($customer_delivery_longitude) ? (float) $customer_delivery_longitude : null) ?>;
 let checkoutMapLocked = false;
-let currentGcashQrPayload = '';
 let checkoutMap = null;
 let checkoutMarker = null;
 let checkoutGeocodeDebounce = null;
@@ -207,13 +207,9 @@ function toggleCheckoutModalFields() {
     if (method === 'gcash') {
         const refInput = document.getElementById('popup_gcash_reference');
         const qrImage = document.getElementById('popup_gcash_qr');
-        if (refInput) {
-            refInput.value = '';
-        }
 
         if (qrImage) {
-            currentGcashQrPayload = `GCASH|MERCHANT:${gcashMerchantName}|NUMBER:${gcashMerchantNumber}|AMOUNT:${checkoutTotal.toFixed(2)}|REF:${refInput ? refInput.value : ''}`;
-            qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=${encodeURIComponent(currentGcashQrPayload)}`;
+            qrImage.src = gcashQrImageUrl;
         }
     }
 }
@@ -245,7 +241,8 @@ function validateCheckoutModal() {
 
     if (method === 'gcash') {
         const gcashRef = (document.getElementById('popup_gcash_reference').value || '').trim();
-        if (!gcashRef || gcashRef.length < 6) {
+        const isSampleRef = gcashRef.toUpperCase() === 'QWERTY';
+        if (!isSampleRef && !/^\d{10,13}$/.test(gcashRef)) {
             alert('Please enter a valid GCash reference number.');
             return false;
         }

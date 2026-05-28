@@ -378,7 +378,8 @@
 
         if (selectedMethod === 'gcash') {
             const gcashReference = document.getElementById('gcash_reference').value.trim();
-            if (!gcashReference || gcashReference.length < 6) {
+            const isSampleRef = gcashReference.toUpperCase() === 'QWERTY';
+            if (!isSampleRef && !/^\d{10,13}$/.test(gcashReference)) {
                 alert('Please enter a valid GCash reference number.');
                 return false;
             }

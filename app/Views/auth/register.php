@@ -552,8 +552,8 @@
         </main>
     </div>
 
-    <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
-    <script src="<?= base_url('assets/js/gensan-region-address-data.js') ?>"></script>
+    <script src="<?= base_url('public/assets/js/safe-input.js') ?>"></script>
+    <script src="<?= base_url('public/assets/js/gensan-region-address-data.js') ?>"></script>
     <script>
         setTimeout(function () {
             const successAlert = document.querySelector('.alert-success');

@@ -6,7 +6,7 @@
 CI_ENVIRONMENT = development
 
 # Active server base URL
-app.baseURL = 'https://interesting-production-selling-elder.trycloudflare.com/VapeShopSystem/'
+app.baseURL = 'https://reaches-choose-anymore-richmond.trycloudflare.com/VapeShopSystem/'
 
 # If you switch back to local (XAMPP), use:
 # app.baseURL = 'http://localhost/VapeShopSystem/'

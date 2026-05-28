@@ -24,8 +24,11 @@ if (! in_array($paymentMethod, ['cash_on_delivery', 'gcash'], true)) {
 }
 
 $gcashReference = trim((string) ($input['gcash_reference'] ?? ''));
-if ($paymentMethod === 'gcash' && ($gcashReference === '' || strlen($gcashReference) < 6)) {
-    json_response(false, 'Please enter a valid GCash reference number (at least 6 characters).', null, 400);
+if ($paymentMethod === 'gcash') {
+    $isSampleRef = strtoupper($gcashReference) === 'QWERTY';
+    if (! $isSampleRef && ! preg_match('/^\d{10,13}$/', $gcashReference)) {
+        json_response(false, 'Please enter a valid GCash reference number.', null, 400);
+    }
 }
 
 try {
@@ -60,7 +63,9 @@ try {
                     p.unit_price AS product_unit_price,
                     COALESCE(pv.price, p.selling_price, p.price) AS selling_price,
                     pv.flavor AS flavor_name,
-                    p.stock_qty, p.is_active
+                    COALESCE(pv.stock_qty, p.stock_qty) AS available_stock_qty,
+                    p.stock_qty,
+                    p.is_active
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id
              LEFT JOIN product_variants pv ON pv.id = ci.variant_id
@@ -72,7 +77,9 @@ try {
                     p.unit_price AS product_unit_price,
                     COALESCE(p.selling_price, p.price) AS selling_price,
                     NULL AS flavor_name,
-                    p.stock_qty, p.is_active
+                    p.stock_qty AS available_stock_qty,
+                    p.stock_qty,
+                    p.is_active
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id
              WHERE ci.cart_id = :cart_id'
@@ -91,7 +98,7 @@ try {
     $preparedLines = [];
     foreach ($cartItems as $item) {
         $qty = (int) ($item['quantity'] ?? 0);
-        $stock = (int) ($item['stock_qty'] ?? 0);
+        $stock = (int) ($item['available_stock_qty'] ?? 0);
         $active = (int) ($item['is_active'] ?? 0) === 1;
         $line = compute_mobile_order_line(
             $qty,
@@ -144,12 +151,12 @@ try {
     } else {
         $orderTitle = 'GCash Payment Order';
         $orderDescription = 'Customer order with GCash payment (mobile).';
-        $orderNotes = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639365879409;GCASH_REF:' . $gcashReference;
+        $orderNotes = 'PAYMENT_METHOD:GCASH;GCASH_NUMBER:+639850640073;GCASH_REF:' . $gcashReference;
         $payMethod = 'gcash';
-        $payStatus = 'paid';
-        $amountReceived = $computedTotal;
-        $changeAmount = 0.0;
-        $paidAt = date('Y-m-d H:i:s');
+        $payStatus = 'unpaid';
+        $amountReceived = null;
+        $changeAmount = null;
+        $paidAt = null;
     }
 
     $db->beginTransaction();
@@ -184,6 +191,14 @@ try {
         'UPDATE products SET stock_qty = stock_qty - :quantity_decrement, updated_at = :updated_at
          WHERE id = :product_id AND stock_qty >= :quantity_check'
     );
+    $variantStockUpdate = null;
+    if ($hasVariants) {
+        $variantStockUpdate = $db->prepare(
+            'UPDATE product_variants
+             SET stock_qty = stock_qty - :quantity_decrement, updated_at = :updated_at
+             WHERE id = :variant_id AND product_id = :product_id AND stock_qty >= :quantity_check'
+        );
+    }
 
     foreach ($preparedLines as $item) {
         $qty = (int) $item['quantity'];
@@ -216,6 +231,20 @@ try {
 
         if ($stockUpdate->rowCount() < 1) {
             throw new RuntimeException('Stock update failed during checkout.');
+        }
+
+        $variantId = isset($item['variant_id']) ? (int) $item['variant_id'] : 0;
+        if ($variantStockUpdate !== null && $variantId > 0) {
+            $variantStockUpdate->execute([
+                ':quantity_decrement' => $qty,
+                ':quantity_check' => $qty,
+                ':updated_at' => $now,
+                ':variant_id' => $variantId,
+                ':product_id' => $productId,
+            ]);
+            if ($variantStockUpdate->rowCount() < 1) {
+                throw new RuntimeException('Variant stock update failed during checkout.');
+            }
         }
     }
 
@@ -303,7 +332,7 @@ try {
 
     $successMessage = $paymentMethod === 'cash_on_delivery'
         ? 'Order placed successfully. COD payment is pending.'
-        : 'GCash payment recorded. Your order is marked as paid.';
+        : 'GCash payment submitted. Waiting for admin approval before rider assignment.';
 
     json_response(true, $successMessage, [
         'order_id' => $orderId,

@@ -102,6 +102,7 @@ $routes->post('/dashboard/submitDeliveryProof', 'Dashboard::submitDeliveryProof'
 $routes->post('/dashboard/updateRiderLocation', 'Dashboard::updateRiderLocation', ['filter' => 'auth:rider']);
 $routes->get('/dashboard/orderTracking/(:num)', 'Dashboard::orderTracking/$1', ['filter' => 'auth']);
 $routes->post('/dashboard/assignRiderToOrder', 'Dashboard::assignRiderToOrder', ['filter' => 'auth:admin']);
+$routes->post('/dashboard/approveOrderPayment', 'Dashboard::approveOrderPayment', ['filter' => 'auth:admin']);
 $routes->post('/dashboard/getDeliveryProof', 'Dashboard::getDeliveryProof', ['filter' => 'auth:admin']);
 $routes->get('/uploads/delivery_proofs/(:any)', 'Dashboard::serveDeliveryProof/$1');
 $routes->get('/uploads/return_evidence/(:any)', 'Dashboard::serveReturnEvidence/$1', ['filter' => 'auth']);

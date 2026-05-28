@@ -81,6 +81,7 @@ $buildProductLines = static function (array $categoryProducts) use ($reviewSumma
                 'charging_port' => null,
                 'compatibility' => null,
                 'flavors' => [],
+                'flavor_stocks' => [],
                 'nicotine_level' => '',
                 'expires_at' => null,
                 'review_summary' => [
@@ -141,6 +142,10 @@ $buildProductLines = static function (array $categoryProducts) use ($reviewSumma
 
         if ($flavorName !== '') {
             $lines[$lineKey]['flavors'][$flavorName] = $flavorName;
+            if (! isset($lines[$lineKey]['flavor_stocks'][$flavorName])) {
+                $lines[$lineKey]['flavor_stocks'][$flavorName] = 0;
+            }
+            $lines[$lineKey]['flavor_stocks'][$flavorName] += (int) ($product['stock_qty'] ?? 0);
         }
 
         $nicotineLevel = trim((string) ($product['nicotine_level'] ?? ''));
@@ -1412,6 +1417,14 @@ $defaultCategorySlug = $categoriesWithProducts !== []
                                                 $isActive = (bool) ($productLine['is_active'] ?? false);
                                                 $brandName = trim((string) ($productLine['brand'] ?? ''));
                                                 $flavors = array_values($productLine['flavors'] ?? []);
+                                                $flavorStocks = (array) ($productLine['flavor_stocks'] ?? []);
+                                                $flavorDisplayList = array_map(
+                                                    static function (string $flavorName) use ($flavorStocks): string {
+                                                        $stock = (int) ($flavorStocks[$flavorName] ?? 0);
+                                                        return $flavorName . ' (' . $stock . ' left)';
+                                                    },
+                                                    $flavors
+                                                );
                                                 $puffGroups = array_values($productLine['puffs'] ?? []);
                                                 $prices = array_values(array_unique(array_map(static fn ($price) => number_format((float) $price, 2, '.', ''), $productLine['prices'] ?? [])));
                                                 $unitPrices = array_values(array_unique(array_map(static fn ($price) => number_format((float) $price, 2, '.', ''), $productLine['unit_prices'] ?? [])));
@@ -1475,7 +1488,7 @@ $defaultCategorySlug = $categoriesWithProducts !== []
                                                                     class="flavor-toggle-btn"
                                                                     data-flavor-toggle
                                                                     data-flavor-count="<?= $flavorCount ?>"
-                                                                    data-flavors='<?= json_encode(array_values($flavors), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>'
+                                                                    data-flavors='<?= json_encode(array_values($flavorDisplayList), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>'
                                                                     data-product-name="<?= esc($productLine['name'] ?? 'Product') ?>"
                                                                     aria-haspopup="dialog"
                                                                 >

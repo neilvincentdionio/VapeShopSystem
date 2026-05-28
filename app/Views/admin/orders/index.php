@@ -1549,16 +1549,30 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 <div class="action-cell">
                                 <?php 
                                 $deliveryStatus = $order['delivery_status'] ?? 'to_pay';
-                                // Debug: Show actual status (remove this line after fixing)
-                                // echo "<small style='color:red;'>DEBUG: " . esc($deliveryStatus) . "</small><br>";
+                                $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
+                                $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
+                                $isGcashOrder = $paymentMethod === 'gcash';
+                                $needsPaymentApproval = $isGcashOrder && $paymentStatus !== 'paid';
                                 ?>
                                 <a class="action-btn btn-details" href="<?= site_url('admin/order-details/' . (int) $order['id']) ?>">
                                     <i class="fas fa-circle-info"></i> Order Details
                                 </a>
-                                <?php if (in_array($deliveryStatus, ['to_pay', 'to_ship', 'ready_for_pickup', 'accepted_by_rider'], true)): ?>
-                                    <button class="action-btn btn-checkout" onclick="assignRider(<?= (int) $order['id'] ?>, <?= (int) ($order['assigned_rider_id'] ?? 0) ?>)">
-                                        <i class="fas fa-motorcycle"></i> <?= in_array($deliveryStatus, ['to_pay', 'to_ship'], true) ? 'Assign Rider' : 'Reassign Rider' ?>
+                                <?php if ($needsPaymentApproval): ?>
+                                    <button class="action-btn btn-checkout" onclick="approvePayment(<?= (int) $order['id'] ?>)">
+                                        <i class="fas fa-check-circle"></i> Approve Payment
                                     </button>
+                                <?php endif; ?>
+                                <?php if (in_array($deliveryStatus, ['to_pay', 'to_ship', 'ready_for_pickup', 'accepted_by_rider'], true)): ?>
+                                    <?php if (! $needsPaymentApproval): ?>
+                                        <button
+                                            class="action-btn btn-checkout"
+                                            onclick="assignRider(<?= (int) $order['id'] ?>, <?= (int) ($order['assigned_rider_id'] ?? 0) ?>)"
+                                        >
+                                            <i class="fas fa-motorcycle"></i> <?= in_array($deliveryStatus, ['to_pay', 'to_ship'], true) ? 'Assign Rider' : 'Reassign Rider' ?>
+                                        </button>
+                                    <?php else: ?>
+                                        <div class="muted action-meta">Approve payment first before rider assignment.</div>
+                                    <?php endif; ?>
                                     <?php if (!empty($order['assigned_rider_name'])): ?>
                                         <div class="muted action-meta">Assigned: <?= esc($order['assigned_rider_name']) ?></div>
                                     <?php endif; ?>
@@ -1797,6 +1811,36 @@ function assignRider(orderId, currentRiderId = 0) {
     .catch(error => {
         console.error('Error:', error);
         alert('An error occurred while assigning rider');
+    });
+}
+
+function approvePayment(orderId) {
+    if (!confirm('Approve this GCash payment?')) {
+        return;
+    }
+
+    fetch('<?= site_url('dashboard/approveOrderPayment') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            order_id: orderId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Payment approved.');
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to approve payment.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while approving payment.');
     });
 }
 

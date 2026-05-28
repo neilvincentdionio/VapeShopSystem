@@ -33,7 +33,7 @@ $defaultAddressMode = ($hasSavedAddress && $hasSavedPin) ? 'saved_address' : 'ma
 
             <div class="checkout-field" id="popup_gcash_wrap" style="display:none;">
                 <div class="gcash-box">
-                    <strong>Pay to QuickPuff GCash:</strong> +63 9365879409
+                    <strong>Pay to QuickPuff GCash:</strong> +63 9850640073
                 </div>
                 <div class="gcash-qr-wrap">
                     <img id="popup_gcash_qr" class="gcash-qr" alt="QuickPuff GCash QR">
