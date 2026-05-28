@@ -552,7 +552,7 @@
                     </div>
 
                     <div class="form-help">
-                        Select Province, then City, then Barangay. Country is set to Philippines.
+                        Delivery areas are limited to South Cotabato: General Santos and Polomolok. Select Province, then City, then Barangay.
                     </div>
                 </section>
 
@@ -593,7 +593,18 @@
 
         // Address System Functionality
         (function() {
-            const addressData = GensanRegionAddress.getAddressData();
+            const sourceAddressData = GensanRegionAddress.getAddressData();
+            const allowedProvince = 'South Cotabato';
+            const allowedCities = ['General Santos City', 'Polomolok'];
+            const cityLabels = {
+                'General Santos City': 'General Santos'
+            };
+            const addressData = {
+                [allowedProvince]: allowedCities.reduce(function(cities, city) {
+                    cities[city] = sourceAddressData[allowedProvince][city] || [];
+                    return cities;
+                }, {})
+            };
             const cityPostalCodes = GensanRegionAddress.cityPostalCodes;
 
             function renderOptions(select, values, placeholder, selectedValue) {
@@ -609,7 +620,7 @@
                 values.forEach(function(value) {
                     const option = document.createElement('option');
                     option.value = value;
-                    option.textContent = value;
+                    option.textContent = cityLabels[value] || value;
                     if (selectedValue && selectedValue === value) {
                         option.selected = true;
                     }
@@ -622,9 +633,9 @@
                 if (provinceSelect) {
                     renderOptions(
                         provinceSelect,
-                        GensanRegionAddress.getProvinceNames(),
+                        [allowedProvince],
                         'Select Province',
-                        GensanRegionAddress.defaultProvince
+                        allowedProvince
                     );
                 }
             }

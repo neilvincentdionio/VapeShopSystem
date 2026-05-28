@@ -16,7 +16,7 @@ class App extends BaseConfig
      *
      * E.g., http://example.com/
      */
-    public string $baseURL = 'https://reaches-choose-anymore-richmond.trycloudflare.com/VapeShopSystem/';
+    public string $baseURL = 'https://disk-consist-contacts-consultant.trycloudflare.com/VapeShopSystem/';
     //public string $baseURL = 'http://localhost/VapeShopSystem/';
 
     /**

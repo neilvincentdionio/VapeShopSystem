@@ -12,6 +12,9 @@ use App\Libraries\NotificationService;
 
 class Auth extends BaseController
 {
+    private const REGISTRATION_ALLOWED_PROVINCE = 'South Cotabato';
+    private const REGISTRATION_ALLOWED_CITIES = ['General Santos City', 'Polomolok'];
+
     protected $userModel;
     protected $passwordResetModel;
     protected $loginAttemptModel;
@@ -691,6 +694,8 @@ class Auth extends BaseController
             $errors['city'] = 'City must not exceed 120 characters.';
         } elseif (! matches_safe_input($city, 'location')) {
             $errors['city'] = safe_input_messages()['location'];
+        } elseif (! in_array($city, self::REGISTRATION_ALLOWED_CITIES, true)) {
+            $errors['city'] = 'City / Municipality must be General Santos or Polomolok.';
         }
 
         if ($province === '') {
@@ -701,6 +706,8 @@ class Auth extends BaseController
             $errors['province'] = 'Province must not exceed 120 characters.';
         } elseif (! matches_safe_input($province, 'location')) {
             $errors['province'] = safe_input_messages()['location'];
+        } elseif ($province !== self::REGISTRATION_ALLOWED_PROVINCE) {
+            $errors['province'] = 'Province must be South Cotabato.';
         }
 
         if ($postalCode === '') {

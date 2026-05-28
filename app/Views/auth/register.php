@@ -527,7 +527,7 @@
                     </div>
 
                     <div class="form-help">
-                        Delivery areas near General Santos City only (South Cotabato, Sarangani, Sultan Kudarat). Select Province, then City, then Barangay.
+                        Delivery areas are limited to South Cotabato: General Santos and Polomolok. Select Province, then City, then Barangay.
                     </div>
 
                     <div class="map-panel">
@@ -578,7 +578,18 @@
 
         // Address System Functionality
         (function() {
-            const addressData = GensanRegionAddress.getAddressData();
+            const sourceAddressData = GensanRegionAddress.getAddressData();
+            const allowedProvince = 'South Cotabato';
+            const allowedCities = ['General Santos City', 'Polomolok'];
+            const cityLabels = {
+                'General Santos City': 'General Santos'
+            };
+            const addressData = {
+                [allowedProvince]: allowedCities.reduce(function(cities, city) {
+                    cities[city] = sourceAddressData[allowedProvince][city] || [];
+                    return cities;
+                }, {})
+            };
             const cityPostalCodes = GensanRegionAddress.cityPostalCodes;
 
             function renderOptions(select, values, placeholder, selectedValue) {
@@ -594,7 +605,7 @@
                 values.forEach(function(value) {
                     const option = document.createElement('option');
                     option.value = value;
-                    option.textContent = value;
+                    option.textContent = cityLabels[value] || value;
                     if (selectedValue && selectedValue === value) {
                         option.selected = true;
                     }
@@ -677,11 +688,7 @@
                 }
 
                 if (!bestValue) {
-                    const extra = document.createElement('option');
-                    extra.value = targetValue;
-                    extra.textContent = targetValue;
-                    selectEl.appendChild(extra);
-                    bestValue = targetValue;
+                    return false;
                 }
 
                 selectEl.value = bestValue;
@@ -773,8 +780,8 @@
                     const citySelect = document.getElementById('city');
                     const barangaySelect = document.getElementById('barangay');
 
-                    if (province && provinceSelect) {
-                        setSelectValueWithFallback(provinceSelect, province);
+                    if (provinceSelect) {
+                        setSelectValueWithFallback(provinceSelect, allowedProvince);
                         provinceSelect.dispatchEvent(new Event('change'));
                     }
                     if (city && citySelect) {
@@ -809,9 +816,9 @@
                 if (provinceSelect) {
                     renderOptions(
                         provinceSelect,
-                        GensanRegionAddress.getProvinceNames(),
+                        [allowedProvince],
                         'Select Province',
-                        GensanRegionAddress.defaultProvince
+                        allowedProvince
                     );
                 }
             }

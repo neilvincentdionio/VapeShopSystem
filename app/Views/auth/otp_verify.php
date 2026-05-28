@@ -13,7 +13,6 @@
         .alert { padding:10px 12px; border-radius:10px; margin:0 0 12px; font-size:14px; }
         .alert-success { background:#d4edda; border:1px solid #c3e6cb; color:#155724; }
         .alert-error { background:#f8d7da; border:1px solid #f5c6cb; color:#721c24; }
-        .alert-warn { background:#fff3cd; border:1px solid #ffeeba; color:#856404; }
         label { display:block; font-size:14px; margin:10px 0 6px; }
         input { width:100%; padding:12px; font-size:18px; letter-spacing:6px; text-align:center; border:1px solid #ddd; border-radius:10px; }
         button { width:100%; margin-top:12px; padding:12px; border-radius:10px; border:0; cursor:pointer; font-size:15px; }
@@ -23,7 +22,6 @@
         .row { display:flex; gap:10px; margin-top:10px; }
         .row form { flex:1; }
         .small { font-size:12px; color:#666; margin-top:10px; }
-        code { background:#f3f3f3; padding:2px 6px; border-radius:6px; }
     </style>
 </head>
 <body>
@@ -44,13 +42,6 @@
 
         <?php if (session()->getFlashdata('error')): ?>
             <div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
-        <?php endif; ?>
-
-        <?php if (session()->get('otp_debug')): ?>
-            <div class="alert alert-warn">
-                <?= session()->get('otp_email_error') ? 'Email delivery failed. For testing, use this OTP:' : 'Testing OTP:' ?>
-                <strong><code><?= esc(session()->get('otp_debug') ?? '') ?></code></strong>
-            </div>
         <?php endif; ?>
 
         <form action="<?= site_url('otp/verify') ?>" method="post">

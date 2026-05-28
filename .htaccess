@@ -29,7 +29,8 @@ Options +FollowSymLinks
     RewriteRule ^ %1 [L,R=301]
 
     # Handle Front Controller
-    # Serve APK downloads from /public/downloads without exposing /public in URL.
+    # Serve public assets/downloads without exposing /public in URL.
+    RewriteRule ^assets/(.+)$ public/assets/$1 [L,NC]
     RewriteRule ^downloads/(.+)$ public/downloads/$1 [L,NC]
 
     # Handle Front Controller and preserve normalized URI path.

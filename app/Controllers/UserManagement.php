@@ -9,6 +9,9 @@ use App\Libraries\NotificationService;
 
 class UserManagement extends BaseController
 {
+    private const USER_CREATE_ALLOWED_PROVINCE = 'South Cotabato';
+    private const USER_CREATE_ALLOWED_CITIES = ['General Santos City', 'Polomolok'];
+
     protected $userModel;
     protected $session;
     protected $activityLogger;
@@ -261,7 +264,9 @@ class UserManagement extends BaseController
             'name' => 'required|min_length[3]|max_length[255]|safe_person_name',
             'email' => 'required|valid_email|is_unique[users.email]',
             'password' => 'required|min_length[8]',
-            'role' => 'required'
+            'role' => 'required',
+            'province' => 'required|in_list[' . self::USER_CREATE_ALLOWED_PROVINCE . ']',
+            'city' => 'required|in_list[' . implode(',', self::USER_CREATE_ALLOWED_CITIES) . ']',
         ];
 
         if (!$this->validate($rules)) {

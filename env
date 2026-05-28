@@ -6,7 +6,7 @@
 CI_ENVIRONMENT = development
 
 # Active server base URL
-app.baseURL = 'https://reaches-choose-anymore-richmond.trycloudflare.com/VapeShopSystem/'
+app.baseURL = 'https://disk-consist-contacts-consultant.trycloudflare.com/VapeShopSystem/'
 
 # If you switch back to local (XAMPP), use:
 # app.baseURL = 'http://localhost/VapeShopSystem/'
@@ -24,7 +24,7 @@ database.default.port = 3306
 
 # Gmail App Password (Google Account → Security → 2-Step Verification → App passwords)
 GMAIL_SMTP_USER=diosalibrado@gmail.com
-GMAIL_SMTP_PASS=xytssmtvanohdpkb
+GMAIL_SMTP_PASS=vdiufvwanvdezsjx
 GMAIL_FROM_NAME="VapeShop System"
 
 # AUTH_OTP_TTL_SECONDS = 300
