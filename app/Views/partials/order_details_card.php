@@ -120,7 +120,7 @@ $mapId = (string) ($map_element_id ?? 'order_details_map');
             <div class="delivery-tracker">
                 <h3>
                     <i class="fas <?= $isReturnFlow ? 'fa-undo' : 'fa-map-marked-alt' ?>"></i>
-                    <?= $isReturnFlow ? 'Return / Refund Progress' : 'Delivery Progress' ?>
+                    <?= $isReturnFlow ? 'Return / Refund Status' : 'Order Delivery Status' ?>
                 </h3>
                 <div class="tracker-progress">
                     <?php

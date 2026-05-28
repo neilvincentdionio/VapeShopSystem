@@ -18,7 +18,8 @@ $deliveryStatus = (string) ($order['delivery_status'] ?? '');
 $isReturnFlow = function_exists('is_return_refund_status') && is_return_refund_status($deliveryStatus);
 ?>
 
-<div class="container order-details-page">
+<div class="container orders-page">
+    <div class="module-shell">
     <div class="order-details-shell order-details-shell--admin">
         <?= view('partials/order_details_styles') ?>
 
@@ -46,6 +47,7 @@ $isReturnFlow = function_exists('is_return_refund_status') && is_return_refund_s
                 <a href="<?= site_url('orders') ?>" class="btn-checkout btn-action">Back to Orders</a>
             </div>
         <?php endif; ?>
+    </div>
     </div>
 </div>
 
@@ -90,30 +92,215 @@ function updateDeliveryStatus(orderId, newStatus) {
 <?php endif; ?>
 
 <style>
-.order-details-page {
-    max-width: none;
-    margin-left: 270px;
-    width: calc(100% - 270px);
-    padding: 1.5rem;
-    min-height: 100vh;
-    background: #f6f8fb;
-    box-sizing: border-box;
+.orders-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 2.5rem;
+    width: 100%;
 }
 
 .order-details-shell--admin {
     max-width: none;
     padding: 0;
+    gap: 0;
+}
+
+.orders-page .module-shell {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.order-details-shell--admin .orders-header {
+    border: 0;
+    border-bottom: 1px solid #eef0f2;
+    border-radius: 0;
+    box-shadow: none;
+    background: linear-gradient(135deg, #f8f9fa, #ffffff);
+    padding: 1.25rem 1.5rem;
+}
+
+.order-details-shell--admin .back-link {
+    color: #00bcd4;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.order-details-shell--admin .back-link:hover {
+    color: #0097a7;
+}
+
+.order-details-shell--admin .orders-header h1 {
+    color: #1f2937;
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+
+.order-details-shell--admin .orders-header p {
+    color: #666;
+    font-size: 0.92rem;
+}
+
+.order-details-shell--admin .order-detail-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.order-details-shell--admin .order-header {
+    background: #fff;
+    border-bottom: 1px solid #eef0f2;
+}
+
+.order-details-shell--admin .order-info h2 {
+    color: #00bcd4;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.order-details-shell--admin .order-info p,
+.order-details-shell--admin .item-details,
+.order-details-shell--admin .stage-description {
+    color: #6b7280;
+    font-size: 0.82rem;
+}
+
+.order-details-shell--admin .order-total {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+}
+
+.order-details-shell--admin .order-total h3 {
+    color: #666;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.order-details-shell--admin .total-amount {
+    font-size: 1.8rem;
+    color: #111827;
+}
+
+.order-details-shell--admin .order-header,
+.order-details-shell--admin .tracking-info,
+.order-details-shell--admin .shipping-info,
+.order-details-shell--admin .delivery-proof-section,
+.order-details-shell--admin .delivery-tracker,
+.order-details-shell--admin .order-items,
+.order-details-shell--admin .order-summary,
+.order-details-shell--admin .order-details-actions {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+.order-details-shell--admin .tracking-info h3,
+.order-details-shell--admin .shipping-info h3,
+.order-details-shell--admin .delivery-proof-section h3,
+.order-details-shell--admin .delivery-tracker h3,
+.order-details-shell--admin .order-items h3,
+.order-details-shell--admin .order-summary h3,
+.order-details-shell--admin .order-details-actions h3 {
+    font-size: 1.02rem;
+    color: #1f2937;
+}
+
+.order-details-shell--admin .tracker-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.72rem;
+}
+
+.order-details-shell--admin .tracker-line {
+    margin-top: 14px;
+}
+
+.order-details-shell--admin .stage-name {
+    font-size: 0.75rem;
+}
+
+.order-details-shell--admin .stage-description {
+    font-size: 0.68rem;
+}
+
+.order-details-shell--admin .order-item {
+    padding: 0.8rem 0;
+}
+
+.order-details-shell--admin .item-name,
+.order-details-shell--admin .item-price {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.order-details-shell--admin .summary-row {
+    font-size: 0.9rem;
+}
+
+.order-details-shell--admin .summary-row.total {
+    font-size: 1rem;
 }
 
 .order-details-shell--admin .order-details-actions {
     margin-top: 0;
-    border-radius: 0 0 12px 12px;
+    border-radius: 0;
+}
+
+.order-details-shell--admin .order-status {
+    font-size: 0.66rem;
+    padding: 0.32rem 0.62rem;
+}
+
+.order-details-shell--admin .status-to-pay,
+.order-details-shell--admin .status-to_pay {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.order-details-shell--admin .status-to-ship,
+.order-details-shell--admin .status-to_ship,
+.order-details-shell--admin .status-ready-for-pickup,
+.order-details-shell--admin .status-ready_for_pickup,
+.order-details-shell--admin .status-accepted-by-rider,
+.order-details-shell--admin .status-accepted_by_rider,
+.order-details-shell--admin .status-delivered-to-rider,
+.order-details-shell--admin .status-delivered_to_rider,
+.order-details-shell--admin .status-to-receive,
+.order-details-shell--admin .status-to_receive,
+.order-details-shell--admin .status-delivered {
+    background: rgba(0, 188, 212, 0.12);
+    color: #0c5460;
+}
+
+.order-details-shell--admin .status-completed {
+    background: #e8f5e8;
+    color: #2e7d2e;
+}
+
+.order-details-shell--admin .status-cancelled,
+.order-details-shell--admin .status-failed-delivery,
+.order-details-shell--admin .status-failed_delivery {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.order-details-shell--admin .btn-checkout,
+.order-details-shell--admin .btn-action {
+    font-size: 0.85rem;
+    border-radius: 8px;
+    padding: 0.55rem 0.95rem;
+}
+
+.order-details-shell--admin #order_details_map {
+    border-color: #e0e0e0;
+    border-radius: 8px;
 }
 
 @media (max-width: 992px) {
-    .order-details-page {
-        margin-left: 0;
-        width: 100%;
+    .orders-page {
         padding: 1rem;
     }
 }

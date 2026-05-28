@@ -752,6 +752,17 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
             color: #666;
             margin-bottom: 0.25rem;
         }
+
+        .item-main-line {
+            color: #1f2937;
+            font-weight: 600;
+        }
+
+        .item-flavor-line {
+            font-size: 0.72rem;
+            color: #047857;
+            margin-top: 0.12rem;
+        }
         
         .more-items {
             color: #00bcd4;
@@ -1442,8 +1453,19 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                     <?php if (!empty($order['items'])): ?>
                                         <?php $itemCount = count($order['items']); ?>
                                         <?php for ($i = 0; $i < min(2, $itemCount); $i++): ?>
+                                            <?php
+                                                $rawItemName = (string) ($order['items'][$i]['name'] ?? '');
+                                                $itemNameParts = explode(' - ', $rawItemName, 2);
+                                                $itemBaseName = trim((string) ($itemNameParts[0] ?? $rawItemName));
+                                                $itemFlavor = trim((string) ($itemNameParts[1] ?? ''));
+                                            ?>
                                             <div class="item-preview">
-                                                <?= esc($order['items'][$i]['name']) ?> &times; <?= (int) $order['items'][$i]['qty'] ?>
+                                                <div class="item-main-line">
+                                                    <?= esc($itemBaseName) ?> &times; <?= (int) $order['items'][$i]['qty'] ?>
+                                                </div>
+                                                <div class="item-flavor-line">
+                                                    Flavor: <?= esc($itemFlavor !== '' ? $itemFlavor : 'Not specified') ?>
+                                                </div>
                                             </div>
                                         <?php endfor; ?>
                                         <?php if ($itemCount > 2): ?>

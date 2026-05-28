@@ -38,13 +38,50 @@ try {
          ORDER BY o.id DESC'
     );
     $ordersStmt->execute([':customer_id' => $userId]);
+    $orderRows = $ordersStmt->fetchAll();
+
+    $orderIds = [];
+    foreach ($orderRows as $row) {
+        if (is_array($row)) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $orderIds[] = $id;
+            }
+        }
+    }
+    $orderIds = array_values(array_unique($orderIds));
+
+    $reviewedOrderMap = [];
+    if ($orderIds !== []) {
+        $placeholders = [];
+        $bind = [':user_id' => $userId];
+        foreach ($orderIds as $index => $orderIdValue) {
+            $key = ':order_' . $index;
+            $placeholders[] = $key;
+            $bind[$key] = $orderIdValue;
+        }
+        $reviewSql = 'SELECT DISTINCT order_id FROM product_reviews WHERE user_id = :user_id AND order_id IN (' . implode(',', $placeholders) . ')';
+        $reviewStmt = $db->prepare($reviewSql);
+        $reviewStmt->execute($bind);
+        foreach ($reviewStmt->fetchAll() as $reviewRow) {
+            if (! is_array($reviewRow)) {
+                continue;
+            }
+            $reviewOrderId = (int) ($reviewRow['order_id'] ?? 0);
+            if ($reviewOrderId > 0) {
+                $reviewedOrderMap[$reviewOrderId] = true;
+            }
+        }
+    }
 
     $result = [];
-    foreach ($ordersStmt->fetchAll() as $order) {
+    foreach ($orderRows as $order) {
         if (! is_array($order)) {
             continue;
         }
         $formatted = mobile_format_order_row($order, true, $db);
+        $currentOrderId = (int) ($formatted['order_id'] ?? 0);
+        $formatted['review_submitted'] = isset($reviewedOrderMap[$currentOrderId]);
         $addr = (string) ($formatted['shipment']['shipping_address'] ?? '');
         if ($addr !== '') {
             $parts = array_map('trim', explode(',', $addr));

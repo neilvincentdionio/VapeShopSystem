@@ -91,9 +91,11 @@ function mobile_format_notification_row(array $row, string $role): array
 {
     $createdAt = (string) ($row['created_at'] ?? '');
     $type = strtolower((string) ($row['type'] ?? ''));
+    $category = strtolower((string) ($row['category'] ?? ''));
     $link = (string) ($row['link'] ?? '');
     $relatedId = (int) ($row['related_id'] ?? 0);
-    $target = mobile_notification_mobile_target($link, $type, $role, $relatedId);
+    $relatedType = strtolower((string) ($row['related_type'] ?? ''));
+    $target = mobile_notification_mobile_target($link, $type, $role, $relatedId, $relatedType, $category);
 
     return [
         'id' => (int) ($row['id'] ?? 0),
@@ -113,13 +115,31 @@ function mobile_format_notification_row(array $row, string $role): array
 /**
  * @return array{target: string, order_id: int}
  */
-function mobile_notification_mobile_target(string $link, string $type, string $role, int $relatedId): array
-{
+function mobile_notification_mobile_target(
+    string $link,
+    string $type,
+    string $role,
+    int $relatedId,
+    string $relatedType = '',
+    string $category = ''
+): array {
     $orderId = $relatedId;
     if (preg_match('#/order-details/(\d+)#i', $link, $m) === 1) {
         $orderId = (int) $m[1];
+    } elseif (preg_match('#/customer/order-details/(\d+)#i', $link, $m) === 1) {
+        $orderId = (int) $m[1];
+    } elseif (preg_match('#/admin/order-details/(\d+)#i', $link, $m) === 1) {
+        $orderId = (int) $m[1];
+    } elseif (preg_match('#/rider/order-details/(\d+)#i', $link, $m) === 1) {
+        $orderId = (int) $m[1];
     } elseif (preg_match('#[?&]order_id=(\d+)#i', $link, $m) === 1) {
         $orderId = (int) $m[1];
+    }
+
+    if ($relatedType === 'order' || mobile_is_order_notification($type, $category)) {
+        if ($orderId <= 0) {
+            $orderId = $relatedId;
+        }
     }
 
     if ($role === 'rider') {
@@ -129,7 +149,7 @@ function mobile_notification_mobile_target(string $link, string $type, string $r
         if (str_contains($link, '/rider/deliveries') || $type === 'rider_assigned') {
             return ['target' => 'deliveries', 'order_id' => $orderId];
         }
-        if (str_contains($link, '/rider/messages')) {
+        if (str_contains($link, '/rider/messages') || $relatedType === 'conversation' || $category === 'messages') {
             return ['target' => 'messages', 'order_id' => 0];
         }
         if ($orderId > 0) {
@@ -140,13 +160,48 @@ function mobile_notification_mobile_target(string $link, string $type, string $r
     }
 
     if ($role === 'customer') {
-        if (str_contains($link, '/customer/messages')) {
+        if (str_contains($link, '/customer/messages') || $relatedType === 'conversation' || $category === 'messages') {
             return ['target' => 'messages', 'order_id' => 0];
+        }
+        if (str_contains($link, '/customer/orders') || $category === 'orders') {
+            return ['target' => 'orders', 'order_id' => $orderId];
+        }
+        if ($relatedType === 'user' || str_starts_with($type, 'account_')) {
+            return ['target' => 'profile', 'order_id' => 0];
         }
         if ($orderId > 0) {
             return ['target' => 'order_detail', 'order_id' => $orderId];
         }
+        if (str_starts_with($type, 'review_')) {
+            return ['target' => 'orders', 'order_id' => 0];
+        }
     }
 
     return ['target' => 'none', 'order_id' => $orderId];
+}
+
+function mobile_is_order_notification(string $type, string $category): bool
+{
+    if (in_array($category, ['orders', 'payments', 'delivery', 'cancellations'], true)) {
+        return true;
+    }
+
+    return in_array($type, [
+        'approval',
+        'cancellation',
+        'delivery_accepted',
+        'delivery_cancelled',
+        'delivery_info',
+        'delivery_status',
+        'new_order',
+        'order_cancelled',
+        'order_created',
+        'order_handed_to_rider',
+        'order_picked_up',
+        'order_received',
+        'order_status',
+        'out_for_delivery',
+        'payment_received',
+        'rider_assigned',
+    ], true);
 }

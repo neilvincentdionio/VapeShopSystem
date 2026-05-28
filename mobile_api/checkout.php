@@ -59,6 +59,7 @@ try {
             'SELECT ci.id, ci.product_id, ci.variant_id, ci.quantity, p.name AS product_name,
                     p.unit_price AS product_unit_price,
                     COALESCE(pv.price, p.selling_price, p.price) AS selling_price,
+                    pv.flavor AS flavor_name,
                     p.stock_qty, p.is_active
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id
@@ -70,6 +71,7 @@ try {
             'SELECT ci.id, ci.product_id, ci.quantity, p.name AS product_name,
                     p.unit_price AS product_unit_price,
                     COALESCE(p.selling_price, p.price) AS selling_price,
+                    NULL AS flavor_name,
                     p.stock_qty, p.is_active
              FROM cart_items ci
              INNER JOIN products p ON p.id = ci.product_id
@@ -187,11 +189,15 @@ try {
         $qty = (int) $item['quantity'];
         $productId = (int) $item['product_id'];
         $productName = (string) $item['product_name'];
+        $flavorName = trim((string) ($item['flavor_name'] ?? ''));
+        $lineProductName = $flavorName !== ''
+            ? $productName . ' - ' . $flavorName
+            : $productName;
 
         $itemInsert->execute([
             ':order_id' => $orderId,
             ':product_id' => $productId,
-            ':product_name' => $productName,
+            ':product_name' => $lineProductName,
             ':quantity' => $qty,
             ':unit_price' => (float) $item['unit_price'],
             ':selling_price' => (float) $item['selling_price'],
@@ -291,6 +297,9 @@ try {
             'source' => 'mobile_api',
         ]
     );
+
+    require_once __DIR__ . '/notify_order.php';
+    mobile_notify_order_placed($userId, $orderId, $reference, $paymentMethod);
 
     $successMessage = $paymentMethod === 'cash_on_delivery'
         ? 'Order placed successfully. COD payment is pending.'

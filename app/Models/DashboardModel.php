@@ -572,11 +572,26 @@ class DashboardModel extends Model
         $rows = $builder->get()->getResultArray();
 
         foreach ($rows as $row) {
-            $name = trim((string) ($row['product_name'] ?? 'Product'));
-            if (strlen($name) > 42) {
-                $name = substr($name, 0, 39) . '...';
+            $rawName = trim((string) ($row['product_name'] ?? 'Product'));
+            $productName = $rawName;
+            $flavorName = 'Not specified';
+
+            // Stored order item names now follow "PRODUCT - FLAVOR" for flavored items.
+            if ($rawName !== '' && str_contains($rawName, ' - ')) {
+                $parts = explode(' - ', $rawName, 2);
+                $productName = trim((string) ($parts[0] ?? $rawName));
+                $parsedFlavor = trim((string) ($parts[1] ?? ''));
+                if ($parsedFlavor !== '') {
+                    $flavorName = $parsedFlavor;
+                }
             }
-            $labels[] = $name !== '' ? $name : 'Product';
+
+            $label = ($productName !== '' ? $productName : 'Product') . ' (Flavor: ' . $flavorName . ')';
+            if (strlen($label) > 60) {
+                $label = substr($label, 0, 57) . '...';
+            }
+
+            $labels[] = $label;
             $quantities[] = (int) ($row['sold_qty'] ?? 0);
         }
 

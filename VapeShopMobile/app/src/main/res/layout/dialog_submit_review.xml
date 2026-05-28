@@ -24,10 +24,16 @@
 
     <RatingBar
         android:id="@+id/review_rating_bar"
-        style="?android:attr/ratingBarStyleSmall"
+        style="?android:attr/ratingBarStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
+        android:isIndicator="false"
+        android:clickable="true"
+        android:focusable="true"
+        android:progressTint="#FFC107"
+        android:secondaryProgressTint="#FFE082"
+        android:progressBackgroundTint="#E5E7EB"
         android:numStars="5"
         android:rating="5"
         android:stepSize="1.0" />

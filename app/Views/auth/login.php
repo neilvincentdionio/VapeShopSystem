@@ -98,6 +98,27 @@
         .register-link a { color: #27c56f; text-decoration: none; font-size: 1.15rem; font-weight: 600; }
         .validation-errors { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 0.75rem; border-radius: 5px; margin-bottom: 1rem; font-size: 0.9rem; }
         .validation-errors ul { margin-left: 1.5rem; }
+        .apk-download-wrap {
+            margin-top: 1rem;
+            text-align: center;
+        }
+        .apk-download-btn {
+            display: inline-block;
+            width: 100%;
+            padding: 0.85rem;
+            border-radius: 10px;
+            border: 1px solid #1f6feb;
+            color: #1f6feb;
+            text-decoration: none;
+            font-size: 1.03rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            background: #f7fbff;
+        }
+        .apk-download-btn:hover {
+            background: #1f6feb;
+            color: #ffffff;
+        }
         @media (max-width: 900px) {
             .book-login { min-height: auto; font-size: 1rem; }
             .book-page { padding: 1.75rem; }
@@ -119,7 +140,14 @@
     <div class="book-login">
         <aside class="book-page book-page-left">
             <div class="brand-wrap">
-                <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo">
+                <img
+                    src="<?= base_url('public/QuickPuff_logo3.png?v=20260528') ?>"
+                    alt="QuickPuff VapeShop"
+                    class="brand-logo"
+                    decoding="async"
+                    fetchpriority="high"
+                    onerror="if(!this.dataset.fallbackStep){this.dataset.fallbackStep='1';this.src='<?= base_url('public/QuickPuff_logo2.png?v=20260528') ?>';return;}this.onerror=null;this.src='<?= base_url('public/assets/img/quickpuff-logo-green.png?v=20260528') ?>';"
+                >
             </div>
             <div class="book-spine-mark"></div>
         </aside>
@@ -170,6 +198,11 @@
 
                 <div class="forgot-password"><a href="<?= site_url('forgot-password') ?>">Forgot your password?</a></div>
                 <div class="register-link"><a href="<?= site_url('register') ?>">Create a customer account</a></div>
+                <div class="apk-download-wrap">
+                    <a class="apk-download-btn" href="<?= base_url('downloads/QuickPuffMobile.apk') ?>" download>
+                        Download Mobile App (APK)
+                    </a>
+                </div>
             </div>
         </section>
     </div>

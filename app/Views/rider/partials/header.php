@@ -52,14 +52,15 @@
             gap: .5rem;
             white-space: nowrap;
             flex: 0 0 auto;
+            min-height: 64px;
         }
 
         .brand-logo-image {
-            height: 62px;
+            height: 58px;
+            max-height: 100%;
             width: auto;
             display: block;
-            transform: scale(1.6);
-            transform-origin: left center;
+            object-fit: contain;
         }
 
         .nav-links {
@@ -162,8 +163,7 @@
             max-width: 1700px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
-            font-size: 0.86rem;
-            zoom: 0.82;
+            font-size: 0.95rem;
         }
 
         .panel {
@@ -174,16 +174,46 @@
         }
 
         @media (max-width: 768px) {
-            .navbar { padding: .85rem .95rem; }
-            .navbar-content { flex-direction: column; align-items: stretch; gap: .65rem; }
-            .brand { flex: 0 0 auto; justify-content: center; }
+            .navbar { padding: .68rem .75rem; }
+            .navbar-content { flex-direction: column; align-items: stretch; gap: .55rem; }
+            .brand { flex: 0 0 auto; justify-content: center; min-height: 52px; }
             .brand-logo-image {
-                height: 54px;
-                transform: scale(1.28);
+                height: 46px;
             }
-            .nav-links { justify-content: flex-start; }
-            .nav-right { flex: 0 0 auto; justify-content: space-between; }
-            .container { padding: 1.5rem .95rem; }
+            .nav-links {
+                justify-content: flex-start;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                padding-bottom: .2rem;
+                gap: .42rem;
+            }
+            .nav-links a {
+                flex: 0 0 auto;
+                white-space: nowrap;
+                font-size: .82rem;
+                padding: .4rem .72rem;
+            }
+            .nav-right {
+                flex: 0 0 auto;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: .5rem;
+            }
+            .user-chip {
+                max-width: 100%;
+                font-size: .8rem;
+                padding: .28rem .52rem;
+            }
+            .btn-logout {
+                font-size: .82rem;
+                padding: .4rem .72rem;
+            }
+            .container {
+                padding: 1rem .75rem;
+                font-size: .92rem;
+            }
         }
     </style>
 </head>
@@ -191,7 +221,13 @@
     <nav class="navbar">
         <div class="navbar-content">
             <a href="<?= site_url('rider/dashboard') ?>" class="brand">
-                <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff Vape Shop" class="brand-logo-image">
+                <img
+                    src="<?= base_url('public/QuickPuff_logo3.png?v=20260528') ?>"
+                    alt="QuickPuff Vape Shop"
+                    class="brand-logo-image"
+                    decoding="async"
+                    onerror="if(!this.dataset.fallbackStep){this.dataset.fallbackStep='1';this.src='<?= base_url('public/QuickPuff_logo2.png?v=20260528') ?>';return;}this.onerror=null;this.src='<?= base_url('public/assets/img/quickpuff-logo-green.png?v=20260528') ?>';"
+                >
             </a>
 
             <div class="nav-links">

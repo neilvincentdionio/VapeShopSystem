@@ -108,8 +108,8 @@
             margin-bottom: 1rem;
         }
         .section-subtitle strong { color: var(--accent); }
-        .chart-wrap { position: relative; height: 280px; }
-        .chart-wrap.tall { height: 320px; }
+        .chart-wrap { position: relative; height: 240px; }
+        .chart-wrap.tall { height: 260px; }
 
         .dashboard-split {
             display: grid;
@@ -380,8 +380,8 @@
                             borderColor: '#27c56f',
                             backgroundColor: 'rgba(39, 197, 111, 0.15)',
                             fill: true,
-                            tension: 0.35,
-                            pointRadius: 4,
+                            tension: 0,
+                            pointRadius: 3,
                             pointBackgroundColor: '#27c56f'
                         }]
                     },
@@ -390,7 +390,7 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: pesoTooltip } } },
                         scales: {
-                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.04)' } },
                             x: { grid: { display: false } }
                         }
                     }
@@ -409,7 +409,7 @@
                             backgroundColor: 'rgba(103, 58, 183, 0.75)',
                             borderColor: '#673ab7',
                             borderWidth: 1,
-                            borderRadius: 8,
+                            borderRadius: 6,
                             maxBarThickness: 40
                         }]
                     },
@@ -418,7 +418,7 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: pesoTooltip } } },
                         scales: {
-                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                            y: { beginAtZero: true, ticks: { callback: pesoTick }, grid: { color: 'rgba(0,0,0,0.04)' } },
                             x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } } }
                         }
                     }
@@ -437,7 +437,7 @@
                             backgroundColor: 'rgba(255, 152, 0, 0.75)',
                             borderColor: '#ff9800',
                             borderWidth: 1,
-                            borderRadius: 8
+                            borderRadius: 6
                         }]
                     },
                     options: {
@@ -446,8 +446,8 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } },
-                            y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                            x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' } },
+                            y: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 10 } } }
                         }
                     }
                 });

@@ -40,6 +40,35 @@ function mobile_get_or_create_conversation(PDO $db, int $customerId): array
     ];
 }
 
+function mobile_get_rider_conversation(
+    PDO $db,
+    int $riderId,
+    int $conversationId = 0,
+    int $orderId = 0,
+    string $orderReference = ''
+): ?array {
+    $query = 'SELECT c.* FROM message_conversations c LEFT JOIN orders o ON o.id = c.order_id WHERE c.assigned_rider_id = :rider_id';
+    $params = [':rider_id' => $riderId];
+
+    if ($conversationId > 0) {
+        $query .= ' AND c.id = :conversation_id';
+        $params[':conversation_id'] = $conversationId;
+    } elseif ($orderId > 0) {
+        $query .= ' AND c.order_id = :order_id';
+        $params[':order_id'] = $orderId;
+    } elseif (trim($orderReference) !== '') {
+        $query .= ' AND o.reference_number = :order_reference';
+        $params[':order_reference'] = trim($orderReference);
+    }
+
+    $query .= ' ORDER BY c.last_message_at DESC, c.updated_at DESC, c.id DESC LIMIT 1';
+    $stmt = $db->prepare($query);
+    $stmt->execute($params);
+    $row = $stmt->fetch();
+
+    return is_array($row) ? $row : null;
+}
+
 function mobile_customer_owns_order(PDO $db, int $customerId, int $orderId): bool
 {
     if ($orderId <= 0) {
@@ -142,6 +171,95 @@ function mobile_escalate_conversation(PDO $db, int $conversationId, ?int $orderI
             ':updated_at' => $now,
             ':id' => $conversationId,
         ]);
+    }
+}
+
+/**
+ * @return list<int>
+ */
+function mobile_get_admin_user_ids(PDO $db): array
+{
+    $stmt = $db->query(
+        "SELECT id FROM users WHERE role IN ('admin','staff') AND is_active = 1"
+    );
+    if ($stmt === false) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($stmt->fetchAll() as $row) {
+        if (! is_array($row)) {
+            continue;
+        }
+        $id = (int) ($row['id'] ?? 0);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
+function mobile_notify_chat_users(PDO $db, int $conversationId, array $userIds, string $message): void
+{
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)));
+    if ($conversationId <= 0 || $userIds === []) {
+        return;
+    }
+
+    $now = date('Y-m-d H:i:s');
+    $stmt = $db->prepare(
+        'INSERT INTO chat_notifications (conversation_id, user_id, message, is_read, created_at, updated_at)
+         VALUES (:conversation_id, :user_id, :message, 0, :created_at, :updated_at)'
+    );
+
+    foreach ($userIds as $userId) {
+        $stmt->execute([
+            ':conversation_id' => $conversationId,
+            ':user_id' => $userId,
+            ':message' => function_exists('mb_substr') ? mb_substr($message, 0, 255) : substr($message, 0, 255),
+            ':created_at' => $now,
+            ':updated_at' => $now,
+        ]);
+    }
+}
+
+function mobile_notify_admin_bell(int $conversationId, string $title, string $message): void
+{
+    if ($conversationId <= 0) {
+        return;
+    }
+
+    try {
+        mobile_ci_bootstrap();
+        $notificationService = new \App\Libraries\NotificationService();
+        $notificationService->notifyAdmins([
+            'category' => 'messages',
+            'type' => 'support_escalated',
+            'title' => $title,
+            'message' => $message,
+            'link' => site_url('admin/messages/' . $conversationId),
+            'related_type' => 'conversation',
+            'related_id' => $conversationId,
+        ]);
+    } catch (Throwable $e) {
+        error_log('mobile_notify_admin_bell failed: ' . $e->getMessage());
+    }
+}
+
+function mobile_notify_users_bell(array $userIds, array $payload): void
+{
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)));
+    if ($userIds === []) {
+        return;
+    }
+
+    try {
+        mobile_ci_bootstrap();
+        $notificationService = new \App\Libraries\NotificationService();
+        $notificationService->notifyUsers($userIds, $payload);
+    } catch (Throwable $e) {
+        error_log('mobile_notify_users_bell failed: ' . $e->getMessage());
     }
 }
 
@@ -288,6 +406,45 @@ function mobile_count_unread_staff_messages(PDO $db, int $conversationId): int
     return is_array($row) ? (int) ($row['unread_count'] ?? 0) : 0;
 }
 
+function mobile_count_unread_for_rider(PDO $db, int $conversationId): int
+{
+    if ($conversationId <= 0) {
+        return 0;
+    }
+
+    $stmt = $db->prepare(
+        'SELECT COUNT(*) AS unread_count
+         FROM conversation_messages
+         WHERE conversation_id = :conversation_id
+           AND sender_role IN (\'admin\', \'customer\')
+           AND is_read = 0'
+    );
+    $stmt->execute([':conversation_id' => $conversationId]);
+    $row = $stmt->fetch();
+
+    return is_array($row) ? (int) ($row['unread_count'] ?? 0) : 0;
+}
+
+function mobile_count_unread_for_rider_total(PDO $db, int $riderId): int
+{
+    if ($riderId <= 0) {
+        return 0;
+    }
+
+    $stmt = $db->prepare(
+        'SELECT COUNT(*) AS unread_count
+         FROM conversation_messages m
+         INNER JOIN message_conversations c ON c.id = m.conversation_id
+         WHERE c.assigned_rider_id = :rider_id
+           AND m.sender_role IN (\'admin\', \'customer\')
+           AND m.is_read = 0'
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    $row = $stmt->fetch();
+
+    return is_array($row) ? (int) ($row['unread_count'] ?? 0) : 0;
+}
+
 function mobile_mark_staff_messages_read(PDO $db, int $conversationId): void
 {
     $now = date('Y-m-d H:i:s');
@@ -296,6 +453,23 @@ function mobile_mark_staff_messages_read(PDO $db, int $conversationId): void
          SET is_read = 1, read_at = :read_at, updated_at = :updated_at
          WHERE conversation_id = :conversation_id
            AND sender_role IN (\'admin\', \'rider\', \'chatbot\')
+           AND is_read = 0'
+    );
+    $stmt->execute([
+        ':read_at' => $now,
+        ':updated_at' => $now,
+        ':conversation_id' => $conversationId,
+    ]);
+}
+
+function mobile_mark_rider_messages_read(PDO $db, int $conversationId): void
+{
+    $now = date('Y-m-d H:i:s');
+    $stmt = $db->prepare(
+        'UPDATE conversation_messages
+         SET is_read = 1, read_at = :read_at, updated_at = :updated_at
+         WHERE conversation_id = :conversation_id
+           AND sender_role IN (\'admin\', \'customer\')
            AND is_read = 0'
     );
     $stmt->execute([

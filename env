@@ -1,0 +1,32 @@
+#--------------------------------------------------------------------
+# VapeShop System — local environment
+# Fill in GMAIL_SMTP_USER and GMAIL_SMTP_PASS for real OTP emails.
+#--------------------------------------------------------------------
+
+CI_ENVIRONMENT = development
+
+# Active server base URL
+app.baseURL = 'https://interesting-production-selling-elder.trycloudflare.com/VapeShopSystem/'
+
+# If you switch back to local (XAMPP), use:
+# app.baseURL = 'http://localhost/VapeShopSystem/'
+# If deployed on a server/subdomain, replace with your live URL:
+# app.baseURL = 'https://your-domain.com/'
+# If hosted in a subfolder on server, use:
+# app.baseURL = 'https://your-domain.com/vapeshopsystem/'
+
+database.default.hostname = localhost
+database.default.database = vapeshop_db
+database.default.username = root
+database.default.password =
+database.default.DBDriver = MySQLi
+database.default.port = 3306
+
+# Gmail App Password (Google Account → Security → 2-Step Verification → App passwords)
+GMAIL_SMTP_USER=diosalibrado@gmail.com
+GMAIL_SMTP_PASS=xytssmtvanohdpkb
+GMAIL_FROM_NAME="VapeShop System"
+
+# AUTH_OTP_TTL_SECONDS = 300
+# AUTH_OTP_MAX_ATTEMPTS = 3
+# AUTH_OTP_RESEND_COOLDOWN_SECONDS = 60

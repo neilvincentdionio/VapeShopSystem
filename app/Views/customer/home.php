@@ -96,6 +96,16 @@
         opacity: .95;
         font-weight: 500;
     }
+    .promo-btn.secondary-download {
+        border-color: #1f6feb;
+        color: #1f6feb;
+        background: #f7fbff;
+    }
+    .promo-btn.secondary-download:hover {
+        background: #1f6feb;
+        border-color: #1f6feb;
+        color: #ffffff;
+    }
 
     @media (max-width: 768px) {
         .promo-hero { min-height: 380px; }
@@ -113,6 +123,7 @@
         <div class="promo-actions">
             <a href="<?= site_url('customer/products') ?>" class="promo-btn primary">Shop Now</a>
             <a href="<?= site_url('customer/products') ?>" class="promo-btn">Find More</a>
+            <a href="<?= base_url('downloads/QuickPuffMobile.apk') ?>" class="promo-btn secondary-download" download>Download APK</a>
         </div>
         <div class="promo-footnote">Quality vape devices and premium e-liquids.</div>
     </div>

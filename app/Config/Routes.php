@@ -9,6 +9,13 @@ use CodeIgniter\Router\RouteCollection;
 // Redirect root to login
 $routes->get('/', 'Auth::login');
 
+// Compatibility aliases for prefixed URLs (ex: /vapeshopsystem/*).
+// Keep one source-of-truth in the main routes below.
+$routes->get('vapeshopsystem', static fn () => redirect()->to('/login'));
+$routes->get('vapeshopsystem/(:any)', static fn ($path) => redirect()->to('/' . ltrim($path, '/')));
+$routes->get('VapeShopSystem', static fn () => redirect()->to('/login'));
+$routes->get('VapeShopSystem/(:any)', static fn ($path) => redirect()->to('/' . ltrim($path, '/')));
+
 // Authentication routes
 $routes->get('/login', 'Auth::login');
 $routes->get('/register', 'Auth::register');

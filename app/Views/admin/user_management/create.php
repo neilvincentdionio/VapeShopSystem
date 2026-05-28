@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -560,7 +560,7 @@
             </form>
 
             <div class="back-link">
-                <a href="<?= site_url('user-management') ?>">← Back to User Management</a>
+                <a href="<?= site_url('user-management') ?>">â† Back to User Management</a>
             </div>
                 </main>
             </div>
@@ -568,6 +568,7 @@
     </div>
 
     <script src="<?= base_url('assets/js/safe-input.js') ?>"></script>
+    <script src="<?= base_url('assets/js/gensan-region-address-data.js') ?>"></script>
     <script>
         setTimeout(function () {
             const successAlert = document.querySelector('.alert-success');
@@ -592,138 +593,8 @@
 
         // Address System Functionality
         (function() {
-            const addressData = {
-                'Agusan del Norte': { 'Butuan City': [], 'Cabadbaran City': [] },
-                'Agusan del Sur': { 'Bayugan City': [] },
-                'Basilan': { 'Isabela City': [], 'Lamitan City': [] },
-                'Bukidnon': { 'Malaybalay City': [], 'Valencia City': [] },
-                'Camiguin': {
-                    'Catarman': [], 'Guinsiliban': [], 'Mahinog': [], 'Mambajao': [], 'Sagay': []
-                },
-                'Cotabato': { 'Kidapawan City': [] },
-                'Davao de Oro': {
-                    'Compostela': [], 'Laak': [], 'Mabini': [], 'Maco': [], 'Maragusan': [], 'Mawab': [],
-                    'Monkayo': [], 'Montevista': [], 'Nabunturan': [], 'New Bataan': [], 'Pantukan': []
-                },
-                'Davao del Norte': { 'Panabo City': [], 'Samal City': [], 'Tagum City': [] },
-                'Davao del Sur': { 'Davao City': [], 'Digos City': [] },
-                'Davao Occidental': {
-                    'Don Marcelino': [], 'Jose Abad Santos': [], 'Malita': [], 'Santa Maria': [], 'Sarangani': []
-                },
-                'Davao Oriental': { 'Mati City': [] },
-                'Dinagat Islands': {
-                    'Basilisa': [], 'Cagdianao': [], 'Dinagat': [], 'Libjo': [], 'Loreto': [],
-                    'San Jose': [], 'Tubajon': []
-                },
-                'Lanao del Norte': { 'Iligan City': [] },
-                'Lanao del Sur': { 'Marawi City': [] },
-                'Maguindanao del Norte': {
-                    'Barira': [], 'Buldon': [], 'Datu Blah Sinsuat': [], 'Datu Odin Sinsuat': [],
-                    'Kabuntalan': [], 'Matanog': [], 'Northern Kabuntalan': [], 'Parang': [], 'Sultan Kudarat': []
-                },
-                'Maguindanao del Sur': {
-                    'Ampatuan': [], 'Buluan': [], 'Datu Abdullah Sangki': [], 'Datu Anggal Midtimbang': [],
-                    'Datu Hoffer Ampatuan': [], 'Datu Paglas': [], 'Datu Piang': [], 'Datu Salibo': [],
-                    'Datu Saudi-Ampatuan': [], 'General S.K. Pendatun': [], 'Guindulungan': [], 'Mamasapano': [],
-                    'Mangudadatu': [], 'Pagalungan': [], 'Paglat': [], 'Pandag': [], 'Rajah Buayan': [],
-                    'Shariff Aguak': [], 'Shariff Saydona Mustapha': [], 'South Upi': [], 'Sultan sa Barongis': [],
-                    'Talayan': []
-                },
-                'Misamis Occidental': { 'Oroquieta City': [], 'Ozamiz City': [], 'Tangub City': [] },
-                'Misamis Oriental': { 'Cagayan de Oro City': [], 'El Salvador City': [], 'Gingoog City': [] },
-                'Sarangani': {
-                    'Alabel': [], 'Glan': [], 'Kiamba': [], 'Maasim': [], 'Maitum': [], 'Malapatan': [], 'Malungon': []
-                },
-                'South Cotabato': { 'General Santos City': [], 'Koronadal City': [] },
-                'Sultan Kudarat': { 'Tacurong City': [] },
-                'Sulu': {
-                    'Banguingui': [], 'Hadji Panglima Tahil': [], 'Indanan': [], 'Jolo': [], 'Kalingalan Caluang': [],
-                    'Lugus': [], 'Luuk': [], 'Maimbung': [], 'Old Panamao': [], 'Omar': [], 'Pandami': [],
-                    'Panglima Estino': [], 'Pangutaran': [], 'Parang': [], 'Pata': [], 'Patikul': [],
-                    'Siasi': [], 'Talipao': [], 'Tapul': []
-                },
-                'Surigao del Norte': { 'Surigao City': [] },
-                'Surigao del Sur': { 'Bislig City': [], 'Tandag City': [] },
-                'Tawi-Tawi': {
-                    'Bongao': [], 'Languyan': [], 'Mapun': [], 'Panglima Sugala': [], 'Sapa-Sapa': [],
-                    'Sibutu': [], 'Simunul': [], 'Sitangkai': [], 'South Ubian': [], 'Tandubas': [], 'Turtle Islands': []
-                },
-                'Zamboanga del Norte': { 'Dapitan City': [], 'Dipolog City': [] },
-                'Zamboanga del Sur': { 'Pagadian City': [], 'Zamboanga City': [] },
-                'Zamboanga Sibugay': {
-                    'Alicia': [], 'Buug': [], 'Diplahan': [], 'Imelda': [], 'Ipil': [], 'Kabasalan': [],
-                    'Mabuhay': [], 'Malangas': [], 'Naga': [], 'Olutanga': [], 'Payao': [], 'Roseller Lim': [],
-                    'Siay': [], 'Talusan': [], 'Titay': [], 'Tungawan': []
-                }
-            };
-
-            const defaultBarangayList = [
-                'Poblacion', 'Barangay 1', 'Barangay 2', 'Barangay 3', 'Barangay 4',
-                'Barangay 5', 'Barangay 6', 'Barangay 7', 'Barangay 8', 'Barangay 9', 'Barangay 10'
-            ];
-
-            const cityBarangayOverrides = {
-                'General Santos City': [
-                    'Apopong', 'Baluan', 'Bawing', 'Buayan', 'Bula', 'Calumpang', 'City Heights',
-                    'Conel', 'Dadiangas East', 'Dadiangas North', 'Dadiangas South', 'Dadiangas West',
-                    'Fatima', 'Katangawan', 'Labangal', 'Lagao', 'Ligaya', 'Mabuhay', 'Olympog',
-                    'San Isidro', 'San Jose', 'Siguel', 'Sinawal', 'Tambler', 'Tinagacan', 'Upper Labay'
-                ],
-                'Davao City': ['Buhangin', 'Calinan', 'Matina', 'Poblacion', 'Talomo', 'Tugbok'],
-                'Cagayan de Oro City': ['Balulang', 'Bugo', 'Carmen', 'Gusa', 'Kauswagan', 'Lapasan', 'Macabalan', 'Nazareth'],
-                'Zamboanga City': ['Ayala', 'Baliwasan', 'Canelar', 'Divisoria', 'Guiwan', 'Pasonanca', 'Putik', 'Tetuan'],
-                'Butuan City': ['Agao', 'Ambago', 'Ampayon', 'Baan', 'Bancasi', 'Dumalagan', 'Lemon', 'Maon'],
-                'Iligan City': ['Bagong Silang', 'Hinaplanon', 'Pala-o', 'Poblacion', 'San Miguel', 'Saray', 'Tambacan'],
-                'Koronadal City': ['Avancena', 'Cacub', 'Caloocan', 'Carpenter Hill', 'Concepcion', 'General Paulino Santos', 'Mabini'],
-                'Kidapawan City': ['Amas', 'Balabag', 'Binoligan', 'Lanao', 'Magsaysay', 'Nuangan', 'Perez'],
-                'Marawi City': ['Banggolo', 'Basak Malutlut', 'Datu sa Dansalan', 'Lilod Madaya', 'Marinaut', 'Poblacion'],
-                'Surigao City': ['Anomar', 'Canlanipa', 'Luna', 'Mabua', 'Nabago', 'Punta Bilar']
-            };
-
-            const cityPostalCodes = {
-                'Butuan City': '8600',
-                'Cabadbaran City': '8605',
-                'Bayugan City': '8502',
-                'Isabela City': '7300',
-                'Lamitan City': '7302',
-                'Malaybalay City': '8700',
-                'Valencia City': '8709',
-                'Kidapawan City': '9400',
-                'Panabo City': '8105',
-                'Samal City': '8119',
-                'Tagum City': '8100',
-                'Davao City': '8000',
-                'Digos City': '8002',
-                'Mati City': '8200',
-                'Iligan City': '9200',
-                'Marawi City': '9700',
-                'Oroquieta City': '7207',
-                'Ozamiz City': '7200',
-                'Tangub City': '7214',
-                'Cagayan de Oro City': '9000',
-                'El Salvador City': '9017',
-                'Gingoog City': '9014',
-                'Alabel': '9501',
-                'Glan': '9517',
-                'Kiamba': '9514',
-                'Maasim': '9502',
-                'Maitum': '9515',
-                'Malapatan': '9516',
-                'Malungon': '9503',
-                'General Santos City': '9500',
-                'Koronadal City': '9506',
-                'Tacurong City': '9800',
-                'Surigao City': '8400',
-                'Bislig City': '8311',
-                'Tandag City': '8300',
-                'Dapitan City': '7101',
-                'Dipolog City': '7100',
-                'Pagadian City': '7016',
-                'Zamboanga City': '7000',
-                'Ipil': '7001',
-                'Jolo': '7400',
-                'Bongao': '7500'
-            };
+            const addressData = GensanRegionAddress.getAddressData();
+            const cityPostalCodes = GensanRegionAddress.cityPostalCodes;
 
             function renderOptions(select, values, placeholder, selectedValue) {
                 if (!select) {
@@ -749,7 +620,12 @@
             function loadProvinces() {
                 const provinceSelect = document.getElementById('province');
                 if (provinceSelect) {
-                    renderOptions(provinceSelect, ['South Cotabato'], 'Select Province', 'South Cotabato');
+                    renderOptions(
+                        provinceSelect,
+                        GensanRegionAddress.getProvinceNames(),
+                        'Select Province',
+                        GensanRegionAddress.defaultProvince
+                    );
                 }
             }
 
@@ -768,11 +644,8 @@
                 const province = provinceSelect ? provinceSelect.value : '';
                 const city = citySelect ? citySelect.value : '';
                 let barangays = [];
-                if (province && city && addressData[province] && Object.prototype.hasOwnProperty.call(addressData[province], city)) {
-                    barangays = cityBarangayOverrides[city] || addressData[province][city] || [];
-                    if (!Array.isArray(barangays) || barangays.length === 0) {
-                        barangays = defaultBarangayList;
-                    }
+                if (province && city && addressData[province] && addressData[province][city]) {
+                    barangays = addressData[province][city];
                 }
                 renderOptions(barangaySelect, barangays, 'Select Barangay', selected || '<?= esc(old('barangay')) ?>');
             }

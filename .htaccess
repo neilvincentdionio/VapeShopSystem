@@ -10,9 +10,18 @@ Options +FollowSymLinks
     php_value error_reporting E_ALL
 </IfModule>
 
+# Ensure Android APK files are served with the correct MIME type.
+<IfModule mod_mime.c>
+    AddType application/vnd.android.package-archive .apk
+</IfModule>
+
 # URL rewriting for pretty URLs
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Normalize "/vapeshopsystem/*" internally so existing routes are reused.
+    RewriteRule ^vapeshopsystem$ login [L,NC]
+    RewriteRule ^vapeshopsystem/(.*)$ $1 [L,NC]
 
     # Redirect Trailing Slashes If Not A Folder
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -20,9 +29,13 @@ Options +FollowSymLinks
     RewriteRule ^ %1 [L,R=301]
 
     # Handle Front Controller
+    # Serve APK downloads from /public/downloads without exposing /public in URL.
+    RewriteRule ^downloads/(.+)$ public/downloads/$1 [L,NC]
+
+    # Handle Front Controller and preserve normalized URI path.
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
+    RewriteRule ^([\s\S]*)$ index.php/$1 [L,NC,QSA]
 </IfModule>
 
 <IfModule !mod_rewrite.c>

@@ -503,6 +503,7 @@
                             <th>Role</th>
                             <th>Status</th>
                             <th>Approval</th>
+                            <th>Verification ID</th>
                             <th>Last Login</th>
                             <th>Actions</th>
                         </tr>
@@ -531,6 +532,21 @@
                                     </span>
                                 </td>
                                 <td>
+                                    <?php if (($user['role'] ?? '') === 'customer' && !empty($user['verification_id_path'])): ?>
+                                        <a href="<?= site_url('user-management/verification-id/' . $user['id']) ?>"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="btn btn-view"
+                                           style="padding:.35rem .65rem;font-size:.8rem;">
+                                            View ID
+                                        </a>
+                                    <?php elseif (($user['role'] ?? '') === 'customer'): ?>
+                                        <span style="color:#9CA3AF;font-size:.85rem;">Not uploaded</span>
+                                    <?php else: ?>
+                                        <span style="color:#9CA3AF;font-size:.85rem;">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
                                     <?= $user['last_login'] ? date('M d, Y', strtotime($user['last_login'])) : 'Never' ?>
                                 </td>
                                 <td>
@@ -538,11 +554,11 @@
                                         <?php if ($user['role'] === 'customer'): ?>
                                             <a href="<?= site_url('user-management/view/' . $user['id']) ?>" 
                                                class="btn btn-view">
-                                                View
+                                                Review
                                             </a>
                                         <?php endif; ?>
                                         <?php if ($user['role'] === 'customer' && $approvalStatus === 'pending'): ?>
-                                            <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post">
+                                            <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post" onsubmit="return confirm('Approve this customer account?');">
                                                 <?= csrf_field() ?>
                                                 <button type="submit" class="btn btn-approve">Approve</button>
                                             </form>

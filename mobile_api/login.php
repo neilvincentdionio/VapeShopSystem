@@ -23,7 +23,7 @@ try {
     }
 
     if (isset($user['approval_status']) && (string) $user['approval_status'] !== 'approved') {
-        json_response(false, 'Account is not approved yet.', null, 403);
+        json_response(false, 'Your account is pending admin approval. Please wait for approval before logging in.', null, 403);
     }
 
     if (!password_verify($password, (string) ($user['password'] ?? ''))) {

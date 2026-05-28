@@ -39,37 +39,37 @@
                     <h4 class="text-white text-center mb-4">VapeShop Admin</h4>
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/dashboard">
+                            <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
                                 <i class="fas fa-tachometer-alt"></i> Dashboard
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/session-logs">
+                            <a class="nav-link" href="<?= site_url('admin/session-logs') ?>">
                                 <i class="fas fa-users"></i> Session Logs
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/activity-logs">
+                            <a class="nav-link" href="<?= site_url('admin/activity-logs') ?>">
                                 <i class="fas fa-list"></i> Activity Logs
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/user-management">
+                            <a class="nav-link" href="<?= site_url('user-management') ?>">
                                 <i class="fas fa-user-cog"></i> User Management
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/products">
+                            <a class="nav-link" href="<?= site_url('products') ?>">
                                 <i class="fas fa-box"></i> Products
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/orders">
+                            <a class="nav-link" href="<?= site_url('orders') ?>">
                                 <i class="fas fa-shopping-cart"></i> Orders
                             </a>
                         </li>
                         <li class="nav-item mt-3">
-                            <a class="nav-link text-danger" href="/auth/logout">
+                            <a class="nav-link text-danger" href="<?= site_url('auth/logout') ?>">
                                 <i class="fas fa-sign-out-alt"></i> Logout
                             </a>
                         </li>

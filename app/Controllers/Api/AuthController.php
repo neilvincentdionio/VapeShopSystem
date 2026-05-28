@@ -43,8 +43,8 @@ class AuthController extends BaseApiController
             'email' => $email,
             'password' => $password,
             'role' => 'customer',
-            'approval_status' => 'approved',
-            'is_active' => 1,
+            'approval_status' => 'pending',
+            'is_active' => 0,
         ]);
 
         if (!$userId) {

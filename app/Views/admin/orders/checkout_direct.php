@@ -185,11 +185,11 @@
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="/dashboard" class="nav-brand">Quick Puff Vape Shop</a>
+            <a href="<?= site_url('dashboard') ?>" class="nav-brand">Quick Puff Vape Shop</a>
             <div class="nav-links">
-                <a href="/dashboard" class="nav-link">Dashboard</a>
-                <a href="/orders" class="nav-link">Orders</a>
-                <a href="/dashboard" class="nav-link">Back</a>
+                <a href="<?= site_url('dashboard') ?>" class="nav-link">Dashboard</a>
+                <a href="<?= site_url('orders') ?>" class="nav-link">Orders</a>
+                <a href="<?= site_url('dashboard') ?>" class="nav-link">Back</a>
             </div>
         </div>
     </nav>

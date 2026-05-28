@@ -4,9 +4,13 @@ import android.annotation.SuppressLint;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.CancellationSignal;
+import android.provider.Settings;
 import android.net.Uri;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
@@ -93,6 +97,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -121,14 +127,17 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USER_ROLE = "user_role";
     private static final String KEY_USER_ID = "user_id";
     private static final String[] API_BASE_URLS = {
+        // Public tunnel URL (works for Android phones outside local network)
+        "https://interesting-production-selling-elder.trycloudflare.com/VapeShopSystem/mobile_api/",
         // Physical device via USB + adb reverse (run: adb reverse tcp:8080 tcp:80)
         "http://127.0.0.1:8080/VapeShopSystem/mobile_api/",
+        // Localhost fallback (if reverse is mapped directly to port 80)
+        "http://127.0.0.1/VapeShopSystem/mobile_api/",
         // Android Studio emulator
         "http://10.0.2.2/VapeShopSystem/mobile_api/",
         // Genymotion emulator
         "http://10.0.3.2/VapeShopSystem/mobile_api/",
-        // This PC LAN IPv4(s) for physical device on same network/hotspot
-        "http://192.168.137.94/VapeShopSystem/mobile_api/",
+        // Update this LAN host to your current PC IPv4 for Wi-Fi testing
         "http://192.168.1.72/VapeShopSystem/mobile_api/"
     };
     private boolean isLoggedIn = false;
@@ -145,6 +154,31 @@ public class MainActivity extends AppCompatActivity {
     private EditText pendingReturnQrManualInput = null;
     private int riderLocationOrderId = 0;
     private static final long RIDER_LOCATION_PUSH_MS = 20000L;
+    private CheckoutLocationParams pendingCheckoutLocationParams;
+    private boolean suppressCheckoutSpinnerCallbacks = false;
+    private final Executor checkoutLocationExecutor = Executors.newSingleThreadExecutor();
+    private final ActivityResultLauncher<String[]> checkoutLocationPermissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+            boolean fine = Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_FINE_LOCATION));
+            boolean coarse = Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_COARSE_LOCATION));
+            if ((fine || coarse) && pendingCheckoutLocationParams != null) {
+                CheckoutLocationParams params = pendingCheckoutLocationParams;
+                pendingCheckoutLocationParams = null;
+                startCheckoutLocationFetch(params);
+                return;
+            }
+            if (pendingCheckoutLocationParams != null && pendingCheckoutLocationParams.mapStatus != null) {
+                pendingCheckoutLocationParams.mapStatus.setText(
+                    "Location permission denied. Enable it in Settings, then try again."
+                );
+            }
+            pendingCheckoutLocationParams = null;
+            Toast.makeText(
+                MainActivity.this,
+                "Allow location access to autofill your delivery address.",
+                Toast.LENGTH_LONG
+            ).show();
+        });
     private final ActivityResultLauncher<String> returnQrCameraPermissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
             if (Boolean.TRUE.equals(granted)) {
@@ -1183,10 +1217,18 @@ public class MainActivity extends AppCompatActivity {
         String city,
         String barangay,
         String postalCode,
+        String province,
+        String country,
         double deliveryLatitude,
         double deliveryLongitude,
+        Uri verificationIdUri,
         SimpleCallback callback
     ) {
+        if (verificationIdUri == null) {
+            callback.onError("Please upload your verification ID.");
+            return;
+        }
+
         Map<String, String> params = new HashMap<>();
         params.put("full_name", fullName);
         params.put("email", email);
@@ -1196,35 +1238,25 @@ public class MainActivity extends AppCompatActivity {
         params.put("city", city);
         params.put("barangay", barangay);
         params.put("postal_code", postalCode);
-        params.put("province", "South Cotabato");
-        params.put("country", "Philippines");
+        params.put("province", province == null || province.trim().isEmpty() ? "South Cotabato" : province.trim());
+        params.put("country", country == null || country.trim().isEmpty() ? "Philippines" : country.trim());
         params.put("delivery_latitude", String.format(Locale.US, "%.6f", deliveryLatitude));
         params.put("delivery_longitude", String.format(Locale.US, "%.6f", deliveryLongitude));
 
-        apiPost("register.php", params, new SimpleCallback() {
+        List<Uri> idFiles = Collections.singletonList(verificationIdUri);
+        apiPostMultipart("register.php", params, idFiles, "verification_id_image", new SimpleCallback() {
             @Override
             public void onSuccess(String responseBody) {
                 try {
                     JSONObject root = new JSONObject(responseBody);
                     if (!root.optBoolean("success", false)) {
-                        callback.onError(root.optString("message", "Account already exists"));
+                        callback.onError(root.optString("message", "Registration failed"));
                         return;
                     }
-                    saveAccountLocally(
-                        fullName,
-                        email,
-                        password,
-                        phone,
-                        street,
-                        city,
-                        barangay,
-                        postalCode,
-                        "South Cotabato",
-                        "Philippines",
-                        deliveryLatitude,
-                        deliveryLongitude
-                    );
-                    callback.onSuccess(root.optString("message", "Account created"));
+                    callback.onSuccess(root.optString(
+                        "message",
+                        "Your account was submitted and is pending admin approval."
+                    ));
                 } catch (Exception e) {
                     callback.onError("Invalid server response");
                 }
@@ -1402,7 +1434,9 @@ public class MainActivity extends AppCompatActivity {
         final double[] deliveryLng = {getRegisteredLongitude()};
 
         setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned, null);
-        btnCurrentLocation.setOnClickListener(v -> fetchCheckoutCurrentLocation(
+        Button btnAddressLocation = dialogView.findViewById(R.id.btn_edit_address_use_location);
+        wireUseCurrentLocationButton(
+            btnCurrentLocation,
             mapWebView,
             deliveryLat,
             deliveryLng,
@@ -1413,7 +1447,20 @@ public class MainActivity extends AppCompatActivity {
             citySpinner,
             barangaySpinner,
             postalInput
-        ));
+        );
+        wireUseCurrentLocationButton(
+            btnAddressLocation,
+            mapWebView,
+            deliveryLat,
+            deliveryLng,
+            mapPinned,
+            mapStatus,
+            streetInput,
+            provinceSpinner,
+            citySpinner,
+            barangaySpinner,
+            postalInput
+        );
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         int dialogHeight = (int) (metrics.heightPixels * 0.92f);
         dialogView.setLayoutParams(new ViewGroup.LayoutParams(
@@ -1891,11 +1938,15 @@ public class MainActivity extends AppCompatActivity {
         return details.toString();
     }
 
-    private static final int REQ_CHECKOUT_LOCATION = 9021;
     private static final String GCASH_MERCHANT_NUMBER = "+639365879409";
     private static final String GCASH_MERCHANT_NAME = "QuickPuff VapeShop";
     private final Map<String, List<String>> checkoutProvinceCityMap = new HashMap<>();
     private final Map<String, List<String>> checkoutCityBarangayMap = new HashMap<>();
+    private final Map<String, String> checkoutCityPostalMap = new HashMap<>();
+    private static final List<String> CHECKOUT_DEFAULT_BARANGAYS = Arrays.asList(
+        "Poblacion", "Barangay 1", "Barangay 2", "Barangay 3", "Barangay 4",
+        "Barangay 5", "Barangay 6", "Barangay 7", "Barangay 8", "Barangay 9", "Barangay 10"
+    );
 
     private interface OnMapLocationListener {
         void onLocationPicked(double latitude, double longitude);
@@ -2035,7 +2086,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        btnCurrentLocation.setOnClickListener(v -> fetchCheckoutCurrentLocation(
+        Button btnAddressLocation = dialogView.findViewById(R.id.btn_checkout_use_location_address);
+        wireUseCurrentLocationButton(
+            btnCurrentLocation,
             mapWebView,
             deliveryLat,
             deliveryLng,
@@ -2046,7 +2099,20 @@ public class MainActivity extends AppCompatActivity {
             citySpinner,
             barangaySpinner,
             postalInput
-        ));
+        );
+        wireUseCurrentLocationButton(
+            btnAddressLocation,
+            mapWebView,
+            deliveryLat,
+            deliveryLng,
+            mapPinned,
+            mapStatus,
+            streetInput,
+            provinceSpinner,
+            citySpinner,
+            barangaySpinner,
+            postalInput
+        );
 
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Checkout")
@@ -2165,15 +2231,68 @@ public class MainActivity extends AppCompatActivity {
             == PackageManager.PERMISSION_GRANTED;
     }
 
-    private void requestCheckoutLocationPermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            new String[]{
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            },
-            REQ_CHECKOUT_LOCATION
-        );
+    private void requestCheckoutLocationPermission(CheckoutLocationParams params) {
+        pendingCheckoutLocationParams = params;
+        checkoutLocationPermissionLauncher.launch(new String[]{
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        });
+    }
+
+    private boolean isDeviceLocationEnabled() {
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager == null) {
+            return false;
+        }
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+    }
+
+    private void promptEnableDeviceLocation() {
+        try {
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        } catch (Exception e) {
+            Toast.makeText(this, "Turn on Location (GPS) in your phone settings.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private static class CheckoutLocationParams {
+        WebView mapWebView;
+        double[] deliveryLat;
+        double[] deliveryLng;
+        boolean[] mapPinned;
+        TextView mapStatus;
+        EditText streetInput;
+        Spinner provinceSpinner;
+        Spinner citySpinner;
+        Spinner barangaySpinner;
+        EditText postalInput;
+    }
+
+    private Location getBestLastKnownLocation(LocationManager locationManager) {
+        if (locationManager == null) {
+            return null;
+        }
+        Location best = null;
+        for (String provider : new String[]{
+            LocationManager.FUSED_PROVIDER,
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        }) {
+            try {
+                Location candidate = locationManager.getLastKnownLocation(provider);
+                if (candidate == null) {
+                    continue;
+                }
+                if (best == null || candidate.getTime() > best.getTime()) {
+                    best = candidate;
+                }
+            } catch (Exception ignored) {
+                // try next provider
+            }
+        }
+        return best;
     }
 
     private void styleCheckoutAddressTab(TextView enterTab, TextView savedTab, boolean enterSelected) {
@@ -2238,14 +2357,154 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void applyCheckoutMapPin(WebView mapWebView, double lat, double lng) {
-        if (mapWebView == null) {
-            return;
+        syncMapLocation(mapWebView, lat, lng, 17);
+        if (mapWebView != null) {
+            mainHandler.postDelayed(() -> syncMapLocation(mapWebView, lat, lng, 17), 450);
+            mainHandler.postDelayed(() -> syncMapLocation(mapWebView, lat, lng, 17), 1200);
         }
-        String js = String.format(Locale.US, "setLocation(%.6f,%.6f,17)", lat, lng);
-        mapWebView.evaluateJavascript(js, null);
+    }
+
+    private void applyCheckoutGpsResult(CheckoutLocationParams params) {
+        params.deliveryLat[0] = lastCheckoutGpsLat;
+        params.deliveryLng[0] = lastCheckoutGpsLng;
+        params.mapPinned[0] = true;
+        applyCheckoutMapPin(params.mapWebView, params.deliveryLat[0], params.deliveryLng[0]);
+        reverseGeocodeCheckoutAddress(
+            params.deliveryLat[0],
+            params.deliveryLng[0],
+            params.streetInput,
+            params.provinceSpinner,
+            params.citySpinner,
+            params.barangaySpinner,
+            params.postalInput,
+            params.mapStatus
+        );
     }
 
     @SuppressLint("MissingPermission")
+    private void startCheckoutLocationFetch(CheckoutLocationParams params) {
+        if (params.mapStatus != null) {
+            params.mapStatus.setText("Getting your current location...");
+        }
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager == null) {
+            if (params.mapStatus != null) {
+                params.mapStatus.setText("Location service unavailable.");
+            }
+            return;
+        }
+
+        Runnable applyLocation = () -> applyCheckoutGpsResult(params);
+
+        final boolean[] resolved = {false};
+        Runnable finishWithLastKnown = () -> {
+            if (resolved[0]) {
+                return;
+            }
+            Location fallback = getBestLastKnownLocation(locationManager);
+            if (fallback != null) {
+                resolved[0] = true;
+                lastCheckoutGpsLat = fallback.getLatitude();
+                lastCheckoutGpsLng = fallback.getLongitude();
+                mainHandler.post(applyLocation);
+                return;
+            }
+            if (params.mapStatus != null) {
+                params.mapStatus.setText("Unable to get GPS. Turn on Location, go outdoors briefly, or pin on the map.");
+            }
+            Toast.makeText(
+                this,
+                "Could not detect GPS. Enable Location in settings or pin on the map.",
+                Toast.LENGTH_LONG
+            ).show();
+        };
+
+        Runnable requestLegacyUpdates = () -> {
+            final LocationListener[] listenerHolder = new LocationListener[1];
+            listenerHolder[0] = new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    if (resolved[0] || location == null) {
+                        return;
+                    }
+                    resolved[0] = true;
+                    locationManager.removeUpdates(this);
+                    lastCheckoutGpsLat = location.getLatitude();
+                    lastCheckoutGpsLng = location.getLongitude();
+                    mainHandler.post(applyLocation);
+                }
+            };
+            mainHandler.postDelayed(() -> {
+                if (listenerHolder[0] != null) {
+                    try {
+                        locationManager.removeUpdates(listenerHolder[0]);
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (!resolved[0]) {
+                    finishWithLastKnown.run();
+                }
+            }, 12000);
+            try {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    0L,
+                    0f,
+                    listenerHolder[0],
+                    Looper.getMainLooper()
+                );
+            } catch (Exception e) {
+                try {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        0L,
+                        0f,
+                        listenerHolder[0],
+                        Looper.getMainLooper()
+                    );
+                } catch (Exception ex) {
+                    finishWithLastKnown.run();
+                }
+            }
+        };
+
+        Consumer<Location> onLocationReady = location -> mainHandler.post(() -> {
+            if (resolved[0]) {
+                return;
+            }
+            if (location != null) {
+                resolved[0] = true;
+                lastCheckoutGpsLat = location.getLatitude();
+                lastCheckoutGpsLng = location.getLongitude();
+                applyLocation.run();
+                return;
+            }
+            requestLegacyUpdates.run();
+        });
+
+        try {
+            CancellationSignal cancellationSignal = new CancellationSignal();
+            mainHandler.postDelayed(() -> {
+                if (!resolved[0]) {
+                    cancellationSignal.cancel();
+                }
+            }, 10000);
+            locationManager.getCurrentLocation(
+                LocationManager.FUSED_PROVIDER,
+                cancellationSignal,
+                checkoutLocationExecutor,
+                onLocationReady::accept
+            );
+        } catch (Exception e) {
+            Location cached = getBestLastKnownLocation(locationManager);
+            if (cached != null) {
+                onLocationReady.accept(cached);
+            } else {
+                requestLegacyUpdates.run();
+            }
+        }
+    }
+
     private void fetchCheckoutCurrentLocation(
         WebView mapWebView,
         double[] deliveryLat,
@@ -2258,87 +2517,33 @@ public class MainActivity extends AppCompatActivity {
         Spinner barangaySpinner,
         EditText postalInput
     ) {
+        CheckoutLocationParams params = new CheckoutLocationParams();
+        params.mapWebView = mapWebView;
+        params.deliveryLat = deliveryLat;
+        params.deliveryLng = deliveryLng;
+        params.mapPinned = mapPinned;
+        params.mapStatus = mapStatus;
+        params.streetInput = streetInput;
+        params.provinceSpinner = provinceSpinner;
+        params.citySpinner = citySpinner;
+        params.barangaySpinner = barangaySpinner;
+        params.postalInput = postalInput;
+
         if (!hasCheckoutLocationPermission()) {
-            requestCheckoutLocationPermission();
-            mapStatus.setText("Allow location access, then tap Use Current Location again.");
+            if (mapStatus != null) {
+                mapStatus.setText("Allow location access to autofill your address...");
+            }
+            requestCheckoutLocationPermission(params);
             return;
         }
-        mapStatus.setText("Getting your current location...");
-        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        if (locationManager == null) {
-            mapStatus.setText("Location service unavailable.");
+        if (!isDeviceLocationEnabled()) {
+            if (mapStatus != null) {
+                mapStatus.setText("Turn on Location (GPS) in phone settings, then try again.");
+            }
+            promptEnableDeviceLocation();
             return;
         }
-
-        Runnable applyLocation = () -> {
-            deliveryLat[0] = lastCheckoutGpsLat;
-            deliveryLng[0] = lastCheckoutGpsLng;
-            mapPinned[0] = true;
-            applyCheckoutMapPin(mapWebView, deliveryLat[0], deliveryLng[0]);
-            reverseGeocodeCheckoutAddress(
-                deliveryLat[0],
-                deliveryLng[0],
-                streetInput,
-                provinceSpinner,
-                citySpinner,
-                barangaySpinner,
-                postalInput,
-                mapStatus
-            );
-        };
-
-        Location cached = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        if (cached == null) {
-            cached = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-        }
-        if (cached != null && System.currentTimeMillis() - cached.getTime() < 120000) {
-            lastCheckoutGpsLat = cached.getLatitude();
-            lastCheckoutGpsLng = cached.getLongitude();
-            applyLocation.run();
-            return;
-        }
-
-        final LocationListener[] listenerHolder = new LocationListener[1];
-        listenerHolder[0] = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                locationManager.removeUpdates(this);
-                lastCheckoutGpsLat = location.getLatitude();
-                lastCheckoutGpsLng = location.getLongitude();
-                mainHandler.post(applyLocation);
-            }
-        };
-
-        mainHandler.postDelayed(() -> {
-            if (listenerHolder[0] != null) {
-                locationManager.removeUpdates(listenerHolder[0]);
-            }
-            if (!mapPinned[0]) {
-                mapStatus.setText("Unable to get GPS. Tap the map to pin manually.");
-            }
-        }, 15000);
-
-        try {
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                0L,
-                0f,
-                listenerHolder[0],
-                Looper.getMainLooper()
-            );
-        } catch (Exception e) {
-            try {
-                locationManager.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    0L,
-                    0f,
-                    listenerHolder[0],
-                    Looper.getMainLooper()
-                );
-            } catch (Exception ex) {
-                mapStatus.setText("Unable to access GPS. Pin location on the map.");
-            }
-        }
+        startCheckoutLocationFetch(params);
     }
 
     private double lastCheckoutGpsLat = 6.1164;
@@ -2358,7 +2563,7 @@ public class MainActivity extends AppCompatActivity {
         networkExecutor.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                String urlText = "https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat="
+                String urlText = "https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&accept-language=en&lat="
                     + URLEncoder.encode(String.format(Locale.US, "%.6f", lat), "UTF-8")
                     + "&lon=" + URLEncoder.encode(String.format(Locale.US, "%.6f", lng), "UTF-8");
                 URL url = new URL(urlText);
@@ -2394,8 +2599,10 @@ public class MainActivity extends AppCompatActivity {
                     addr.optString("city", ""),
                     addr.optString("town", ""),
                     addr.optString("municipality", ""),
+                    addr.optString("city_district", ""),
                     addr.optString("county", "")
                 );
+                city = city.replaceFirst("(?i)^Municipality of\\s+", "").trim();
                 String province = normalizeProvinceName(
                     firstNonEmpty(
                         addr.optString("state", ""),
@@ -2403,6 +2610,20 @@ public class MainActivity extends AppCompatActivity {
                     )
                 );
                 String postal = addr.optString("postcode", "");
+                String cityNormalized = normalizeCityName(city);
+
+                if (province.isEmpty() && !cityNormalized.isEmpty()) {
+                    if (checkoutProvinceCityMap.containsKey("Sarangani")
+                        && checkoutProvinceCityMap.get("Sarangani").contains(cityNormalized)) {
+                        province = "Sarangani";
+                    } else if (checkoutProvinceCityMap.containsKey("Sultan Kudarat")
+                        && checkoutProvinceCityMap.get("Sultan Kudarat").contains(cityNormalized)) {
+                        province = "Sultan Kudarat";
+                    } else if (checkoutProvinceCityMap.containsKey("South Cotabato")
+                        && checkoutProvinceCityMap.get("South Cotabato").contains(cityNormalized)) {
+                        province = "South Cotabato";
+                    }
+                }
 
                 List<String> barangayCandidates = new ArrayList<>();
                 for (String key : new String[]{"suburb", "neighbourhood", "village", "hamlet", "quarter", "city_district"}) {
@@ -2413,38 +2634,134 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 final String streetFinal = street;
-                final String cityFinal = normalizeCityName(city);
-                final String provinceFinal = province;
+                final String cityFinal = cityNormalized;
+                final String provinceFinal = normalizeProvinceName(province);
                 String postalResolved = postal;
-                if (postalResolved.isEmpty() && "General Santos City".equals(cityFinal)) {
-                    postalResolved = "9500";
+                if (postalResolved.isEmpty() && !cityFinal.isEmpty()) {
+                    String mappedPostal = checkoutCityPostalMap.get(cityFinal);
+                    if (mappedPostal != null && !mappedPostal.isEmpty()) {
+                        postalResolved = mappedPostal;
+                    }
                 }
                 final String postalFinal = postalResolved;
                 final List<String> barangayCandidatesFinal = barangayCandidates;
 
-                mainHandler.post(() -> {
-                    if (!streetFinal.isEmpty()) {
-                        streetInput.setText(streetFinal);
-                    }
-                    if (!provinceFinal.isEmpty()) {
-                        setCheckoutSpinnerValue(provinceSpinner, provinceFinal);
-                    }
-                    if (!cityFinal.isEmpty()) {
-                        setCheckoutSpinnerValue(citySpinner, cityFinal);
-                        updateCheckoutBarangays(citySpinner, barangaySpinner, getSpinnerValue(citySpinner));
-                    }
-                    matchBarangaySpinner(barangaySpinner, barangayCandidatesFinal);
-                    if (!postalFinal.isEmpty()) {
-                        postalInput.setText(postalFinal);
-                    }
-                    mapStatus.setText("Location captured and address autofilled.");
-                });
+                mainHandler.post(() -> applyReverseGeocodeToAddressFields(
+                    streetInput,
+                    provinceSpinner,
+                    citySpinner,
+                    barangaySpinner,
+                    postalInput,
+                    mapStatus,
+                    streetFinal,
+                    provinceFinal,
+                    cityFinal,
+                    postalFinal,
+                    barangayCandidatesFinal
+                ));
             } catch (Exception e) {
-                mainHandler.post(() -> mapStatus.setText("Location captured. Address autofill unavailable — edit fields manually."));
+                reverseGeocodeWithAndroidGeocoder(
+                    lat,
+                    lng,
+                    streetInput,
+                    provinceSpinner,
+                    citySpinner,
+                    barangaySpinner,
+                    postalInput,
+                    mapStatus
+                );
             } finally {
                 if (connection != null) {
                     connection.disconnect();
                 }
+            }
+        });
+    }
+
+    @SuppressLint("MissingPermission")
+    private void reverseGeocodeWithAndroidGeocoder(
+        double lat,
+        double lng,
+        EditText streetInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner,
+        EditText postalInput,
+        TextView mapStatus
+    ) {
+        networkExecutor.execute(() -> {
+            try {
+                if (!Geocoder.isPresent()) {
+                    throw new Exception("Geocoder unavailable");
+                }
+                Geocoder geocoder = new Geocoder(this, Locale.getDefault());
+                List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+                if (addresses == null || addresses.isEmpty()) {
+                    throw new Exception("No geocoder results");
+                }
+                Address address = addresses.get(0);
+                String street = firstNonEmpty(
+                    ((address.getSubThoroughfare() == null ? "" : address.getSubThoroughfare() + " ")
+                        + (address.getThoroughfare() == null ? "" : address.getThoroughfare())).trim(),
+                    address.getFeatureName(),
+                    address.getAddressLine(0)
+                );
+                String city = firstNonEmpty(
+                    address.getLocality(),
+                    address.getSubAdminArea(),
+                    address.getAdminArea()
+                );
+                String province = normalizeProvinceName(firstNonEmpty(
+                    address.getAdminArea(),
+                    address.getSubAdminArea()
+                ));
+                String postal = address.getPostalCode() == null ? "" : address.getPostalCode();
+                String cityNormalized = normalizeCityName(city);
+                if (province.isEmpty() && !cityNormalized.isEmpty()) {
+                    if (checkoutProvinceCityMap.containsKey("Sarangani")
+                        && checkoutProvinceCityMap.get("Sarangani").contains(cityNormalized)) {
+                        province = "Sarangani";
+                    } else if (checkoutProvinceCityMap.containsKey("Sultan Kudarat")
+                        && checkoutProvinceCityMap.get("Sultan Kudarat").contains(cityNormalized)) {
+                        province = "Sultan Kudarat";
+                    } else if (checkoutProvinceCityMap.containsKey("South Cotabato")
+                        && checkoutProvinceCityMap.get("South Cotabato").contains(cityNormalized)) {
+                        province = "South Cotabato";
+                    }
+                }
+                List<String> barangayCandidates = new ArrayList<>();
+                if (address.getSubLocality() != null && !address.getSubLocality().trim().isEmpty()) {
+                    barangayCandidates.add(address.getSubLocality().trim());
+                }
+                final String streetFinal = street;
+                final String provinceFinal = normalizeProvinceName(province);
+                final String cityFinal = cityNormalized;
+                final String postalFinal = postal;
+                final List<String> barangayCandidatesFinal = barangayCandidates;
+                mainHandler.post(() -> applyReverseGeocodeToAddressFields(
+                    streetInput,
+                    provinceSpinner,
+                    citySpinner,
+                    barangaySpinner,
+                    postalInput,
+                    mapStatus,
+                    streetFinal,
+                    provinceFinal,
+                    cityFinal,
+                    postalFinal,
+                    barangayCandidatesFinal
+                ));
+            } catch (Exception ex) {
+                mainHandler.post(() -> {
+                    if (mapStatus != null) {
+                        mapStatus.setText("Location captured on map. Fill street/province/city manually if needed.");
+                    }
+                    Toast.makeText(
+                        MainActivity.this,
+                        "GPS found but address lookup failed. You can edit the fields manually.",
+                        Toast.LENGTH_LONG
+                    ).show();
+                });
             }
         });
     }
@@ -2476,12 +2793,94 @@ public class MainActivity extends AppCompatActivity {
             .trim();
     }
 
+    private void applyReverseGeocodeToAddressFields(
+        EditText streetInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner,
+        EditText postalInput,
+        TextView mapStatus,
+        String street,
+        String province,
+        String city,
+        String postal,
+        List<String> barangayCandidates
+    ) {
+        suppressCheckoutSpinnerCallbacks = true;
+        try {
+            if (!street.isEmpty() && streetInput != null) {
+                streetInput.setText(street);
+            }
+            if (!province.isEmpty() && provinceSpinner != null) {
+                setCheckoutSpinnerValue(provinceSpinner, province);
+                List<String> cities = checkoutProvinceCityMap.get(province);
+                if (cities == null || cities.isEmpty()) {
+                    cities = city.isEmpty() ? new ArrayList<>() : new ArrayList<>(Collections.singletonList(city));
+                } else if (!city.isEmpty() && !cities.contains(city)) {
+                    cities = new ArrayList<>(cities);
+                    cities.add(city);
+                }
+                bindCheckoutSpinner(citySpinner, cities);
+            }
+            if (!city.isEmpty() && citySpinner != null) {
+                setCheckoutSpinnerValue(citySpinner, city);
+                updateCheckoutBarangays(citySpinner, barangaySpinner, city);
+            }
+            matchBarangaySpinner(barangaySpinner, barangayCandidates);
+            if (!postal.isEmpty() && postalInput != null) {
+                postalInput.setText(postal);
+            }
+        } finally {
+            suppressCheckoutSpinnerCallbacks = false;
+        }
+        if (mapStatus != null) {
+            mapStatus.setText("Location captured and address autofilled.");
+        }
+        Toast.makeText(this, "Address updated from your current location.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void wireUseCurrentLocationButton(
+        View button,
+        WebView mapWebView,
+        double[] deliveryLat,
+        double[] deliveryLng,
+        boolean[] mapPinned,
+        TextView mapStatus,
+        EditText streetInput,
+        Spinner provinceSpinner,
+        Spinner citySpinner,
+        Spinner barangaySpinner,
+        EditText postalInput
+    ) {
+        if (button == null) {
+            return;
+        }
+        button.setOnClickListener(v -> fetchCheckoutCurrentLocation(
+            mapWebView,
+            deliveryLat,
+            deliveryLng,
+            mapPinned,
+            mapStatus,
+            streetInput,
+            provinceSpinner,
+            citySpinner,
+            barangaySpinner,
+            postalInput
+        ));
+    }
+
     private String normalizeProvinceName(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
             return "";
         }
         String norm = normalizeLocationText(raw);
-        if (norm.contains("soccsksargen") || norm.contains("south cotabato") || norm.contains("sarangani")) {
+        if (norm.contains("sarangani") && !norm.contains("south cotabato")) {
+            return "Sarangani";
+        }
+        if (norm.contains("sultan kudarat")) {
+            return "Sultan Kudarat";
+        }
+        if (norm.contains("soccsksargen") || norm.contains("south cotabato")) {
             return "South Cotabato";
         }
         if (norm.contains("davao del sur")) {
@@ -2507,6 +2906,15 @@ public class MainActivity extends AppCompatActivity {
         String norm = normalizeLocationText(trimmed);
         if ("gensan".equals(norm) || norm.contains("general santos")) {
             return "General Santos City";
+        }
+        if (norm.equals("alabel") || norm.contains("alabel")) {
+            return "Alabel";
+        }
+        if (norm.contains("koronadal")) {
+            return "Koronadal City";
+        }
+        if (norm.contains("polomolok")) {
+            return "Polomolok";
         }
         return trimmed;
     }
@@ -2575,21 +2983,148 @@ public class MainActivity extends AppCompatActivity {
     private void initCheckoutAddressMappings() {
         checkoutProvinceCityMap.clear();
         checkoutCityBarangayMap.clear();
-        checkoutProvinceCityMap.put("South Cotabato", Arrays.asList("General Santos City"));
-        checkoutCityBarangayMap.put("General Santos City", Arrays.asList(
-            "Apopong", "Baluan", "Batomelong", "Buayan", "Bula", "Calumpang",
-            "City Heights", "Conel", "Dadiangas East", "Dadiangas North",
-            "Dadiangas South", "Dadiangas West", "Fatima", "Katangawan",
-            "Labangal", "Lagao", "Ligaya", "Mabuhay", "Olympog", "San Isidro",
-            "San Jose", "Siguel", "Sinawal", "Tambler", "Tinagacan", "Upper Labay"
+        checkoutCityPostalMap.clear();
+
+        checkoutProvinceCityMap.put("South Cotabato", Arrays.asList(
+            "General Santos City", "Koronadal City", "Polomolok", "Tupi", "Banga", "Norala",
+            "Surallah", "Tantangan", "Tampakan", "Santo Nino", "Lake Sebu", "T'boli"
         ));
+        checkoutProvinceCityMap.put("Sarangani", Arrays.asList(
+            "Alabel", "Glan", "Malungon", "Kiamba", "Maasim", "Maitum", "Malapatan"
+        ));
+        checkoutProvinceCityMap.put("Sultan Kudarat", Arrays.asList(
+            "Tacurong City", "Isulan"
+        ));
+
+        checkoutCityBarangayMap.put("General Santos City", Arrays.asList(
+            "Apopong", "Baluan", "Bawing", "Buayan", "Bula", "Calumpang", "City Heights",
+            "Conel", "Dadiangas East", "Dadiangas North", "Dadiangas South", "Dadiangas West",
+            "Fatima", "Katangawan", "Labangal", "Lagao", "Ligaya", "Mabuhay", "Olympog",
+            "San Isidro", "San Jose", "Siguel", "Sinawal", "Tambler", "Tinagacan", "Upper Labay"
+        ));
+        checkoutCityBarangayMap.put("Koronadal City", Arrays.asList(
+            "Avancena", "Cacub", "Caloocan", "Carpenter Hill", "Concepcion",
+            "General Paulino Santos", "Mabini", "Magsaysay", "Morales", "San Isidro",
+            "Santa Cruz", "Zone I", "Zone II", "Zone III", "Zone IV"
+        ));
+        checkoutCityBarangayMap.put("Polomolok", Arrays.asList(
+            "Cannery Site", "Glamang", "Kinilis", "Koronadal Proper", "Landan", "Lapu", "Lumakil",
+            "Magsaysay", "Maligo", "Pagalungan", "Palkan", "Poblacion", "Rubber", "Silway 7",
+            "Silway 8", "Sumbakil"
+        ));
+        checkoutCityBarangayMap.put("Alabel", Arrays.asList(
+            "Alegria", "Bagacay", "Baluntay", "Domolok", "Kawas", "Maribulan", "Pag-asa",
+            "Paraiso", "Poblacion", "Spring", "Tokawal"
+        ));
+        checkoutCityBarangayMap.put("Glan", Arrays.asList(
+            "Baliton", "Batulaki", "Big Margus", "Burias", "Calabanit", "Cross", "Datal Bukay",
+            "E. Alegado", "Gumasa", "Kapatan", "Lago", "Poblacion", "Rio del Pilar", "San Jose",
+            "Taluya", "Tangisan", "Upper Klinan"
+        ));
+        checkoutCityBarangayMap.put("Malungon", Arrays.asList(
+            "Alpabel", "Banate", "Datal Batong", "Datal Bila", "Datal Tampal", "Kawayan",
+            "Lower Mainit", "Malungon Gamay", "Poblacion", "San Juan", "Tamban", "Upper Mainit"
+        ));
+        checkoutCityBarangayMap.put("Kiamba", Arrays.asList(
+            "Badtasan", "Gasi", "Kling", "Mabay", "Maligang", "Ned", "Poblacion", "Salidan",
+            "Suli", "Tablao", "Talukpod", "Ticulab"
+        ));
+        checkoutCityBarangayMap.put("Maasim", Arrays.asList(
+            "Amsipit", "Balesmic", "Colon", "Daliao", "Kabatiol", "Kablacan", "Lumatil", "Malbang",
+            "Nomoh", "Olvia", "Poblacion", "Seven Hills", "Tinoto", "Tuburan"
+        ));
+        checkoutCityBarangayMap.put("Maitum", Arrays.asList(
+            "Kiambing", "Mabay", "Maltana", "New La Union", "Old Poblacion", "Pamantingan", "Pangi",
+            "Pinol", "Poblacion", "Sison", "Ticulab", "Upo", "Wali", "Yabay"
+        ));
+        checkoutCityBarangayMap.put("Malapatan", Arrays.asList(
+            "Daan Suyan", "Kihan", "Kinag", "Libo", "Lun Masla", "Lun Pequeño", "Malapatan",
+            "Municipal", "Poblacion", "Sapu Padidu", "Sulit", "Tuyan"
+        ));
+        checkoutCityBarangayMap.put("Tupi", Arrays.asList(
+            "Acmonan", "Bololmala", "Bunao", "Cebuano", "Crossing Rubber", "Kablon", "Kalkam",
+            "Linan", "Lunen", "Miasong", "Palian", "Poblacion", "Polonuling", "Simbo", "Tubeng"
+        ));
+        checkoutCityBarangayMap.put("Banga", Arrays.asList(
+            "Benitez", "Cabudian", "Cabuling", "Cinco", "Derilon", "El Nonok", "Improgo Village",
+            "Kusan", "Lam-apos", "Lamba", "Lambingi", "Lampari", "Liwanay", "Malaya",
+            "Punong Grande", "Rang-ay", "Reyes", "Rizal", "Rizal Poblacion", "San Jose",
+            "San Vicente", "Yangco Poblacion"
+        ));
+        checkoutCityBarangayMap.put("Norala", Arrays.asList(
+            "Benigno Aquino, Jr.", "Dumaguil", "Esperanza", "Kibid", "Lapuz", "Liberty",
+            "Lopez Jaena", "Matapol", "Poblacion", "Puti", "San Jose", "San Miguel", "Simsiman", "Tinago"
+        ));
+        checkoutCityBarangayMap.put("Surallah", Arrays.asList(
+            "Buenavista", "Canahay", "Centrala", "Colongulo", "Dajay", "Duengas", "Lambontong",
+            "Lamian", "Lamsugod", "Libertad", "Little Baguio", "Moloy", "Naci", "Talahik",
+            "Tubiala", "Upper Sepaka", "Veterans"
+        ));
+        checkoutCityBarangayMap.put("Tantangan", Arrays.asList(
+            "Bukay Pait", "Cabuling", "Dumadalig", "Libas", "Magon", "Maibo", "Mangilala",
+            "New Cuyapo", "New Iloilo", "New Lambunao", "Poblacion", "San Felipe", "Tinongcop"
+        ));
+        checkoutCityBarangayMap.put("Tampakan", Arrays.asList(
+            "Albagan", "Buto", "Danlag", "Kipalbig", "Lambayong", "Lampitak", "Liberty",
+            "Maltana", "Palo", "Poblacion", "Pula-bato", "San Isidro", "Santa Cruz", "Tablu"
+        ));
+        checkoutCityBarangayMap.put("Santo Nino", Arrays.asList(
+            "Ambalgan", "Guinsang-an", "Katipunan", "Manuel Roxas", "Panay", "Poblacion",
+            "Sajaneba", "San Isidro", "San Vicente", "Teresita"
+        ));
+        checkoutCityBarangayMap.put("Lake Sebu", Arrays.asList(
+            "Bacdulong", "Denlag", "Halilan", "Hanoon", "Klubi", "Lake Lahit", "Lamcade",
+            "Lamdalag", "Lamfugon", "Lamlahak", "Lower Maculan", "Luhib", "Ned", "Poblacion",
+            "Siluton", "Takunel", "Talisay", "Tasiman", "Upper Maculan"
+        ));
+        checkoutCityBarangayMap.put("T'boli", Arrays.asList(
+            "Aflek", "Afus", "Basag", "Datal Bob", "Desawo", "Dlanag", "Edwards", "Kematu",
+            "Laconon", "Lambangan", "Lambuling", "Lamhako", "Lamsalome", "Lemsnolon", "Maan",
+            "Malugong", "Mongocayo", "New Dumangas", "Poblacion", "Salacafe", "Sinolon",
+            "Talcon", "Talufo", "T'bolok", "Tudok"
+        ));
+        checkoutCityBarangayMap.put("Tacurong City", Arrays.asList(
+            "Baras", "Buenaflor", "Calean", "Carmen", "D'Ledesma", "Virginia Griño", "Kalandagan",
+            "Lancheta", "Enrique JC Montilla", "New Isabela", "New Lagao", "New Passi", "Poblacion",
+            "Rajah Nuda", "San Antonio", "San Emmanuel", "San Pablo", "San Rafael", "Tina", "Upper Katungal"
+        ));
+        checkoutCityBarangayMap.put("Isulan", Arrays.asList(
+            "Bambad", "Bual", "Dansuli", "D'Lotilla", "Impao", "Kalawag I", "Kalawag II", "Kalawag III",
+            "Kenram", "Kolambog", "Kudanding", "Lagandang", "Laguilayan", "Mapantig",
+            "New Pangasinan", "Sampao", "Tayugo"
+        ));
+
+        checkoutCityPostalMap.put("General Santos City", "9500");
+        checkoutCityPostalMap.put("Koronadal City", "9506");
+        checkoutCityPostalMap.put("Banga", "9511");
+        checkoutCityPostalMap.put("Lake Sebu", "9514");
+        checkoutCityPostalMap.put("Norala", "9508");
+        checkoutCityPostalMap.put("Polomolok", "9504");
+        checkoutCityPostalMap.put("Santo Nino", "9511");
+        checkoutCityPostalMap.put("Surallah", "9512");
+        checkoutCityPostalMap.put("Tampakan", "9507");
+        checkoutCityPostalMap.put("Tantangan", "9510");
+        checkoutCityPostalMap.put("Tupi", "9505");
+        checkoutCityPostalMap.put("T'boli", "9513");
+        checkoutCityPostalMap.put("Alabel", "9501");
+        checkoutCityPostalMap.put("Glan", "9517");
+        checkoutCityPostalMap.put("Kiamba", "9514");
+        checkoutCityPostalMap.put("Maasim", "9502");
+        checkoutCityPostalMap.put("Maitum", "9515");
+        checkoutCityPostalMap.put("Malapatan", "9516");
+        checkoutCityPostalMap.put("Malungon", "9503");
+        checkoutCityPostalMap.put("Tacurong City", "9800");
+        checkoutCityPostalMap.put("Isulan", "9805");
     }
 
     private void setupCheckoutAddressSpinners(Spinner provinceSpinner, Spinner citySpinner, Spinner barangaySpinner) {
-        bindCheckoutSpinner(provinceSpinner, Arrays.asList("South Cotabato"));
+        bindCheckoutSpinner(provinceSpinner, Arrays.asList("South Cotabato", "Sarangani", "Sultan Kudarat"));
         provinceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (suppressCheckoutSpinnerCallbacks) {
+                    return;
+                }
                 String province = parent.getItemAtPosition(position).toString();
                 List<String> cities = checkoutProvinceCityMap.get(province);
                 if (cities == null || cities.isEmpty()) {
@@ -2606,6 +3141,9 @@ public class MainActivity extends AppCompatActivity {
         citySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (suppressCheckoutSpinnerCallbacks) {
+                    return;
+                }
                 updateCheckoutBarangays(citySpinner, barangaySpinner, parent.getItemAtPosition(position).toString());
             }
 
@@ -2620,7 +3158,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateCheckoutBarangays(Spinner citySpinner, Spinner barangaySpinner, String city) {
         List<String> barangays = checkoutCityBarangayMap.get(city);
         if (barangays == null || barangays.isEmpty()) {
-            barangays = Arrays.asList("Poblacion");
+            barangays = CHECKOUT_DEFAULT_BARANGAYS;
         }
         bindCheckoutSpinner(barangaySpinner, barangays);
         barangaySpinner.setSelection(0);
@@ -2979,6 +3517,7 @@ public class MainActivity extends AppCompatActivity {
                                 shippingContact
                             );
                             info.refundRequested = order.optBoolean("refund_requested", false);
+                            info.reviewSubmitted = order.optBoolean("review_submitted", false);
                             info.canRequestReturn = order.optBoolean("can_request_return", false);
                             info.canPay = order.optBoolean("can_pay", false);
                             info.canCancel = order.optBoolean("can_cancel", false);
@@ -3020,6 +3559,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
+        params.put("role", isRiderRole() ? "rider" : "customer");
         params.put("mark_read", markRead ? "1" : "0");
         apiPost("support_messages_list.php", params, new SimpleCallback() {
             @Override
@@ -3057,6 +3597,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
+        params.put("role", isRiderRole() ? "rider" : "customer");
         apiPost("support_messages_unread.php", params, new SimpleCallback() {
             @Override
             public void onSuccess(String responseBody) {
@@ -3107,7 +3648,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void refreshNotificationBadges() {
-        mainHandler.post(() -> applyUnreadBadge(findViewById(R.id.rider_dashboard_notif_badge), notificationUnreadCount));
+        mainHandler.post(() -> {
+            applyUnreadBadge(findViewById(R.id.rider_dashboard_notif_badge), notificationUnreadCount);
+            applyUnreadBadge(findViewById(R.id.home_notif_badge), notificationUnreadCount);
+        });
     }
 
     public void setNotificationUnreadCount(int count) {
@@ -3252,7 +3796,46 @@ public class MainActivity extends AppCompatActivity {
             if ("order_detail".equals(target) && orderId > 0) {
                 openRiderOrderById(orderId);
             }
+            return;
         }
+
+        if ("order_detail".equals(target) && orderId > 0) {
+            openCustomerOrderById(orderId);
+            return;
+        }
+        if ("orders".equals(target)) {
+            loadFragment(new MyPurchaseFragment());
+            return;
+        }
+        if ("profile".equals(target)) {
+            loadFragment(new SettingsFragment());
+        }
+    }
+
+    public void openCustomerOrderById(int orderId) {
+        if (orderId <= 0) {
+            RiderOrderUi.toast(this, "Invalid order reference.");
+            return;
+        }
+        fetchOrdersFromServer(new OrdersCallback() {
+            @Override
+            public void onSuccess(List<OrderInfo> orders) {
+                for (OrderInfo order : orders) {
+                    if (order.orderId == orderId) {
+                        loadFragment(OrderDetailsFragment.newInstance(order));
+                        return;
+                    }
+                }
+                RiderOrderUi.toast(MainActivity.this, "Order not found. Opening your purchases.");
+                loadFragment(new MyPurchaseFragment());
+            }
+
+            @Override
+            public void onError(String message) {
+                RiderOrderUi.toast(MainActivity.this, message);
+                loadFragment(new MyPurchaseFragment());
+            }
+        });
     }
 
     private void openRiderOrderById(int orderId) {
@@ -3327,6 +3910,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
+        params.put("role", isRiderRole() ? "rider" : "customer");
         params.put("message", message);
         if (relatedOrderId > 0) {
             params.put("order_id", String.valueOf(relatedOrderId));
@@ -5371,7 +5955,10 @@ public class MainActivity extends AppCompatActivity {
             activity.setupCheckoutAddressSpinners(provinceSpinner, citySpinner, barangaySpinner);
             bindSpinner(countrySpinner, Arrays.asList("Philippines"));
             activity.setupDeliveryMapWebView(mapWebView, mapStatus, deliveryLat, deliveryLng, mapPinned);
-            useLocationButton.setOnClickListener(v -> activity.fetchCheckoutCurrentLocation(
+            TextView addressAutofillStatus = view.findViewById(R.id.register_address_autofill_status);
+            Button useLocationAddressButton = view.findViewById(R.id.btn_register_use_location_address);
+            activity.wireUseCurrentLocationButton(
+                useLocationButton,
                 mapWebView,
                 deliveryLat,
                 deliveryLng,
@@ -5382,7 +5969,20 @@ public class MainActivity extends AppCompatActivity {
                 citySpinner,
                 barangaySpinner,
                 postalCode
-            ));
+            );
+            activity.wireUseCurrentLocationButton(
+                useLocationAddressButton,
+                mapWebView,
+                deliveryLat,
+                deliveryLng,
+                mapPinned,
+                addressAutofillStatus != null ? addressAutofillStatus : mapStatus,
+                street,
+                provinceSpinner,
+                citySpinner,
+                barangaySpinner,
+                postalCode
+            );
 
             createButton.setOnClickListener(v -> {
                 registerInlineError.setVisibility(View.GONE);
@@ -5453,6 +6053,17 @@ public class MainActivity extends AppCompatActivity {
                     registerInlineError.setVisibility(View.VISIBLE);
                     return;
                 }
+                if (selectedIdUri == null) {
+                    registerInlineError.setText("Upload your verification ID before creating an account.");
+                    registerInlineError.setVisibility(View.VISIBLE);
+                    return;
+                }
+                String provinceValue = provinceSpinner.getSelectedItem() == null
+                    ? "South Cotabato"
+                    : provinceSpinner.getSelectedItem().toString().trim();
+                String countryValue = countrySpinner.getSelectedItem() == null
+                    ? "Philippines"
+                    : countrySpinner.getSelectedItem().toString().trim();
                 createButton.setEnabled(false);
                 createButton.setText("Creating...");
                 activity.registerWithServer(
@@ -5464,12 +6075,15 @@ public class MainActivity extends AppCompatActivity {
                     cityValue,
                     barangayValue,
                     postalCodeValue,
+                    provinceValue,
+                    countryValue,
                     deliveryLat[0],
                     deliveryLng[0],
+                    selectedIdUri,
                     new SimpleCallback() {
                         @Override
                         public void onSuccess(String message) {
-                            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
                             activity.loadFragment(new LoginFragment());
                         }
 
@@ -5613,6 +6227,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public View onCreateView(LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
             View view = inflater.inflate(R.layout.fragment_home, container, false);
+            normalizeProductCardAppearance(view);
             setupHeaderActions(view);
             setupProductClickListeners(view);
             applyProductsFromServer(view);
@@ -5624,7 +6239,9 @@ public class MainActivity extends AppCompatActivity {
             super.onResume();
             MainActivity activity = (MainActivity) requireActivity();
             activity.pollSupportUnreadCount();
+            activity.pollNotificationUnreadCount();
             activity.refreshMessageBadges();
+            activity.refreshNotificationBadges();
         }
 
         private void setupHeaderActions(View view) {
@@ -5702,6 +6319,22 @@ public class MainActivity extends AppCompatActivity {
                 View card = rootView.findViewById(cardId);
                 if (card != null) {
                     card.setVisibility(View.VISIBLE);
+                }
+            }
+        }
+
+        private void normalizeProductCardAppearance(View rootView) {
+            for (int cardId : PRODUCT_CARD_IDS) {
+                View card = rootView.findViewById(cardId);
+                if (!(card instanceof androidx.cardview.widget.CardView)) {
+                    continue;
+                }
+                androidx.cardview.widget.CardView cardView = (androidx.cardview.widget.CardView) card;
+                cardView.setCardBackgroundColor(Color.WHITE);
+                cardView.setBackgroundTintList(null);
+                if (cardView.getChildCount() > 0) {
+                    View content = cardView.getChildAt(0);
+                    content.setBackgroundColor(Color.WHITE);
                 }
             }
         }
@@ -6148,17 +6781,22 @@ public class MainActivity extends AppCompatActivity {
             }
             if (messages.isEmpty()) {
                 if (threadContainer.getChildCount() == 0) {
+                    String emptyMessage = ((MainActivity) requireActivity()).isRiderRole()
+                        ? "No assigned delivery support chats yet."
+                        : "Hi! Ask about order status, delivery, or payments. Type \"human support\" to reach an admin.";
                     addMessageBubble(
                         threadContainer,
                         0,
-                        "Chatbot",
-                        "Hi! Ask about order status, delivery, or payments. Type \"human support\" to reach an admin.",
-                        "chatbot",
-                        "text",
+                        ((MainActivity) requireActivity()).isRiderRole() ? "System" : "Chatbot",
+                        emptyMessage,
+                        ((MainActivity) requireActivity()).isRiderRole() ? "system" : "chatbot",
+                        ((MainActivity) requireActivity()).isRiderRole() ? "system" : "text",
                         false,
                         ""
                     );
-                    messagesStatus.setText("Start chatting below.");
+                    messagesStatus.setText(((MainActivity) requireActivity()).isRiderRole()
+                        ? "Waiting for assigned support conversations."
+                        : "Start chatting below.");
                 }
                 lastRenderedMessageCount = 0;
                 return;
@@ -6441,7 +7079,7 @@ public class MainActivity extends AppCompatActivity {
                 return Arrays.asList("delivered_to_rider", "to_receive", "delivered").contains(status);
             }
             if ("to_review".equals(tabKey)) {
-                return "completed".equals(status);
+                return "completed".equals(status) && !order.reviewSubmitted;
             }
             if ("return_refund".equals(tabKey)) {
                 return Arrays.asList(
@@ -6463,7 +7101,9 @@ public class MainActivity extends AppCompatActivity {
                     counts.put(bucket, counts.get(bucket) + 1);
                 }
                 if ("completed".equalsIgnoreCase(order.deliveryStatus)) {
-                    counts.put("to_review", counts.get("to_review") + 1);
+                    if (!order.reviewSubmitted) {
+                        counts.put("to_review", counts.get("to_review") + 1);
+                    }
                 }
             }
             return counts;

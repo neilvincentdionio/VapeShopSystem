@@ -25,6 +25,27 @@
         color: #666666;
         line-height: 1.6;
     }
+    .welcome-actions {
+        margin-top: 1rem;
+    }
+    .apk-download-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid #1f6feb;
+        background: #f7fbff;
+        color: #1f6feb;
+        padding: .62rem .95rem;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: .9rem;
+        transition: all .2s ease;
+    }
+    .apk-download-btn:hover {
+        background: #1f6feb;
+        color: #ffffff;
+    }
 
     .stats-grid {
         display: grid;
@@ -244,6 +265,9 @@
 <section class="welcome-section">
     <h1>Welcome back, <?= esc($user_name ?? 'Rider') ?>!</h1>
     <p>You are logged in as a rider. Track active deliveries and return/refund pickups assigned to you.</p>
+    <div class="welcome-actions">
+        <a class="apk-download-btn" href="<?= base_url('downloads/QuickPuffMobile.apk') ?>" download>Download Rider APK</a>
+    </div>
 </section>
 
 <section class="stats-grid">

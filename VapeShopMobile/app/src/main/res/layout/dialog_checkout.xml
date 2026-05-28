@@ -228,11 +228,23 @@
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
+            <Button
+                android:id="@+id/btn_checkout_use_location_address"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_edit_address_primary_btn"
+                android:text="Use My Current Location"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
             <EditText
                 android:id="@+id/checkout_street"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/bg_checkout_input"
                 android:hint="Street / House No."
                 android:inputType="textPostalAddress"

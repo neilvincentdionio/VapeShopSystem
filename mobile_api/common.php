@@ -128,6 +128,95 @@ function find_user_by_email(PDO $db, string $email): ?array
 /**
  * Load CodeIgniter services/config without running the web app or Spark CLI.
  */
+/**
+ * Save uploaded verification ID image (multipart field: verification_id_image).
+ */
+function mobile_store_verification_id_upload(): ?string
+{
+    if (!isset($_FILES['verification_id_image']) || !is_array($_FILES['verification_id_image'])) {
+        return null;
+    }
+
+    $file = $_FILES['verification_id_image'];
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ($error !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return null;
+    }
+
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0 || $size > 3 * 1024 * 1024) {
+        return null;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->file($tmpName);
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    if (!is_string($mimeType) || !isset($allowed[$mimeType])) {
+        return null;
+    }
+
+    $uploadDirectory = dirname(__DIR__) . '/writable/uploads/customer_ids';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        return null;
+    }
+
+    try {
+        $fileName = bin2hex(random_bytes(16)) . '.' . $allowed[$mimeType];
+        $targetPath = $uploadDirectory . DIRECTORY_SEPARATOR . $fileName;
+        if (!move_uploaded_file($tmpName, $targetPath)) {
+            return null;
+        }
+
+        return 'customer_ids/' . $fileName;
+    } catch (Throwable $e) {
+        error_log('mobile_store_verification_id_upload failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Notify admins that a customer account needs approval (mobile registration).
+ */
+function mobile_notify_account_pending(int $userId, string $customerName): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+
+    try {
+        mobile_ci_bootstrap();
+        $notificationService = new \App\Libraries\NotificationService();
+        $customerName = trim($customerName);
+        if ($customerName === '') {
+            $customerName = 'A customer';
+        }
+
+        $notificationService->notifyAdmins([
+            'category' => 'approvals',
+            'type' => 'account_pending',
+            'title' => 'Customer approval needed',
+            'message' => $customerName . ' submitted an account request (mobile app).',
+            'link' => site_url('user-management/view/' . $userId),
+            'related_type' => 'user',
+            'related_id' => $userId,
+        ]);
+    } catch (Throwable $e) {
+        error_log('mobile_notify_account_pending failed: ' . $e->getMessage());
+    }
+}
+
 function mobile_ci_bootstrap(): void
 {
     static $booted = false;

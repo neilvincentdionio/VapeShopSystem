@@ -9,6 +9,10 @@ $input = get_request_data();
 require_fields($input, ['email']);
 
 $email = normalize_email((string) $input['email']);
+$role = strtolower(trim((string) ($input['role'] ?? 'customer')));
+$conversationId = (int) ($input['conversation_id'] ?? 0);
+$orderId = (int) ($input['order_id'] ?? 0);
+$orderReference = trim((string) ($input['related_order'] ?? $input['order_reference'] ?? ''));
 
 try {
     $db = mobile_db();
@@ -22,13 +26,19 @@ try {
     }
 
     $userId = (int) $user['id'];
-    $conversation = mobile_get_or_create_conversation($db, $userId);
-    $conversationId = (int) ($conversation['id'] ?? 0);
-    $unread = mobile_count_unread_staff_messages($db, $conversationId);
+    if ($role === 'rider') {
+        $conversation = mobile_get_rider_conversation($db, $userId, $conversationId, $orderId, $orderReference);
+        $resolvedConversationId = (int) ($conversation['id'] ?? 0);
+        $unread = mobile_count_unread_for_rider_total($db, $userId);
+    } else {
+        $conversation = mobile_get_or_create_conversation($db, $userId);
+        $resolvedConversationId = (int) ($conversation['id'] ?? 0);
+        $unread = mobile_count_unread_staff_messages($db, $resolvedConversationId);
+    }
 
     json_response(true, 'Unread count loaded.', [
         'unread_count' => $unread,
-        'conversation_id' => $conversationId,
+        'conversation_id' => $resolvedConversationId,
     ], 200);
 } catch (Throwable $e) {
     json_response(false, 'Server error while loading unread count.', null, 500);

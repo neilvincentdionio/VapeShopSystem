@@ -20,7 +20,13 @@ $isMessages = $seg1 === 'admin' && $seg2 === 'messages';
 <nav class="navbar admin-sidebar">
     <div class="navbar-content">
         <a href="<?= site_url('dashboard') ?>" class="navbar-brand">
-            <img src="<?= base_url('public/QuickPuff_logo2.png') ?>" alt="QuickPuff VapeShop" class="brand-logo-image">
+            <img
+                src="<?= base_url('public/QuickPuff_logo3.png?v=20260528') ?>"
+                alt="QuickPuff VapeShop"
+                class="brand-logo-image"
+                decoding="async"
+                onerror="if(!this.dataset.fallbackStep){this.dataset.fallbackStep='1';this.src='<?= base_url('public/QuickPuff_logo2.png?v=20260528') ?>';return;}this.onerror=null;this.src='<?= base_url('public/assets/img/quickpuff-logo-green.png?v=20260528') ?>';"
+            >
         </a>
 
         <div class="navbar-center">

@@ -87,6 +87,18 @@
                             android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:contentDescription="Notifications" />
 
+                        <TextView
+                            android:id="@+id/home_notif_badge"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="top|end"
+                            android:background="@drawable/bg_unread_badge"
+                            android:gravity="center"
+                            android:textColor="#FFFFFF"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+
                     </FrameLayout>
 
                 </LinearLayout>
@@ -129,13 +141,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFE4E1">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -154,13 +167,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±400.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -169,18 +182,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 12,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.5"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -211,13 +224,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0FFF0">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -236,13 +250,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±400.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -251,18 +265,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 8,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.3"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -293,13 +307,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0F8FF">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -318,13 +333,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±500.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -333,18 +348,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 25,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.7"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -375,13 +390,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFF8DC">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -400,13 +416,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±500.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -415,18 +431,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 30,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.8"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -457,13 +473,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFE4E1">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -482,13 +499,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±500.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -497,18 +514,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 25,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.6"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -539,13 +556,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0FFF0">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -564,13 +582,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±500.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -579,18 +597,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 20,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.4"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -621,13 +639,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0F8FF">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -646,13 +665,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±395.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -661,18 +680,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 15,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.2"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -703,13 +722,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFF8DC">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -728,13 +748,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±270.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -743,18 +763,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Pods â€¢ 20,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.1"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -785,13 +805,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFE4E1">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -810,13 +831,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±800.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -825,18 +846,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Device â€¢ Stock: 35"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.9"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -867,13 +888,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0FFF0">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -892,13 +914,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±300.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -907,18 +929,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Device â€¢ Stock: 75"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.0"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -949,13 +971,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0F8FF">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -974,13 +997,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±395.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -989,18 +1012,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Device â€¢ Stock: 60"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.3"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -1031,13 +1054,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFF8DC">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -1056,13 +1080,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±180.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -1071,18 +1095,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="E-liquid â€¢ 5 Flavors"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.6"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -1113,13 +1137,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#FFE4E1">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -1138,13 +1163,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±450.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -1153,18 +1178,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Disposable â€¢ 15,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.7"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -1195,13 +1220,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0FFF0">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -1220,13 +1246,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±380.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -1235,18 +1261,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Disposable â€¢ 30,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.5"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"
@@ -1277,13 +1303,14 @@
                     android:layout_margin="5dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="4dp"
-                    android:backgroundTint="#F0F8FF">
+                    app:cardBackgroundColor="#FFFFFF">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="10dp">
+                        android:padding="10dp"
+                        android:background="#FFFFFF">
 
                         <ImageView
                             android:layout_width="match_parent"
@@ -1302,13 +1329,13 @@
                             android:textStyle="bold"
                             android:textColor="#333333"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â‚±380.00"
+                            android:text="@string/product_price_placeholder"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="#000000"
@@ -1317,18 +1344,18 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Disposable â€¢ 30,000 Puffs"
+                            android:text="@string/product_spec_placeholder"
                             android:textSize="11sp"
                             android:textColor="#666666"
                             android:maxLines="2"
-                            android:ellipsize="end" />
+                            android:ellipsize="end"
                             android:lineSpacingExtra="1dp"
                             android:layout_marginBottom="3dp" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="â­ 4.4"
+                            android:text="@string/product_rating_placeholder"
                             android:textSize="11sp"
                             android:textColor="#FFA500"
                             android:maxLines="1"

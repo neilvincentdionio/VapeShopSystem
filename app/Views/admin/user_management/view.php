@@ -295,6 +295,10 @@
                             <div class="detail-value"><?= esc($user['city'] ?? 'Not provided') ?></div>
                         </div>
                         <div class="detail-box">
+                            <span class="detail-label">Barangay</span>
+                            <div class="detail-value"><?= esc($user['barangay'] ?? 'Not provided') ?></div>
+                        </div>
+                        <div class="detail-box">
                             <span class="detail-label">Province</span>
                             <div class="detail-value"><?= esc($user['province'] ?? 'Not provided') ?></div>
                         </div>
@@ -328,7 +332,7 @@
                 <div class="actions">
                     <a href="<?= site_url('user-management') ?>" class="btn">Back to User Management</a>
                     <?php if (($user['role'] ?? '') === 'customer' && $approvalStatus === 'pending'): ?>
-                        <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post" style="margin:0;">
+                        <form action="<?= site_url('user-management/approve/' . $user['id']) ?>" method="post" style="margin:0;" onsubmit="return confirm('Approve this customer account?');">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-primary">Approve Customer</button>
                         </form>
