@@ -152,6 +152,7 @@ class Records extends BaseController
             ->orderBy('id', $dateSort === 'asc' ? 'ASC' : 'DESC')
             ->paginate(10);
         $records = $this->attachOrderPlacementTimes($records);
+        $records = $this->attachReturnRefundInfo($records);
         $pager = $recordsModel->pager;
 
         $recordTypes = array_map(
@@ -248,6 +249,9 @@ class Records extends BaseController
                 'message' => 'Record not found.',
             ]);
         }
+
+        $enriched = $this->attachReturnRefundInfo([$record]);
+        $record = $enriched[0] ?? $record;
 
         return $this->response->setJSON([
             'success' => true,
@@ -409,6 +413,7 @@ class Records extends BaseController
         }
 
         $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+        $records = $this->attachReturnRefundInfo($records);
 
         // Generate CSV
         $filename = 'records_' . date('Y-m-d_H-i-s') . '.csv';
@@ -430,7 +435,7 @@ class Records extends BaseController
                 $totalAmount,
                 ucfirst($record['payment_method'] ?? ''),
                 ucfirst($record['payment_status']),
-                $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')),
+                $this->escapeCSV((string) ($record['status_display'] ?? record_format_status_cell($record))),
                 $this->escapeCSV($record['notes'] ?? ''),
                 $record['created_at']
             );
@@ -511,6 +516,7 @@ class Records extends BaseController
         }
 
         $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+        $records = $this->attachReturnRefundInfo($records);
 
         // Generate Excel-compatible CSV (tab-separated)
         $filename = 'records_' . date('Y-m-d_H-i-s') . '.xls';
@@ -532,7 +538,7 @@ class Records extends BaseController
                 $totalAmount,
                 ucfirst($record['payment_method'] ?? ''),
                 ucfirst($record['payment_status']),
-                $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')),
+                (string) ($record['status_display'] ?? record_format_status_cell($record)),
                 $record['notes'] ?? '',
                 $record['created_at']
             );
@@ -626,6 +632,7 @@ class Records extends BaseController
         }
 
         $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+        $records = $this->attachReturnRefundInfo($records);
 
         return view('admin/records/print', [
             'records' => $records,
@@ -697,6 +704,7 @@ class Records extends BaseController
         }
 
         $records = $query->orderBy('record_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+        $records = $this->attachReturnRefundInfo($records);
 
         // Generate HTML for PDF
         $html = $this->generatePDFHTML($records, $search, $recordType, $status, $fromDate, $toDate);
@@ -791,7 +799,7 @@ class Records extends BaseController
                 <td>₱' . number_format($record['unit_price'], 2) . '</td>
                 <td>₱' . number_format($totalAmount, 2) . '</td>
                 <td>' . ucfirst($record['payment_method'] ?? '') . '</td>
-                <td>' . $this->formatRecordStatusLabel((string) ($record['status'] ?? 'pending')) . '</td>
+                <td>' . htmlspecialchars((string) ($record['status_display'] ?? record_format_status_cell($record))) . '</td>
             </tr>';
         }
         
@@ -800,8 +808,8 @@ class Records extends BaseController
         $html .= '</tbody>
         <tfoot>
             <tr>
-                <td colspan="7" style="text-align: right; font-weight: bold;">Grand Total:</td>
-                <td colspan="3" style="font-weight: bold;">₱' . number_format($grandTotal, 2) . '</td>
+                <td colspan="8" style="text-align: right; font-weight: bold;">Grand Total:</td>
+                <td colspan="2" style="font-weight: bold;">₱' . number_format($grandTotal, 2) . '</td>
             </tr>
         </tfoot>
     </table>
@@ -980,5 +988,127 @@ class Records extends BaseController
         unset($record);
 
         return $records;
+    }
+
+    /**
+     * Attach live order return/refund info to sales records (and backfill stale status).
+     *
+     * @param array<int, array<string, mixed>> $records
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachReturnRefundInfo(array $records): array
+    {
+        if ($records === []) {
+            return $records;
+        }
+
+        helper(['record', 'return_refund']);
+
+        $references = [];
+        foreach ($records as $record) {
+            if (($record['record_type'] ?? '') !== 'sales') {
+                continue;
+            }
+            $reference = trim((string) ($record['reference_number'] ?? ''));
+            if ($reference !== '') {
+                $references[] = $reference;
+            }
+        }
+
+        $deliveryStatusByReference = [];
+        $returnMetaByReference = [];
+        if ($references !== []) {
+            $references = array_values(array_unique($references));
+            $db = \Config\Database::connect();
+            if ($db->tableExists('orders')) {
+                $rows = $db->table('orders o')
+                    ->select(
+                        'o.reference_number, o.id AS order_id, COALESCE(s.status, o.status) AS delivery_status, s.notes AS shipment_notes, s.delivery_notes',
+                        false
+                    )
+                    ->join('order_shipments s', 's.order_id = o.id', 'left')
+                    ->whereIn('o.reference_number', $references)
+                    ->get()
+                    ->getResultArray();
+
+                foreach ($rows as $row) {
+                    $ref = trim((string) ($row['reference_number'] ?? ''));
+                    if ($ref === '') {
+                        continue;
+                    }
+                    $deliveryStatusByReference[$ref] = strtolower((string) ($row['delivery_status'] ?? ''));
+                    $returnMetaByReference[$ref] = parse_return_meta(
+                        (string) ($row['shipment_notes'] ?? ''),
+                        (string) ($row['delivery_notes'] ?? '')
+                    );
+                }
+            }
+        }
+
+        foreach ($records as &$record) {
+            $ref = trim((string) ($record['reference_number'] ?? ''));
+            $recordStatus = (string) ($record['status'] ?? 'pending');
+            $recordType = (string) ($record['record_type'] ?? '');
+
+            if ($recordType === 'inventory' && record_is_damaged_inventory_reference($ref)) {
+                $record['order_delivery_status'] = '';
+                $record['return_refund_display'] = 'Yes — Damaged Item (inventory)';
+                $record['has_return_refund'] = true;
+            } elseif ($recordType !== 'sales') {
+                $record['order_delivery_status'] = '';
+                $record['return_refund_display'] = ($recordStatus === 'return_refund') ? 'Yes — Return/Refund' : '—';
+                $record['has_return_refund'] = $recordStatus === 'return_refund';
+            } else {
+                $orderStatus = $deliveryStatusByReference[$ref] ?? '';
+                $returnMeta = $returnMetaByReference[$ref] ?? null;
+
+                $record['order_delivery_status'] = $orderStatus;
+                $record['return_refund_display'] = record_format_return_refund_display($orderStatus, $recordStatus, $returnMeta);
+                $record['has_return_refund'] = record_has_return_refund($orderStatus, $recordStatus, $ref);
+
+                if (
+                    $orderStatus !== ''
+                    && is_return_refund_status($orderStatus)
+                    && $recordStatus !== 'return_refund'
+                    && isset($record['id'])
+                ) {
+                    $this->recordModel->update((int) $record['id'], ['status' => 'return_refund']);
+                    $record['status'] = 'return_refund';
+                }
+            }
+
+            $record['status_display'] = record_format_status_cell($record);
+            $record['status_badge_class'] = record_status_badge_class($record);
+        }
+        unset($record);
+
+        return $records;
+    }
+
+    /**
+     * Backfill sales + damaged inventory rows from all orders.
+     */
+    public function syncFromOrders()
+    {
+        $authCheck = $this->checkAuth();
+        if ($authCheck !== true) {
+            return $authCheck;
+        }
+        $schemaCheck = $this->ensureSchema();
+        if ($schemaCheck !== true) {
+            return $schemaCheck;
+        }
+
+        $actorId = (int) (session()->get('user_id') ?? 0);
+        $stats = (new \App\Services\OrderRecordSyncService(null, $this->recordModel))
+            ->syncAllOrders($actorId > 0 ? $actorId : null);
+
+        $message = sprintf(
+            'Synced %d sales record(s) and %d damaged inventory line(s) from orders.',
+            $stats['sales'],
+            $stats['damaged']
+        );
+
+        return redirect()->to('/records')->with('success', $message);
     }
 }

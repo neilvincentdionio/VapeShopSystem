@@ -5,15 +5,20 @@ require_once __DIR__ . '/common.php';
 
 require_post();
 $input = get_request_data();
-require_fields($input, ['email', 'product_name', 'quantity']);
+require_fields($input, ['email', 'quantity']);
 
 $email = normalize_email((string) $input['email']);
-$productName = trim((string) $input['product_name']);
+$productName = trim((string) ($input['product_name'] ?? ''));
+$productId = (int) ($input['product_id'] ?? 0);
 $quantity = (int) $input['quantity'];
 $variantId = (int) ($input['variant_id'] ?? 0);
 
 if ($quantity <= 0) {
     json_response(false, 'Quantity must be greater than zero.', null, 400);
+}
+
+if ($productId <= 0 && $productName === '') {
+    json_response(false, 'Product is required.', null, 400);
 }
 
 try {
@@ -25,13 +30,47 @@ try {
     }
     $userId = (int) $user['id'];
 
-    $productStmt = $db->prepare(
-        'SELECT id, name, category, puffs, price, selling_price, stock_qty, is_active
-         FROM products
-         WHERE LOWER(name) = LOWER(:name)
-         LIMIT 1'
-    );
-    $productStmt->execute([':name' => $productName]);
+    // When variant_id is sent, resolve the owning product (fixes duplicate product names).
+    if ($variantId > 0 && mobile_has_variant_table($db)) {
+        $variantOwnerStmt = $db->prepare(
+            'SELECT p.id, p.name, p.category, p.puffs, p.price, p.selling_price, p.stock_qty, p.is_active
+             FROM product_variants pv
+             INNER JOIN products p ON p.id = pv.product_id
+             WHERE pv.id = :variant_id
+             LIMIT 1'
+        );
+        $variantOwnerStmt->execute([':variant_id' => $variantId]);
+        $variantOwner = $variantOwnerStmt->fetch();
+        if (is_array($variantOwner)) {
+            $resolvedId = (int) ($variantOwner['id'] ?? 0);
+            if ($productId > 0 && $productId !== $resolvedId) {
+                json_response(false, 'Selected flavor does not match this product.', null, 422);
+            }
+            $productId = $resolvedId;
+            if ($productName === '') {
+                $productName = trim((string) ($variantOwner['name'] ?? ''));
+            }
+        }
+    }
+
+    if ($productId > 0) {
+        $productStmt = $db->prepare(
+            'SELECT id, name, category, puffs, price, selling_price, stock_qty, is_active
+             FROM products
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $productStmt->execute([':id' => $productId]);
+    } else {
+        $productStmt = $db->prepare(
+            'SELECT id, name, category, puffs, price, selling_price, stock_qty, is_active
+             FROM products
+             WHERE LOWER(name) = LOWER(:name)
+             ORDER BY id DESC
+             LIMIT 1'
+        );
+        $productStmt->execute([':name' => $productName]);
+    }
     $product = $productStmt->fetch();
 
     if (!is_array($product)) {

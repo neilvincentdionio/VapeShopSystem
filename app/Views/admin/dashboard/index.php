@@ -247,7 +247,7 @@
             <section class="chart-card span-full">
                 <h2 class="section-title">Daily Sales</h2>
                 <p class="section-subtitle">
-                    Last <?= (int) ($dailyChart['days'] ?? 14) ?> days (paid orders) —
+                    Last <?= (int) ($dailyChart['days'] ?? 14) ?> days (net sales, excludes returns) —
                     <strong>&#8369;<?= number_format((float) ($dailyChart['total'] ?? 0), 2) ?></strong>
                 </p>
                 <div class="chart-wrap tall">
@@ -258,7 +258,7 @@
             <section class="chart-card">
                 <h2 class="section-title">Monthly Profit</h2>
                 <p class="section-subtitle">
-                    Last <?= (int) ($profitChart['months'] ?? 12) ?> months —
+                    Last <?= (int) ($profitChart['months'] ?? 12) ?> months (net sales report) —
                     <strong>&#8369;<?= number_format((float) ($profitChart['total'] ?? 0), 2) ?></strong>
                 </p>
                 <div class="chart-wrap">
@@ -269,7 +269,7 @@
             <section class="chart-card">
                 <h2 class="section-title">Best Selling Products</h2>
                 <p class="section-subtitle">
-                    Top <?= (int) ($bestChart['limit'] ?? 8) ?> by units sold —
+                    Top <?= (int) ($bestChart['limit'] ?? 8) ?> by units sold (net sales report) —
                     <strong><?= number_format((int) ($bestChart['total'] ?? 0)) ?></strong> units
                 </p>
                 <div class="chart-wrap">

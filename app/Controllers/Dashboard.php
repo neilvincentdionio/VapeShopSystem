@@ -1425,6 +1425,7 @@ class Dashboard extends BaseController
                 }
 
                 if ($result) {
+                    $this->syncOrderToRecord($orderId);
                     $this->logOrderActivity(
                         'Completed return pickup (QR scanned)',
                         ActivityLogTypes::RETURN_PICKUP_COMPLETED,
@@ -5042,85 +5043,22 @@ class Dashboard extends BaseController
 
     private function syncOrderToRecord(int $orderId): void
     {
-        if ($orderId <= 0) {
-            return;
-        }
+        $actorId = (int) ($this->session->get('user_id') ?? 0);
 
-        try {
-            if (!\Config\Database::connect()->tableExists('records')) {
-                return;
-            }
+        (new \App\Services\OrderRecordSyncService($this->orderModel, $this->recordModel))
+            ->syncOrder($orderId, $actorId > 0 ? $actorId : null);
+    }
 
-            $order = $this->orderModel->getOrder($orderId);
-            if (!$order) {
-                return;
-            }
+    /**
+     * @param array<string, mixed> $order
+     * @param array<string, mixed> $returnMeta
+     */
+    private function syncDamagedItemsToRecords(int $orderId, array $order, array $returnMeta): void
+    {
+        $actorId = (int) ($this->session->get('user_id') ?? 0);
 
-            $referenceNumber = trim((string) ($order['reference_number'] ?? ''));
-            if ($referenceNumber === '') {
-                return;
-            }
-
-            $placedAt = (string) ($order['created_at'] ?? $order['date'] ?? '');
-            $recordDateTs = strtotime($placedAt !== '' ? $placedAt : date('Y-m-d H:i:s'));
-            $normalizedDate = $recordDateTs !== false ? date('Y-m-d', $recordDateTs) : date('Y-m-d');
-
-            $deliveryStatus = strtolower((string) ($order['delivery_status'] ?? 'to_pay'));
-            $recordStatus = 'pending';
-            if ($deliveryStatus === 'return_refund') {
-                $recordStatus = 'return_refund';
-            } elseif (in_array($deliveryStatus, ['cancelled', 'failed_delivery'], true)) {
-                $recordStatus = 'cancelled';
-            } elseif ($deliveryStatus === 'completed') {
-                $recordStatus = 'completed';
-            }
-
-            $paymentMethod = strtolower((string) ($order['payment_method'] ?? 'cash'));
-            if (!in_array($paymentMethod, ['cash', 'card', 'gcash', 'bank_transfer'], true)) {
-                $paymentMethod = 'cash';
-            }
-
-            $paymentStatus = strtolower((string) ($order['payment_status'] ?? 'unpaid'));
-            if (!in_array($paymentStatus, ['paid', 'partial', 'unpaid'], true)) {
-                $paymentStatus = 'unpaid';
-            }
-            if ($recordStatus === 'completed') {
-                $paymentStatus = 'paid';
-            } elseif ($recordStatus === 'return_refund') {
-                $paymentStatus = 'unpaid';
-            }
-
-            $payload = [
-                'record_type' => 'sales',
-                'record_date' => $normalizedDate,
-                'reference_number' => $referenceNumber,
-                'title' => trim((string) ($order['title'] ?? 'Sales Order')),
-                'description' => trim((string) ($order['description'] ?? 'Auto-synced from Orders module')),
-                'quantity' => max(0, (int) ($order['quantity'] ?? 0)),
-                'unit_price' => max(0, (float) ($order['unit_price'] ?? 0)),
-                'payment_method' => $paymentMethod,
-                'payment_status' => $paymentStatus,
-                'status' => $recordStatus,
-                'notes' => trim((string) ($order['notes'] ?? '')),
-                'created_by' => (int) ($this->session->get('user_id') ?? $order['created_by'] ?? 0) ?: null,
-            ];
-
-            $existing = $this->recordModel
-                ->where('record_type', 'sales')
-                ->where('reference_number', $referenceNumber)
-                ->first();
-
-            if ($existing && isset($existing['id'])) {
-                $this->recordModel->update((int) $existing['id'], $payload);
-            } else {
-                $this->recordModel->insert($payload);
-            }
-        } catch (\Throwable $e) {
-            log_message('error', 'Failed syncing order {id} to records: {message}', [
-                'id' => $orderId,
-                'message' => $e->getMessage(),
-            ]);
-        }
+        (new \App\Services\OrderRecordSyncService($this->orderModel, $this->recordModel))
+            ->syncDamagedItems($orderId, $order, $returnMeta, $actorId > 0 ? $actorId : null);
     }
 
     private function reorderItems($order)
@@ -5490,6 +5428,8 @@ class Dashboard extends BaseController
             ]
         );
 
+        $this->syncOrderToRecord($orderId);
+
         return redirect()->to($redirectBack)->with('success', 'Return/refund request submitted. Show your return QR code to the rider during pickup.');
     }
 
@@ -5590,6 +5530,7 @@ class Dashboard extends BaseController
                     'success',
                     (int) $this->session->get('user_id')
                 );
+                $this->syncOrderToRecord($orderId);
             }
 
             return $this->response->setJSON([
@@ -5644,6 +5585,7 @@ class Dashboard extends BaseController
                     'warning',
                     (int) $this->session->get('user_id')
                 );
+                $this->syncOrderToRecord($orderId);
             }
 
             return $this->response->setJSON([
@@ -5779,6 +5721,13 @@ class Dashboard extends BaseController
             }
 
             $this->syncOrderToRecord($orderId);
+            $freshOrder = $this->orderModel->getOrder($orderId) ?? $order;
+            $finalReturnMeta = parse_return_meta(
+                (string) ($freshOrder['shipment_notes'] ?? ''),
+                (string) ($freshOrder['delivery_notes'] ?? '')
+            ) ?? $returnMeta;
+            $this->syncDamagedItemsToRecords($orderId, $freshOrder, $finalReturnMeta);
+
             $this->notificationService->notifyUsers([(int) ($order['created_by'] ?? 0)], [
                 'category' => 'orders',
                 'type' => 'return_refund_completed',

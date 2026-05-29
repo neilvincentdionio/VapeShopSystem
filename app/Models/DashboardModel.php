@@ -11,6 +11,28 @@ class DashboardModel extends Model
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
 
+    private ?SalesReportModel $salesReportModel = null;
+
+    private function salesReport(): SalesReportModel
+    {
+        if ($this->salesReportModel === null) {
+            $this->salesReportModel = model(SalesReportModel::class);
+        }
+
+        return $this->salesReportModel;
+    }
+
+    /**
+     * @return array{start: string, end: string}
+     */
+    private function reportLifetimeRange(): array
+    {
+        return [
+            'start' => '1970-01-01 00:00:00',
+            'end' => date('Y-m-d 00:00:00', strtotime('+1 day')),
+        ];
+    }
+
     public function getTotalUsers()
     {
         return $this->where('is_active', 1)->countAllResults();
@@ -123,12 +145,7 @@ class DashboardModel extends Model
         $today = date('Y-m-d 00:00:00');
         $tomorrow = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
-        return [
-            'orders' => $this->countOrders($today, $tomorrow),
-            'revenue' => '₱' . number_format($this->sumRevenue($today, $tomorrow), 2),
-            'new_users' => $this->countNewUsers($today, $tomorrow),
-            'active_sessions' => $this->countActiveUsers(),
-        ];
+        return $this->buildPeriodStats($today, $tomorrow);
     }
 
     private function getWeekStats()
@@ -136,12 +153,7 @@ class DashboardModel extends Model
         $weekStart = date('Y-m-d 00:00:00', strtotime('monday this week'));
         $nextDay = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
-        return [
-            'orders' => $this->countOrders($weekStart, $nextDay),
-            'revenue' => '₱' . number_format($this->sumRevenue($weekStart, $nextDay), 2),
-            'new_users' => $this->countNewUsers($weekStart, $nextDay),
-            'active_sessions' => $this->countActiveUsers(),
-        ];
+        return $this->buildPeriodStats($weekStart, $nextDay);
     }
 
     private function getMonthStats()
@@ -149,10 +161,20 @@ class DashboardModel extends Model
         $monthStart = date('Y-m-01 00:00:00');
         $nextDay = date('Y-m-d 00:00:00', strtotime('+1 day'));
 
+        return $this->buildPeriodStats($monthStart, $nextDay);
+    }
+
+    /**
+     * @return array{orders: int, revenue: string, new_users: int, active_sessions: int}
+     */
+    private function buildPeriodStats(string $start, string $end): array
+    {
+        $summary = $this->salesReport()->getSummary($start, $end);
+
         return [
-            'orders' => $this->countOrders($monthStart, $nextDay),
-            'revenue' => '₱' . number_format($this->sumRevenue($monthStart, $nextDay), 2),
-            'new_users' => $this->countNewUsers($monthStart, $nextDay),
+            'orders' => (int) ($summary['total_orders'] ?? 0),
+            'revenue' => '₱' . number_format((float) ($summary['total_revenue'] ?? 0), 2),
+            'new_users' => $this->countNewUsers($start, $end),
             'active_sessions' => $this->countActiveUsers(),
         ];
     }
@@ -182,28 +204,11 @@ class DashboardModel extends Model
         return (int) $this->db->table('products')->countAllResults();
     }
 
-    private function countOrders(string $start, string $end): int
-    {
-        return (int) $this->db->table('orders')
-            ->where('created_at >=', $start)
-            ->where('created_at <', $end)
-            ->where('status !=', 'cancelled')
-            ->countAllResults();
-    }
-
     private function sumRevenue(string $start, string $end): float
     {
-        $row = $this->db->table('order_payments op')
-            ->selectSum('op.amount', 'amount')
-            ->join('orders o', 'o.id = op.order_id', 'inner')
-            ->where('op.status', 'paid')
-            ->where('op.paid_at >=', $start)
-            ->where('op.paid_at <', $end)
-            ->where('o.status !=', 'cancelled')
-            ->get()
-            ->getRowArray();
+        $summary = $this->salesReport()->getSummary($start, $end);
 
-        return isset($row['amount']) ? (float) $row['amount'] : 0.0;
+        return (float) ($summary['total_revenue'] ?? 0.0);
     }
 
     private function countActiveUsers(): int
@@ -244,25 +249,11 @@ class DashboardModel extends Model
             $amounts[$dateKey] = 0.0;
         }
 
-        if ($this->db->tableExists('order_payments') && $this->db->tableExists('orders')) {
-            $rows = $this->db->table('order_payments op')
-                ->select("DATE(COALESCE(op.paid_at, op.updated_at, o.created_at)) AS revenue_date", false)
-                ->selectSum('op.amount', 'total')
-                ->join('orders o', 'o.id = op.order_id', 'inner')
-                ->where('op.status', 'paid')
-                ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) >=', $start)
-                ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) <', $end)
-                ->where('o.status !=', 'cancelled')
-                ->groupBy('revenue_date')
-                ->orderBy('revenue_date', 'ASC')
-                ->get()
-                ->getResultArray();
-
-            foreach ($rows as $row) {
-                $key = (string) ($row['revenue_date'] ?? '');
-                if ($key !== '' && array_key_exists($key, $amounts)) {
-                    $amounts[$key] = (float) ($row['total'] ?? 0);
-                }
+        $dailyRows = $this->salesReport()->getDailyBreakdown($start, $end);
+        foreach ($dailyRows as $row) {
+            $key = (string) ($row['date'] ?? '');
+            if ($key !== '' && array_key_exists($key, $amounts)) {
+                $amounts[$key] = (float) ($row['revenue'] ?? 0);
             }
         }
 
@@ -373,69 +364,12 @@ class DashboardModel extends Model
             'low_stock_count' => 0,
         ];
 
-        if ($this->db->tableExists('orders')) {
-            $stats['total_orders'] = (int) $this->db->table('orders')
-                ->where('status !=', 'cancelled')
-                ->countAllResults();
-        }
-
-        if ($this->db->tableExists('order_payments') && $this->db->tableExists('orders')) {
-            $revenueRow = $this->db->table('order_payments op')
-                ->selectSum('op.amount', 'total')
-                ->join('orders o', 'o.id = op.order_id', 'inner')
-                ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
-                ->get()
-                ->getRowArray();
-            $stats['total_revenue'] = round((float) ($revenueRow['total'] ?? 0), 2);
-
-            $profitRow = $this->db->table('orders o')
-                ->selectSum('o.total_profit', 'total')
-                ->join('order_payments op', 'op.order_id = o.id', 'inner')
-                ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
-                ->get()
-                ->getRowArray();
-            $stats['total_profit'] = round((float) ($profitRow['total'] ?? 0), 2);
-
-            if ($stats['total_profit'] <= 0 && $this->db->tableExists('order_items')) {
-                $itemProfitRow = $this->db->table('order_items oi')
-                    ->selectSum('oi.profit', 'total')
-                    ->join('orders o', 'o.id = oi.order_id', 'inner')
-                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
-                    ->where('op.status', 'paid')
-                    ->where('o.status !=', 'cancelled')
-                    ->get()
-                    ->getRowArray();
-                $stats['total_profit'] = round((float) ($itemProfitRow['total'] ?? 0), 2);
-            }
-
-            if ($this->db->tableExists('order_items')) {
-                $soldRow = $this->db->table('order_items oi')
-                    ->selectSum('oi.quantity', 'total')
-                    ->join('orders o', 'o.id = oi.order_id', 'inner')
-                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
-                    ->where('op.status', 'paid')
-                    ->where('o.status !=', 'cancelled')
-                    ->get()
-                    ->getRowArray();
-                $stats['total_products_sold'] = (int) ($soldRow['total'] ?? 0);
-            }
-        } elseif ($this->db->tableExists('orders')) {
-            $amountRow = $this->db->table('orders')
-                ->selectSum('total_amount', 'total')
-                ->where('status', 'completed')
-                ->get()
-                ->getRowArray();
-            $stats['total_revenue'] = round((float) ($amountRow['total'] ?? 0), 2);
-
-            $profitRow = $this->db->table('orders')
-                ->selectSum('total_profit', 'total')
-                ->where('status', 'completed')
-                ->get()
-                ->getRowArray();
-            $stats['total_profit'] = round((float) ($profitRow['total'] ?? 0), 2);
-        }
+        $lifetime = $this->reportLifetimeRange();
+        $summary = $this->salesReport()->getSummary($lifetime['start'], $lifetime['end']);
+        $stats['total_revenue'] = (float) ($summary['total_revenue'] ?? 0);
+        $stats['total_profit'] = (float) ($summary['total_profit'] ?? 0);
+        $stats['total_orders'] = (int) ($summary['total_orders'] ?? 0);
+        $stats['total_products_sold'] = (int) ($summary['total_products_sold'] ?? 0);
 
         if ($this->db->tableExists('products')) {
             $lowStockThreshold = max(1, $lowStockThreshold);
@@ -477,47 +411,14 @@ class DashboardModel extends Model
             $amounts[$monthKey] = 0.0;
         }
 
-        if ($this->db->tableExists('orders') && $this->db->tableExists('order_payments')) {
-            $start = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
-            $rows = $this->db->table('orders o')
-                ->select("DATE_FORMAT(COALESCE(op.paid_at, op.updated_at, o.created_at), '%Y-%m') AS profit_month", false)
-                ->selectSum('o.total_profit', 'total')
-                ->join('order_payments op', 'op.order_id = o.id', 'inner')
-                ->where('op.status', 'paid')
-                ->where('o.status !=', 'cancelled')
-                ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) >=', $start)
-                ->groupBy('profit_month')
-                ->orderBy('profit_month', 'ASC')
-                ->get()
-                ->getResultArray();
+        $start = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
+        $end = date('Y-m-d 00:00:00', strtotime('+1 day'));
+        $monthlyRows = $this->salesReport()->getMonthlyBreakdown($start, $end);
 
-            foreach ($rows as $row) {
-                $key = (string) ($row['profit_month'] ?? '');
-                if ($key !== '' && array_key_exists($key, $amounts)) {
-                    $amounts[$key] = (float) ($row['total'] ?? 0);
-                }
-            }
-
-            if (array_sum($amounts) <= 0 && $this->db->tableExists('order_items')) {
-                $itemRows = $this->db->table('order_items oi')
-                    ->select("DATE_FORMAT(COALESCE(op.paid_at, op.updated_at, o.created_at), '%Y-%m') AS profit_month", false)
-                    ->selectSum('oi.profit', 'total')
-                    ->join('orders o', 'o.id = oi.order_id', 'inner')
-                    ->join('order_payments op', 'op.order_id = o.id', 'inner')
-                    ->where('op.status', 'paid')
-                    ->where('o.status !=', 'cancelled')
-                    ->where('COALESCE(op.paid_at, op.updated_at, o.created_at) >=', $start)
-                    ->groupBy('profit_month')
-                    ->orderBy('profit_month', 'ASC')
-                    ->get()
-                    ->getResultArray();
-
-                foreach ($itemRows as $row) {
-                    $key = (string) ($row['profit_month'] ?? '');
-                    if ($key !== '' && array_key_exists($key, $amounts)) {
-                        $amounts[$key] = (float) ($row['total'] ?? 0);
-                    }
-                }
+        foreach ($monthlyRows as $row) {
+            $key = (string) ($row['month'] ?? '');
+            if ($key !== '' && array_key_exists($key, $amounts)) {
+                $amounts[$key] = (float) ($row['profit'] ?? 0);
             }
         }
 
@@ -554,45 +455,12 @@ class DashboardModel extends Model
             ];
         }
 
-        $builder = $this->db->table('order_items oi')
-            ->select('oi.product_name, SUM(oi.quantity) AS sold_qty', false)
-            ->join('orders o', 'o.id = oi.order_id', 'inner')
-            ->where('o.status !=', 'cancelled')
-            ->groupBy('oi.product_id, oi.product_name')
-            ->orderBy('sold_qty', 'DESC')
-            ->limit($limit);
-
-        if ($this->db->tableExists('order_payments')) {
-            $builder->join('order_payments op', 'op.order_id = o.id', 'inner')
-                ->where('op.status', 'paid');
-        } else {
-            $builder->where('o.status', 'completed');
-        }
-
-        $rows = $builder->get()->getResultArray();
+        $lifetime = $this->reportLifetimeRange();
+        $rows = $this->salesReport()->getTopProducts($lifetime['start'], $lifetime['end'], $limit);
 
         foreach ($rows as $row) {
-            $rawName = trim((string) ($row['product_name'] ?? 'Product'));
-            $productName = $rawName;
-            $flavorName = 'Not specified';
-
-            // Stored order item names now follow "PRODUCT - FLAVOR" for flavored items.
-            if ($rawName !== '' && str_contains($rawName, ' - ')) {
-                $parts = explode(' - ', $rawName, 2);
-                $productName = trim((string) ($parts[0] ?? $rawName));
-                $parsedFlavor = trim((string) ($parts[1] ?? ''));
-                if ($parsedFlavor !== '') {
-                    $flavorName = $parsedFlavor;
-                }
-            }
-
-            $label = ($productName !== '' ? $productName : 'Product') . ' (Flavor: ' . $flavorName . ')';
-            if (strlen($label) > 60) {
-                $label = substr($label, 0, 57) . '...';
-            }
-
-            $labels[] = $label;
-            $quantities[] = (int) ($row['sold_qty'] ?? 0);
+            $labels[] = $this->formatProductChartLabel((string) ($row['product_name'] ?? 'Product'));
+            $quantities[] = (int) ($row['units_sold'] ?? 0);
         }
 
         return [
@@ -601,5 +469,29 @@ class DashboardModel extends Model
             'total' => array_sum($quantities),
             'limit' => $limit,
         ];
+    }
+
+    private function formatProductChartLabel(string $rawName): string
+    {
+        $rawName = trim($rawName);
+        $productName = $rawName !== '' ? $rawName : 'Product';
+        $flavorName = 'Not specified';
+
+        if ($rawName !== '' && str_contains($rawName, ' - ')) {
+            $parts = explode(' - ', $rawName, 2);
+            $productName = trim((string) ($parts[0] ?? $rawName));
+            $parsedFlavor = trim((string) ($parts[1] ?? ''));
+            if ($parsedFlavor !== '') {
+                $flavorName = $parsedFlavor;
+            }
+        }
+
+        $label = $productName . ' (Flavor: ' . $flavorName . ')';
+
+        if (strlen($label) > 60) {
+            return substr($label, 0, 57) . '...';
+        }
+
+        return $label;
     }
 }

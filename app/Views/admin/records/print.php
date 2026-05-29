@@ -66,10 +66,24 @@
         tbody tr:hover {
             background-color: #f0f0f0;
         }
-        .status-pending { color: #f39c12; font-weight: bold; }
-        .status-completed { color: #27ae60; font-weight: bold; }
-        .status-cancelled { color: #e74c3c; font-weight: bold; }
-        .status-return_refund { color: #6d28d9; font-weight: bold; }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.35;
+            max-width: 140px;
+            white-space: normal;
+            text-align: center;
+        }
+        .status-badge.status-pending { background: #fff3cd; color: #856404; }
+        .status-badge.status-completed { background: #e8f5e9; color: #2e7d32; }
+        .status-badge.status-cancelled { background: #fee2e2; color: #991b1b; }
+        .status-badge.status-return-refund,
+        .status-badge.status-damaged { background: #fee2e2; color: #b91c1c; }
         .footer {
             margin-top: 30px;
             text-align: center;
@@ -108,6 +122,7 @@
     </style>
 </head>
 <body>
+<?php helper('record'); ?>
     <button class="print-btn no-print" onclick="window.print()">Print Report</button>
     
     <div class="header">
@@ -154,9 +169,10 @@
         </thead>
         <tbody>
             <?php foreach ($records as $record): ?>
-                <?php 
+                <?php
                     $totalAmount = $record['quantity'] * $record['unit_price'];
-                    $statusClass = 'status-' . $record['status'];
+                    $statusLabel = (string) ($record['status_display'] ?? record_format_status_cell($record));
+                    $statusBadgeClass = record_status_badge_class($record);
                 ?>
                 <tr>
                     <td><?= $record['id'] ?></td>
@@ -169,7 +185,9 @@
                     <td>₱<?= number_format($record['unit_price'], 2) ?></td>
                     <td>₱<?= number_format($totalAmount, 2) ?></td>
                     <td><?= ucfirst($record['payment_method'] ?? '-') ?></td>
-                    <td class="<?= $statusClass ?>"><?= ucfirst($record['status']) ?></td>
+                    <td>
+                        <span class="status-badge <?= esc($statusBadgeClass) ?>"><?= htmlspecialchars($statusLabel) ?></span>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
@@ -181,10 +199,10 @@
                 }
             ?>
             <tr>
-                <td colspan="8" style="text-align: right; font-weight: bold; font-size: 14px;">
+                <td colspan="9" style="text-align: right; font-weight: bold; font-size: 14px;">
                     GRAND TOTAL:
                 </td>
-                <td colspan="3" style="font-weight: bold; font-size: 14px; color: #27ae60;">
+                <td colspan="2" style="font-weight: bold; font-size: 14px; color: #27ae60;">
                     ₱<?= number_format($grandTotal, 2) ?>
                 </td>
             </tr>

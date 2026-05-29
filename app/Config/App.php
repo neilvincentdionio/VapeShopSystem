@@ -16,7 +16,7 @@ class App extends BaseConfig
      *
      * E.g., http://example.com/
      */
-    public string $baseURL = 'https://disk-consist-contacts-consultant.trycloudflare.com/VapeShopSystem/';
+    public string $baseURL = 'https://photography-more-align-poly.trycloudflare.com/VapeShopSystem/';
     //public string $baseURL = 'http://localhost/VapeShopSystem/';
 
     /**
@@ -31,6 +31,8 @@ class App extends BaseConfig
      * @var list<string>
      */
     public array $allowedHostnames = [
+        'photography-more-align-poly.trycloudflare.com',
+        'appears-escape-time-cruise.trycloudflare.com',
         'reaches-choose-anymore-richmond.trycloudflare.com',
         'recorder-configure-provinces-kentucky.trycloudflare.com',
     ];

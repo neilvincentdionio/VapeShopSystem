@@ -148,6 +148,7 @@ $routes->group('records', ['filter' => ['auth:admin', 'permission:manage_records
     $routes->get('export-excel', 'Records::exportExcel');
     $routes->get('generate-pdf', 'Records::generatePDF');
     $routes->get('print', 'Records::printView');
+    $routes->post('sync-from-orders', 'Records::syncFromOrders');
     $routes->get('edit/(:num)', 'Records::edit/$1');
     $routes->get('(:num)', 'Records::show/$1');
     $routes->post('store', 'Records::store');

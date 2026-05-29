@@ -127,20 +127,16 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USER_ROLE = "user_role";
     private static final String KEY_USER_ID = "user_id";
     private static final String[] API_BASE_URLS = {
-        // Active public tunnel URL (works for Android phones outside local network)
-        "https://reaches-choose-anymore-richmond.trycloudflare.com/VapeShopSystem/mobile_api/",
-        // Previous tunnel URL kept as fallback
-        "https://recorder-configure-provinces-kentucky.trycloudflare.com/VapeShopSystem/mobile_api/",
-        // Physical device via USB + adb reverse (run: adb reverse tcp:8080 tcp:80)
+        // Must match app.baseURL in .env (+ /mobile_api/)
+        "https://photography-more-align-poly.trycloudflare.com/VapeShopSystem/mobile_api/",
+        // Same PC on Wi-Fi (update IP if ipconfig shows a new IPv4)
+        "http://192.168.1.7/VapeShopSystem/mobile_api/",
+        // USB + connect-phone.bat (adb reverse tcp:8080 tcp:80)
         "http://127.0.0.1:8080/VapeShopSystem/mobile_api/",
-        // Localhost fallback (if reverse is mapped directly to port 80)
         "http://127.0.0.1/VapeShopSystem/mobile_api/",
-        // Android Studio emulator
+        // Android Studio / Genymotion emulators
         "http://10.0.2.2/VapeShopSystem/mobile_api/",
-        // Genymotion emulator
-        "http://10.0.3.2/VapeShopSystem/mobile_api/",
-        // Update this LAN host to your current PC IPv4 for Wi-Fi testing
-        "http://192.168.1.72/VapeShopSystem/mobile_api/"
+        "http://10.0.3.2/VapeShopSystem/mobile_api/"
     };
     private boolean isLoggedIn = false;
     private String currentUserRole = "customer";
@@ -1559,14 +1555,19 @@ public class MainActivity extends AppCompatActivity {
         matchBarangaySpinner(barangaySpinner, Arrays.asList(prefs.getString(KEY_USER_BARANGAY, "")));
     }
 
-    public void syncCartItemToServer(String productName, int quantity, Integer variantId, SimpleCallback callback) {
+    public void syncCartItemToServer(int productId, String productName, int quantity, Integer variantId, SimpleCallback callback) {
         if (!isUserLoggedIn()) {
             callback.onError("Please login first before adding to cart");
             return;
         }
+        if (productId <= 0) {
+            callback.onError("Product unavailable");
+            return;
+        }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
-        params.put("product_name", productName);
+        params.put("product_id", String.valueOf(productId));
+        params.put("product_name", productName == null ? "" : productName);
         params.put("quantity", String.valueOf(quantity));
         if (variantId != null && variantId > 0) {
             params.put("variant_id", String.valueOf(variantId));
@@ -1740,7 +1741,7 @@ public class MainActivity extends AppCompatActivity {
             showFlavorSelectionDialog(host, product);
             return;
         }
-        syncCartItemToServer(product.name, 1, null, new SimpleCallback() {
+        syncCartItemToServer(product.id, product.name, 1, null, new SimpleCallback() {
             @Override
             public void onSuccess(String message) {
                 addProductToCart(product, null);
@@ -1849,7 +1850,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             ProductVariant selectedVariant = filteredVariants[0].get(flavorIndex);
-            syncCartItemToServer(product.name, 1, selectedVariant.id, new SimpleCallback() {
+            syncCartItemToServer(product.id, product.name, 1, selectedVariant.id, new SimpleCallback() {
                 @Override
                 public void onSuccess(String message) {
                     addProductToCart(product, selectedVariant);

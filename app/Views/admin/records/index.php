@@ -143,9 +143,37 @@
         th { color: #333333; font-weight: 600; background: #f8f9fa; }
         .sort-link { color: #333333; text-decoration: none; }
         .sort-link:hover { text-decoration: underline; }
-        .status-active { color: #28a745; font-weight: 600; }
-        .status-inactive { color: #dc3545; font-weight: 600; }
-        .status-return-refund { color: #6d28d9; font-weight: 600; }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .35rem;
+            padding: .28rem .62rem;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 600;
+            line-height: 1.35;
+            max-width: 12.5rem;
+            text-align: center;
+            white-space: normal;
+        }
+        .status-badge.status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-badge.status-completed {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status-badge.status-cancelled {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status-badge.status-return-refund,
+        .status-badge.status-damaged {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
         .alert { padding: .8rem; border-radius: 8px; margin-bottom: 1rem; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
@@ -242,27 +270,21 @@
 <body>
     <?= $this->include('admin/partials/sidebar') ?>
 <?php
-    $recordStatusLabels = [
-        'pending' => 'Pending',
-        'completed' => 'Completed',
-        'cancelled' => 'Cancelled',
-        'return_refund' => 'Return/Refund',
-    ];
-    $recordStatusClass = static function (string $status): string {
-        if ($status === 'completed') {
-            return 'status-active';
-        }
-        if ($status === 'return_refund') {
-            return 'status-return-refund';
-        }
-
-        return 'status-inactive';
-    };
+    helper('record');
 ?>
 
     <div class="container records-reports-page">
         <?php if (session()->getFlashdata('success')): ?>
             <div class="alert alert-success"><?= htmlspecialchars(session()->getFlashdata('success')) ?></div>
+        <?php endif; ?>
+        <?php
+            $recordCount = model(\App\Models\RecordModel::class)->countAllResults();
+            if ($recordCount === 0):
+        ?>
+            <div class="alert alert-error" style="margin-bottom:1rem;">
+                No records yet. Orders are not imported automatically until you click
+                <strong>Sync from Orders</strong> (or complete a new order/return after this update).
+            </div>
         <?php endif; ?>
         <?php if (session()->getFlashdata('error')): ?>
             <div class="alert alert-error"><?= htmlspecialchars(session()->getFlashdata('error')) ?></div>
@@ -316,6 +338,10 @@
             <div class="module-actions-bar">
                 <strong>Export Options</strong>
                 <div class="module-actions-group">
+                    <form action="<?= site_url('records/sync-from-orders') ?>" method="post" style="display:inline;" onsubmit="return confirm('Import all orders into Records (sales + damaged return lines)?');">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-secondary">Sync from Orders</button>
+                    </form>
                     <button type="button" class="btn btn-info" onclick="exportRecords('excel')">Export Excel</button>
                     <button type="button" class="btn btn-info" onclick="exportRecords('pdf')">Export PDF</button>
                     <button type="button" class="btn btn-info" onclick="printRecords()">Print View</button>
@@ -364,7 +390,15 @@
                                 <td>&#8369;<?= number_format((float) ($item['unit_price'] ?? 0), 2) ?></td>
                                 <td>&#8369;<?= number_format((float) ($item['total_amount'] ?? 0), 2) ?></td>
                                 <td><?= htmlspecialchars(ucfirst((string) ($item['payment_status'] ?? 'unpaid'))) ?></td>
-                                <td class="<?= esc($recordStatusClass((string) ($item['status'] ?? 'pending'))) ?>"><?= htmlspecialchars($recordStatusLabels[(string) ($item['status'] ?? 'pending')] ?? ucfirst((string) ($item['status'] ?? 'pending'))) ?></td>
+                                <?php
+                                    $statusLabel = (string) ($item['status_display'] ?? record_format_status_cell($item));
+                                    $statusBadgeClass = record_status_badge_class($item);
+                                ?>
+                                <td>
+                                    <span class="status-badge <?= esc($statusBadgeClass) ?>" title="<?= esc($statusLabel) ?>">
+                                        <?= htmlspecialchars($statusLabel) ?>
+                                    </span>
+                                </td>
                                 <td>
                                     <div class="actions">
                                         <button type="button" class="btn btn-info js-view-record" data-id="<?= (int) $item['id'] ?>">View</button>
@@ -465,7 +499,7 @@
                 ['payment_method', 'Payment Method'],
                 ['payment_status', 'Payment Status'],
                 ['record_date', 'Record Date'],
-                ['status', 'Status'],
+                ['status_display', 'Status'],
                 ['created_by', 'Created By'],
                 ['created_at', 'Created At'],
                 ['updated_at', 'Updated At'],
@@ -521,8 +555,11 @@
                 if (field === 'created_at' || field === 'updated_at') {
                     return formatDate(value, true);
                 }
-                if (field === 'record_type' || field === 'payment_method' || field === 'payment_status' || field === 'status') {
+                if (field === 'record_type' || field === 'payment_method' || field === 'payment_status') {
                     return String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                }
+                if (field === 'status_display') {
+                    return value;
                 }
                 return value;
             }
@@ -542,7 +579,13 @@
                 for (const [field, label] of detailFields) {
                     html += '<div class="detail-item">';
                     html += '<div class="detail-label">' + escapeHtml(label) + '</div>';
-                    html += '<div class="detail-value">' + escapeHtml(prettify(field, record[field])) + '</div>';
+                    if (field === 'status_display') {
+                        const badgeClass = record.status_badge_class || 'status-pending';
+                        const statusText = record.status_display || record.status || '-';
+                        html += '<div class="detail-value"><span class="status-badge ' + escapeHtml(badgeClass) + '">' + escapeHtml(statusText) + '</span></div>';
+                    } else {
+                        html += '<div class="detail-value">' + escapeHtml(prettify(field, record[field])) + '</div>';
+                    }
                     html += '</div>';
                 }
                 html += '</div>';
