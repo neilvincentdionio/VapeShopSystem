@@ -132,6 +132,7 @@ if (! function_exists('is_system_shipment_meta_line')) {
         $prefixes = [
             'RIDER_RESCHEDULED:',
             'RIDER_CANCELLED:',
+            'RIDER_DECLINED:',
             'CUSTOMER_CANCELLED_AT_DOOR:',
         ];
 
@@ -226,12 +227,138 @@ if (! function_exists('delivery_show_reschedule_notice')) {
     }
 }
 
+if (! function_exists('delivery_completion_max_distance_meters')) {
+    /**
+     * Max distance (meters) between rider GPS and customer delivery pin to allow proof submission.
+     * Customer map pins are often imprecise, so default is relaxed.
+     */
+    function delivery_completion_max_distance_meters(): float
+    {
+        $raw = getenv('DELIVERY_COMPLETION_MAX_DISTANCE_METERS');
+        if ($raw !== false && $raw !== '' && is_numeric($raw)) {
+            return max(100.0, (float) $raw);
+        }
+
+        return 2000.0;
+    }
+}
+
+if (! function_exists('resolve_rider_proof_coordinates')) {
+    /**
+     * @return array{lat: float|null, lng: float|null}
+     */
+    function resolve_rider_proof_coordinates(array $shipment, ?float $submittedLat, ?float $submittedLng): array
+    {
+        $deliveryLat = isset($shipment['delivery_latitude']) ? (float) $shipment['delivery_latitude'] : null;
+        $deliveryLng = isset($shipment['delivery_longitude']) ? (float) $shipment['delivery_longitude'] : null;
+        $maxMeters = delivery_completion_max_distance_meters();
+
+        $candidates = [];
+        if ($submittedLat !== null && $submittedLng !== null) {
+            $candidates[] = [$submittedLat, $submittedLng];
+        }
+
+        $trackedLat = isset($shipment['rider_latitude']) ? (float) $shipment['rider_latitude'] : null;
+        $trackedLng = isset($shipment['rider_longitude']) ? (float) $shipment['rider_longitude'] : null;
+        if ($trackedLat !== null && $trackedLng !== null && ! ($trackedLat == 0.0 && $trackedLng == 0.0)) {
+            $candidates[] = [$trackedLat, $trackedLng];
+        }
+
+        if ($deliveryLat !== null && $deliveryLng !== null && $deliveryLat != 0.0 && $deliveryLng != 0.0) {
+            foreach ($candidates as [$lat, $lng]) {
+                if (delivery_distance_meters($lat, $lng, $deliveryLat, $deliveryLng) <= $maxMeters) {
+                    return ['lat' => $lat, 'lng' => $lng];
+                }
+            }
+        }
+
+        if ($submittedLat !== null && $submittedLng !== null) {
+            return ['lat' => $submittedLat, 'lng' => $submittedLng];
+        }
+
+        if ($trackedLat !== null && $trackedLng !== null) {
+            return ['lat' => $trackedLat, 'lng' => $trackedLng];
+        }
+
+        return ['lat' => null, 'lng' => null];
+    }
+}
+
+if (! function_exists('delivery_distance_meters')) {
+    function delivery_distance_meters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earth = 6371000;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+}
+
+if (! function_exists('delivery_is_rider_declined')) {
+    function delivery_is_rider_declined(?string $shipmentNotes): bool
+    {
+        return stripos((string) $shipmentNotes, 'RIDER_DECLINED:') !== false;
+    }
+}
+
+if (! function_exists('delivery_rider_decline_meta')) {
+    /**
+     * @return array{reason: string|null, declined_at: string|null}|null
+     */
+    function delivery_rider_decline_meta(?string $shipmentNotes): ?array
+    {
+        $notes = (string) $shipmentNotes;
+        if ($notes === '' || ! delivery_is_rider_declined($notes)) {
+            return null;
+        }
+
+        if (preg_match_all(
+            '/RIDER_DECLINED:\s*(.*?)\s*\((\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\)/is',
+            $notes,
+            $matches,
+            PREG_SET_ORDER
+        ) < 1) {
+            return ['reason' => null, 'declined_at' => null];
+        }
+
+        $last = $matches[array_key_last($matches)];
+        $reason = trim((string) ($last[1] ?? ''));
+        if ($reason === '' || strcasecmp($reason, 'No reason provided') === 0) {
+            $reason = null;
+        }
+
+        return [
+            'reason' => $reason,
+            'declined_at' => trim((string) ($last[2] ?? '')) ?: null,
+        ];
+    }
+}
+
+if (! function_exists('delivery_show_rider_declined_notice')) {
+    function delivery_show_rider_declined_notice(?string $deliveryStatus, ?string $shipmentNotes): bool
+    {
+        if (delivery_is_terminal_status($deliveryStatus)) {
+            return false;
+        }
+
+        $status = strtolower(trim((string) $deliveryStatus));
+
+        return $status === 'to_ship' && delivery_is_rider_declined($shipmentNotes);
+    }
+}
+
 if (! function_exists('delivery_status_display_label')) {
     function delivery_status_display_label(?string $status, ?string $shipmentNotes = null, array $labels = []): string
     {
         $status = strtolower(trim((string) $status));
         if ($status === 'delivered_to_rider' && delivery_show_reschedule_notice($status, $shipmentNotes)) {
             return 'Rescheduled';
+        }
+
+        if ($status === 'to_ship' && delivery_show_rider_declined_notice($status, $shipmentNotes)) {
+            return 'Rider Declined';
         }
 
         if ($labels !== [] && isset($labels[$status])) {

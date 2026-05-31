@@ -217,6 +217,42 @@ function mobile_notify_account_pending(int $userId, string $customerName): void
     }
 }
 
+/**
+ * Notify admins when a rider declines a delivery or return pickup assignment (mobile app).
+ */
+function mobile_notify_rider_assignment_declined(
+    int $orderId,
+    string $reference,
+    string $riderName,
+    string $declineReason,
+    string $assignmentType,
+    string $adminLink
+): void {
+    if ($orderId <= 0) {
+        return;
+    }
+
+    try {
+        mobile_ci_bootstrap();
+        $notificationService = new \App\Libraries\NotificationService();
+        $isReturn = $assignmentType === 'return_pickup';
+        $notificationService->notifyAdmins([
+            'category' => $isReturn ? 'orders' : 'delivery',
+            'type' => 'rider_assignment_declined',
+            'title' => $isReturn ? 'Rider declined return pickup' : 'Rider declined delivery',
+            'message' => $riderName . ' declined '
+                . ($isReturn ? 'return pickup for order ' : 'order ')
+                . $reference . '. Reason: ' . $declineReason . '. '
+                . ($isReturn ? 'Assign another rider.' : 'Reassign a rider.'),
+            'link' => $adminLink,
+            'related_type' => 'order',
+            'related_id' => $orderId,
+        ]);
+    } catch (Throwable $e) {
+        error_log('mobile_notify_rider_assignment_declined failed: ' . $e->getMessage());
+    }
+}
+
 function mobile_ci_bootstrap(): void
 {
     static $booted = false;

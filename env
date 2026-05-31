@@ -1,0 +1,38 @@
+#--------------------------------------------------------------------
+# Local environment config (not committed — see .env.example)
+#--------------------------------------------------------------------
+
+CI_ENVIRONMENT = development
+
+# Active server base URL
+app.baseURL = 'https://station-perth-bobby-implied.trycloudflare.com/VapeShopSystem/'
+
+# If you switch back to local (XAMPP), use:
+# app.baseURL = 'http://localhost/VapeShopSystem/'
+
+app.forceGlobalSecureRequests = false
+
+database.default.hostname = localhost
+database.default.database = vapeshop_db
+database.default.username = root
+database.default.password =
+database.default.DBDriver = MySQLi
+database.default.port = 3306
+
+# Use the same key as app/Config/Encryption.php or generate a new one.
+encryption.key = hex2bin:44dc4f19b6c465dbc14eaf205742328541b0e6f2c3940d76583869a65ccc02ae
+
+session.driver = 'CodeIgniter\Session\Handlers\FileHandler'
+
+logger.threshold = 4
+
+# Max meters between rider GPS and customer pin when submitting delivery proof (default 2000).
+DELIVERY_COMPLETION_MAX_DISTANCE_METERS = 2000
+
+# Gmail App Password (Google Account -> Security -> 2-Step Verification -> App passwords)
+GMAIL_SMTP_USER=diosalibrado@gmail.com
+GMAIL_SMTP_PASS=vdiufvwanvdezsjx
+GMAIL_FROM_NAME="VapeShopSystem"
+
+# AUTH_OTP_TTL_SECONDS = 300
+# AUTH_OTP_MAX_ATTEMPTS = 3

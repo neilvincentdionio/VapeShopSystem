@@ -464,6 +464,24 @@ if (! function_exists('rider_accepted_return_pickup')) {
     }
 }
 
+if (! function_exists('rider_can_decline_assignment')) {
+    /**
+     * @param array<string, mixed>|null $returnMeta
+     */
+    function rider_can_decline_assignment(string $status, ?array $returnMeta = null): bool
+    {
+        if ($status === 'ready_for_pickup') {
+            return true;
+        }
+
+        if ($status === 'return_approved') {
+            return ! rider_accepted_return_pickup($returnMeta ?? []);
+        }
+
+        return false;
+    }
+}
+
 if (! function_exists('rider_return_list_dismissed')) {
     /**
      * @param array<string, mixed> $meta
@@ -674,7 +692,7 @@ if (! function_exists('validate_admin_refund_payout_reference')) {
         if ($reference === '') {
             return [
                 'valid' => false,
-                'message' => 'Enter or paste the GCash/Maya transaction reference from your send confirmation.',
+                'message' => 'Invalid transaction reference.',
                 'normalized' => '',
             ];
         }
@@ -688,7 +706,7 @@ if (! function_exists('validate_admin_refund_payout_reference')) {
         if ($pendingNorm !== '' && $upper === $pendingNorm) {
             return [
                 'valid' => false,
-                'message' => 'Use the transaction reference from GCash/Maya after sending—not the QuickPuff message code (QP…).',
+                'message' => 'Invalid transaction reference.',
                 'normalized' => '',
             ];
         }
@@ -696,7 +714,7 @@ if (! function_exists('validate_admin_refund_payout_reference')) {
         if ($orderId > 0 && preg_match('/^QP' . preg_quote((string) $orderId, '/') . '[A-F0-9]{6}$/i', $reference) === 1) {
             return [
                 'valid' => false,
-                'message' => 'The QP code is only for the payment message. Paste the transaction reference from GCash/Maya after you send.',
+                'message' => 'Invalid transaction reference.',
                 'normalized' => '',
             ];
         }
@@ -704,7 +722,7 @@ if (! function_exists('validate_admin_refund_payout_reference')) {
         if (preg_match('/^QP\d+[A-F0-9]{6,}$/i', $reference) === 1) {
             return [
                 'valid' => false,
-                'message' => 'QuickPuff message codes (QP…) cannot be used as a transaction reference.',
+                'message' => 'Invalid transaction reference.',
                 'normalized' => '',
             ];
         }
@@ -724,7 +742,7 @@ if (! function_exists('validate_admin_refund_payout_reference')) {
 
         return [
             'valid' => false,
-            'message' => 'Enter a valid GCash/Maya transaction reference (10–13 digits from your send confirmation). For testing only, use QWERTY.',
+            'message' => 'Invalid transaction reference.',
             'normalized' => '',
         ];
     }

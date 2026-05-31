@@ -1440,6 +1440,125 @@ class Dashboard extends BaseController
                 ]);
             }
 
+            if ($status === 'decline_assignment') {
+                helper('return_refund');
+
+                $declineReason = trim((string) $this->request->getPost('decline_reason'));
+                if ($declineReason === '') {
+                    $declineReason = 'Busy — cannot take this assignment';
+                }
+
+                $rider = $this->userModel->find($riderId);
+                $riderName = is_array($rider) ? trim((string) ($rider['name'] ?? 'Rider')) : 'Rider';
+                if ($riderName === '') {
+                    $riderName = 'Rider';
+                }
+
+                $order = $this->orderModel->getOrder($orderId);
+                if (! $order) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Order not found']);
+                }
+
+                $reference = (string) ($order['reference_number'] ?? ('#' . $orderId));
+
+                if ($currentStatus === 'ready_for_pickup') {
+                    $existingNotes = trim((string) ($shipment['notes'] ?? ''));
+                    $declineLine = 'RIDER_DECLINED: ' . $declineReason . ' (' . date('Y-m-d H:i:s') . ')';
+                    $updatedNotes = $existingNotes !== '' ? ($existingNotes . "\n" . $declineLine) : $declineLine;
+
+                    $result = $this->orderModel->updateDeliveryStatus($orderId, 'to_ship', [
+                        'assigned_rider_id' => null,
+                        'assigned_at' => null,
+                        'notes' => $updatedNotes,
+                    ]);
+
+                    if ($result) {
+                        $this->notificationService->notifyAdmins([
+                            'category' => 'delivery',
+                            'type' => 'rider_assignment_declined',
+                            'title' => 'Rider declined delivery',
+                            'message' => $riderName . ' declined order ' . $reference . '. Reason: ' . $declineReason . '. Reassign a rider.',
+                            'link' => site_url('admin/orders?order=' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                        $this->syncOrderToRecord($orderId);
+                        $this->logOrderActivity(
+                            'Declined delivery assignment',
+                            ActivityLogTypes::RIDER_ASSIGNMENT_DECLINED,
+                            $orderId,
+                            $order,
+                            ['reason' => $declineReason, 'assignment_type' => 'delivery']
+                        );
+                    }
+
+                    return $this->response->setJSON([
+                        'success' => (bool) $result,
+                        'message' => $result ? 'Delivery declined. Admin will reassign another rider.' : 'Unable to decline delivery',
+                    ]);
+                }
+
+                if ($currentStatus === 'return_approved') {
+                    $returnMeta = parse_return_meta(
+                        (string) ($order['shipment_notes'] ?? ''),
+                        (string) ($order['delivery_notes'] ?? '')
+                    ) ?? [];
+
+                    if (rider_accepted_return_pickup($returnMeta)) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => 'Cannot decline after you have accepted this return pickup.',
+                        ]);
+                    }
+
+                    unset($returnMeta['assigned_rider_id'], $returnMeta['rider_accepted_pickup_at'], $returnMeta['rider_accepted_pickup_by']);
+                    $returnMeta['rider_declined_at'] = date('Y-m-d H:i:s');
+                    $returnMeta['rider_declined_by'] = $riderId;
+                    $returnMeta['rider_decline_reason'] = $declineReason;
+
+                    $returnFields = merge_return_meta_shipment_fields(
+                        (string) ($order['shipment_notes'] ?? ''),
+                        (string) ($order['delivery_notes'] ?? ''),
+                        $returnMeta
+                    );
+
+                    $result = $this->orderModel->updateDeliveryStatus($orderId, 'return_approved', array_merge([
+                        'assigned_rider_id' => null,
+                        'assigned_at' => null,
+                    ], $returnFields));
+
+                    if ($result) {
+                        $this->notificationService->notifyAdmins([
+                            'category' => 'orders',
+                            'type' => 'rider_assignment_declined',
+                            'title' => 'Rider declined return pickup',
+                            'message' => $riderName . ' declined return pickup for order ' . $reference . '. Reason: ' . $declineReason . '. Assign another rider.',
+                            'link' => site_url('admin/returns?status=return_approved&order=' . $orderId),
+                            'related_type' => 'order',
+                            'related_id' => $orderId,
+                        ]);
+                        $this->syncOrderToRecord($orderId);
+                        $this->logOrderActivity(
+                            'Declined return pickup assignment',
+                            ActivityLogTypes::RIDER_ASSIGNMENT_DECLINED,
+                            $orderId,
+                            $order,
+                            ['reason' => $declineReason, 'assignment_type' => 'return_pickup']
+                        );
+                    }
+
+                    return $this->response->setJSON([
+                        'success' => (bool) $result,
+                        'message' => $result ? 'Return pickup declined. Admin will reassign another rider.' : 'Unable to decline return pickup',
+                    ]);
+                }
+
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'This assignment cannot be declined from the current status.',
+                ]);
+            }
+
             return $this->response->setJSON(['success' => false, 'message' => 'Invalid status transition']);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
@@ -1755,11 +1874,20 @@ class Dashboard extends BaseController
             $effectiveLng = $finalLng ?? (isset($shipment['rider_longitude']) ? (float) $shipment['rider_longitude'] : null);
             $deliveryLat = isset($shipment['delivery_latitude']) ? (float) $shipment['delivery_latitude'] : null;
             $deliveryLng = isset($shipment['delivery_longitude']) ? (float) $shipment['delivery_longitude'] : null;
+
+            helper('order');
+            $resolved = resolve_rider_proof_coordinates($shipment, $effectiveLat, $effectiveLng);
+            $effectiveLat = $resolved['lat'];
+            $effectiveLng = $resolved['lng'];
+
             if ($effectiveLat !== null && $effectiveLng !== null && $deliveryLat !== null && $deliveryLng !== null) {
-                $meters = $this->calculateDistanceMeters($effectiveLat, $effectiveLng, $deliveryLat, $deliveryLng);
-                $maxMeters = (float) (getenv('DELIVERY_COMPLETION_MAX_DISTANCE_METERS') ?: 500);
+                $meters = delivery_distance_meters($effectiveLat, $effectiveLng, $deliveryLat, $deliveryLng);
+                $maxMeters = delivery_completion_max_distance_meters();
                 if ($meters > $maxMeters) {
-                    return $this->response->setJSON(['success' => false, 'message' => 'You are too far from customer location to complete this delivery']);
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => 'You are too far from customer location to complete this delivery',
+                    ]);
                 }
             }
 
@@ -4191,6 +4319,9 @@ class Dashboard extends BaseController
         }
 
         $customerInfo = $this->getOrderCustomerInfo(isset($order['created_by']) ? (int) $order['created_by'] : null);
+        helper(['order', 'return_refund']);
+        $shipmentNotes = (string) ($order['shipment_notes'] ?? '');
+        $declineMeta = delivery_rider_decline_meta($shipmentNotes);
 
         return $this->response->setJSON([
             'success' => true,
@@ -4204,7 +4335,9 @@ class Dashboard extends BaseController
                 'contact_number' => $this->normalizeContactNumber((string) ($order['contact_number'] ?? '')) !== ''
                     ? $this->normalizeContactNumber((string) ($order['contact_number'] ?? ''))
                     : (($customerInfo['phone'] ?? '') !== '' ? (string) $customerInfo['phone'] : 'Not provided'),
-                'shipment_notes' => (string) ($order['shipment_notes'] ?? ''),
+                'shipment_notes' => $shipmentNotes,
+                'shipment_notes_display' => shipment_notes_for_display($shipmentNotes),
+                'rider_declined_reason' => $declineMeta['reason'] ?? null,
                 'delivery_latitude' => isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null,
                 'delivery_longitude' => isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null,
                 'rider_latitude' => isset($order['rider_latitude']) ? (float) $order['rider_latitude'] : null,
@@ -5539,6 +5672,58 @@ class Dashboard extends BaseController
             ]);
         }
 
+        if ($action === 'reassign_rider') {
+            if ($currentStatus !== 'return_approved') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Rider can only be reassigned for approved return pickups']);
+            }
+
+            if (rider_accepted_return_pickup($returnMeta)) {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Rider already accepted this pickup and cannot be changed']);
+            }
+
+            $riderId = (int) ($payload['rider_id'] ?? 0);
+            if ($riderId <= 0) {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Select a rider for return pickup']);
+            }
+
+            $rider = $this->userModel->find($riderId);
+            if (! $rider || (string) ($rider['role'] ?? '') !== 'rider') {
+                return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Invalid rider selected']);
+            }
+
+            unset($returnMeta['rider_declined_at'], $returnMeta['rider_declined_by'], $returnMeta['rider_decline_reason']);
+            unset($returnMeta['rider_accepted_pickup_at'], $returnMeta['rider_accepted_pickup_by']);
+            $returnMeta['assigned_rider_id'] = $riderId;
+
+            $returnFields = merge_return_meta_shipment_fields(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? ''),
+                $returnMeta
+            );
+            $updated = $this->orderModel->updateDeliveryStatus($orderId, 'return_approved', array_merge([
+                'assigned_rider_id' => $riderId,
+                'assigned_at' => date('Y-m-d H:i:s'),
+            ], $returnFields));
+
+            if ($updated) {
+                $this->notificationService->notifyUsers([$riderId], [
+                    'category' => 'delivery',
+                    'type' => 'return_pickup_assigned',
+                    'title' => 'Return pickup assigned',
+                    'message' => 'Pick up returned items for order ' . $reference . '.',
+                    'link' => site_url('rider/returns?order_id=' . $orderId),
+                    'related_type' => 'order',
+                    'related_id' => $orderId,
+                ]);
+                $this->syncOrderToRecord($orderId);
+            }
+
+            return $this->response->setJSON([
+                'success' => (bool) $updated,
+                'message' => $updated ? 'Return pickup rider reassigned successfully' : 'Unable to reassign rider',
+            ]);
+        }
+
         if ($action === 'reject') {
             if ($currentStatus !== 'return_requested') {
                 return $this->response->setStatusCode(422)->setJSON(['success' => false, 'message' => 'Only pending return requests can be rejected']);
@@ -5621,7 +5806,7 @@ class Dashboard extends BaseController
             if (return_refund_requires_payout((string) ($returnMeta['type'] ?? 'return_and_refund')) && $refundPayoutReference === '') {
                 return $this->response->setStatusCode(422)->setJSON([
                     'success' => false,
-                    'message' => 'Enter or paste the GCash/Maya reference, or use Send via GCash to auto-fill.',
+                    'message' => 'Invalid transaction reference.',
                 ]);
             }
 

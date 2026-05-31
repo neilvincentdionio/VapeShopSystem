@@ -343,8 +343,16 @@ public final class RiderOrderUi {
 
         if (!isReturnList) {
             if ("ready_for_pickup".equals(status)) {
-                addActionBtn(context, actions, "Accept Delivery", "#0F766E", () ->
-                    handler.onStatusUpdate(orderId, "accepted_by_rider", null));
+                addActionRow(
+                    context,
+                    actions,
+                    new String[] {"Accept Delivery", "Decline"},
+                    new String[] {"#0F766E", "#DC2626"},
+                    new Runnable[] {
+                        () -> handler.onStatusUpdate(orderId, "accepted_by_rider", null),
+                        () -> handler.onStatusUpdate(orderId, "decline_assignment", null)
+                    }
+                );
             }
             if ("accepted_by_rider".equals(status)) {
                 addActionBtn(context, actions, "Picked Up from Store", "#0F766E", () ->
@@ -379,8 +387,16 @@ public final class RiderOrderUi {
 
         if ("return_approved".equals(status)) {
             if (!riderHasAcceptedReturnPickup(order)) {
-                addActionBtn(context, actions, "Accept Return Pickup", "#F59E0B", () ->
-                    handler.onStatusUpdate(orderId, "accept_return_pickup", null));
+                addActionRow(
+                    context,
+                    actions,
+                    new String[] {"Accept Pickup", "Decline"},
+                    new String[] {"#F59E0B", "#DC2626"},
+                    new Runnable[] {
+                        () -> handler.onStatusUpdate(orderId, "accept_return_pickup", null),
+                        () -> handler.onStatusUpdate(orderId, "decline_assignment", null)
+                    }
+                );
             } else {
                 addActionBtn(context, actions, "Scan QR & Pick Up", "#2563EB", () ->
                     handler.onScanReturnQr(orderId));

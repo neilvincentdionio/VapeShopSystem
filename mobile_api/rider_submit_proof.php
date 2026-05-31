@@ -52,8 +52,12 @@ try {
     $deliveryLat = isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null;
     $deliveryLng = isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null;
 
+    $resolved = mobile_resolve_rider_proof_coordinates($order, $effectiveLat, $effectiveLng);
+    $effectiveLat = $resolved['lat'];
+    $effectiveLng = $resolved['lng'];
+
     if ($effectiveLat !== null && $effectiveLng !== null && $deliveryLat !== null && $deliveryLng !== null) {
-        $maxMeters = 500.0;
+        $maxMeters = mobile_delivery_completion_max_distance_meters();
         if (mobile_distance_meters($effectiveLat, $effectiveLng, $deliveryLat, $deliveryLng) > $maxMeters) {
             json_response(false, 'You are too far from the customer location to complete delivery.', null, 400);
         }
@@ -85,6 +89,8 @@ try {
     if ($effectiveLat !== null && $effectiveLng !== null) {
         $extra['final_rider_latitude'] = $effectiveLat;
         $extra['final_rider_longitude'] = $effectiveLng;
+        $extra['delivered_latitude'] = $effectiveLat;
+        $extra['delivered_longitude'] = $effectiveLng;
     }
 
     $ok = mobile_update_delivery_status($db, $orderId, 'delivered', $extra);

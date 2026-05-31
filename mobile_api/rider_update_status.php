@@ -164,6 +164,73 @@ try {
             'picked_up_at' => $now, 'updated_at' => $now,
         ]));
         $result = ['success' => $ok, 'message' => $ok ? 'Return pickup recorded successfully.' : 'Unable to record return pickup.'];
+    } elseif ($status === 'decline_assignment') {
+        $declineReason = trim((string) ($_POST['decline_reason'] ?? ''));
+        if ($declineReason === '') {
+            $declineReason = 'Busy — cannot take this assignment';
+        }
+
+        $riderName = trim((string) ($user['name'] ?? 'Rider'));
+        if ($riderName === '') {
+            $riderName = 'Rider';
+        }
+
+        $reference = trim((string) ($order['reference_number'] ?? ('#' . $orderId)));
+
+        if ($current === 'ready_for_pickup') {
+            $notes = trim((string) ($order['shipment_notes'] ?? ''));
+            $line = 'RIDER_DECLINED: ' . $declineReason . ' (' . $now . ')';
+            $notes = $notes !== '' ? $notes . "\n" . $line : $line;
+            $ok = mobile_update_delivery_status($db, $orderId, 'to_ship', [
+                'assigned_rider_id' => null,
+                'assigned_at' => null,
+                'notes' => $notes,
+                'updated_at' => $now,
+            ]);
+            if ($ok) {
+                mobile_notify_rider_assignment_declined(
+                    $orderId,
+                    $reference,
+                    $riderName,
+                    $declineReason,
+                    'delivery',
+                    site_url('admin/orders?order=' . $orderId)
+                );
+            }
+            $result = ['success' => $ok, 'message' => $ok ? 'Delivery declined. Admin will reassign another rider.' : 'Unable to decline delivery.'];
+        } elseif ($current === 'return_approved') {
+            $meta = mobile_parse_return_meta((string) ($order['shipment_notes'] ?? ''), (string) ($order['delivery_notes'] ?? '')) ?? [];
+            if (trim((string) ($meta['rider_accepted_pickup_at'] ?? '')) !== '') {
+                json_response(false, 'Cannot decline after you have accepted this return pickup.', null, 400);
+            }
+            unset($meta['assigned_rider_id'], $meta['rider_accepted_pickup_at'], $meta['rider_accepted_pickup_by']);
+            $meta['rider_declined_at'] = $now;
+            $meta['rider_declined_by'] = $riderId;
+            $meta['rider_decline_reason'] = $declineReason;
+            $fields = mobile_merge_return_meta_shipment_fields(
+                (string) ($order['shipment_notes'] ?? ''),
+                (string) ($order['delivery_notes'] ?? ''),
+                $meta
+            );
+            $ok = mobile_update_delivery_status($db, $orderId, 'return_approved', array_merge($fields, [
+                'assigned_rider_id' => null,
+                'assigned_at' => null,
+                'updated_at' => $now,
+            ]));
+            if ($ok) {
+                mobile_notify_rider_assignment_declined(
+                    $orderId,
+                    $reference,
+                    $riderName,
+                    $declineReason,
+                    'return_pickup',
+                    site_url('admin/returns?status=return_approved&order=' . $orderId)
+                );
+            }
+            $result = ['success' => $ok, 'message' => $ok ? 'Return pickup declined. Admin will reassign another rider.' : 'Unable to decline return pickup.'];
+        } else {
+            json_response(false, 'This assignment cannot be declined from the current status.', null, 400);
+        }
     }
 
     if (! ($result['success'] ?? false)) {

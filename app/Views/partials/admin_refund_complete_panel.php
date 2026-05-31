@@ -35,6 +35,18 @@ $defaultDamaged = $requestType === 'damaged_item';
         <div class="refund-panel-compact__to"><?= esc($account) ?><?= $name !== '' ? ' · ' . esc($name) : '' ?></div>
     </div>
 
+    <?php if ($account !== ''): ?>
+        <div class="refund-panel-compact__copy-row">
+            <div class="refund-panel-compact__copy-meta">
+                <span class="refund-panel-compact__label"><?= esc($ewalletLabel) ?> number</span>
+                <span class="refund-panel-compact__copy-number"><?= esc($account) ?></span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm js-copy-payout-number" title="Copy <?= esc($ewalletLabel) ?> number">
+                <i class="fas fa-copy"></i> Copy number
+            </button>
+        </div>
+    <?php endif; ?>
+
     <?php if ($orderItems !== []): ?>
         <div class="refund-panel-compact__damage">
             <label class="refund-panel-compact__label">Stock disposition</label>
@@ -74,10 +86,6 @@ $defaultDamaged = $requestType === 'damaged_item';
     <button type="button" class="btn btn-block <?= $payoutMethod === 'maya' ? 'btn-maya' : 'btn-gcash' ?> js-send-ewallet">
         <i class="fas fa-paper-plane"></i> Send via <?= esc($ewalletLabel) ?>
     </button>
-
-    <?php if ($pendingRef !== ''): ?>
-        <p class="refund-panel-compact__hint">Message code for <?= esc($ewalletLabel) ?> note: <strong><?= esc($pendingRef) ?></strong> (not the transaction ref).</p>
-    <?php endif; ?>
 
     <label class="refund-panel-compact__label" for="refund-ref-<?= $orderId ?>">Transaction reference</label>
     <div class="refund-panel-compact__ref-row">

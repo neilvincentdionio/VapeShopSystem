@@ -46,6 +46,7 @@ class ActivityLogTypes
     public const ORDER_CANCELLED_AT_DOOR = 'ORDER_CANCELLED_AT_DOOR';
     public const RETURN_PICKUP_ACCEPTED = 'RETURN_PICKUP_ACCEPTED';
     public const RETURN_PICKUP_COMPLETED = 'RETURN_PICKUP_COMPLETED';
+    public const RIDER_ASSIGNMENT_DECLINED = 'RIDER_ASSIGNMENT_DECLINED';
     public const PRODUCT_CREATED = 'PRODUCT_CREATED';
     public const PRODUCT_UPDATED = 'PRODUCT_UPDATED';
     public const PRODUCT_DELETED = 'PRODUCT_DELETED';
@@ -109,6 +110,7 @@ class ActivityLogTypes
             self::ORDER_CANCELLED_AT_DOOR => 'Customer Cancelled at Delivery',
             self::RETURN_PICKUP_ACCEPTED => 'Return Pickup Accepted',
             self::RETURN_PICKUP_COMPLETED => 'Return Item Picked Up',
+            self::RIDER_ASSIGNMENT_DECLINED => 'Rider Declined Assignment',
         ];
     }
 
@@ -184,6 +186,7 @@ class ActivityLogTypes
             self::ORDER_CANCELLED_AT_DOOR => 'warning',
             self::RETURN_PICKUP_ACCEPTED => 'info',
             self::RETURN_PICKUP_COMPLETED => 'success',
+            self::RIDER_ASSIGNMENT_DECLINED => 'warning',
         ];
     }
 }

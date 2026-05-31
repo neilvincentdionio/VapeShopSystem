@@ -71,6 +71,8 @@ import androidx.fragment.app.FragmentTransaction;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
@@ -128,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_USER_ID = "user_id";
     private static final String[] API_BASE_URLS = {
         // Must match app.baseURL in .env (+ /mobile_api/)
-        "https://photography-more-align-poly.trycloudflare.com/VapeShopSystem/mobile_api/",
+        "https://station-perth-bobby-implied.trycloudflare.com/VapeShopSystem/mobile_api/",
         // Same PC on Wi-Fi (update IP if ipconfig shows a new IPv4)
         "http://192.168.1.7/VapeShopSystem/mobile_api/",
         // USB + connect-phone.bat (adb reverse tcp:8080 tcp:80)
@@ -151,7 +153,11 @@ public class MainActivity extends AppCompatActivity {
     private AlertDialog pendingReturnQrDialog = null;
     private EditText pendingReturnQrManualInput = null;
     private int riderLocationOrderId = 0;
-    private static final long RIDER_LOCATION_PUSH_MS = 20000L;
+    private static final long RIDER_LOCATION_PUSH_MS = 8000L;
+    private LocationListener riderDeviceLocationListener;
+    private long lastRiderServerPushAtMs = 0;
+    private double lastTrackingDeliveryLat = Double.NaN;
+    private double lastTrackingDeliveryLng = Double.NaN;
     private CheckoutLocationParams pendingCheckoutLocationParams;
     private boolean suppressCheckoutSpinnerCallbacks = false;
     private final Executor checkoutLocationExecutor = Executors.newSingleThreadExecutor();
@@ -577,6 +583,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private interface AuthCallback {
+        void onSuccess(String fullName, String email);
+        void onError(String message);
+    }
+
+    private interface LoginStartCallback {
+        void onOtpRequired(String mfaToken, String email, String password, int expiresIn, int resendCooldown, int maxAttempts, String otpDebug, String otpEmailError);
         void onSuccess(String fullName, String email);
         void onError(String message);
     }
@@ -1151,7 +1163,7 @@ public class MainActivity extends AppCompatActivity {
             .apply();
     }
 
-    public void loginWithServer(String email, String password, AuthCallback callback) {
+    public void loginWithServer(String email, String password, LoginStartCallback callback) {
         Map<String, String> params = new HashMap<>();
         params.put("email", email);
         params.put("password", password);
@@ -1165,35 +1177,30 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     JSONObject data = root.optJSONObject("data");
-                    String fullName = data != null ? data.optString("full_name", "Customer") : "Customer";
-                    String savedEmail = data != null ? data.optString("email", email) : email;
-                    String phone = data != null ? data.optString("phone", "") : "";
-                    String street = data != null ? sanitizeAddressField(data.optString("street", "")) : "";
-                    String city = data != null ? sanitizeAddressField(data.optString("city", "")) : "";
-                    String barangay = data != null ? sanitizeAddressField(data.optString("barangay", "")) : "";
-                    String postalCode = data != null ? sanitizeAddressField(data.optString("postal_code", "")) : "";
-                    String province = data != null ? sanitizeAddressField(data.optString("province", "South Cotabato")) : "South Cotabato";
-                    String country = data != null ? sanitizeAddressField(data.optString("country", "Philippines")) : "Philippines";
-                    double latitude = data != null ? data.optDouble("latitude", 6.1164) : 6.1164;
-                    double longitude = data != null ? data.optDouble("longitude", 125.1716) : 125.1716;
-                    String role = data != null ? data.optString("role", "customer") : "customer";
-                    int userId = data != null ? data.optInt("user_id", 0) : 0;
-                    if (isAdminOrStaffRole(role)) {
-                        callback.onError("Admin accounts are web-only. Please login on the web dashboard.");
+                    if (data != null && data.optBoolean("otp_required", false)) {
+                        callback.onOtpRequired(
+                            data.optString("mfa_token", ""),
+                            data.optString("email", email),
+                            password,
+                            data.optInt("expires_in", 300),
+                            data.optInt("resend_cooldown", 60),
+                            data.optInt("max_attempts", 3),
+                            data.optString("otp_debug", ""),
+                            data.optString("otp_email_error", "")
+                        );
                         return;
                     }
-                    currentUserRole = sanitizeMobileRole(role);
-                    currentUserId = userId;
-                    saveAccountLocally(
-                        fullName, savedEmail, password, phone, street, city, barangay, postalCode, province, country, latitude, longitude
-                    );
-                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putString(KEY_USER_ROLE, currentUserRole)
-                        .putInt(KEY_USER_ID, currentUserId)
-                        .apply();
-                    refreshSavedAddressFromServer(() ->
-                        runOnUiThreadIfAlive(() -> callback.onSuccess(fullName, savedEmail))
-                    );
+                    completeLoginFromData(data, email, password, new AuthCallback() {
+                        @Override
+                        public void onSuccess(String fullName, String savedEmail) {
+                            callback.onSuccess(fullName, savedEmail);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            callback.onError(message);
+                        }
+                    });
                 } catch (Exception e) {
                     callback.onError("Invalid server response");
                 }
@@ -1204,6 +1211,107 @@ public class MainActivity extends AppCompatActivity {
                 callback.onError(message);
             }
         });
+    }
+
+    public void verifyOtpWithServer(String mfaToken, String otpCode, String email, String password, AuthCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("mfa_token", mfaToken);
+        params.put("otp_code", otpCode);
+        apiPost("verify_otp.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        callback.onError(root.optString("message", "Invalid OTP code"));
+                        return;
+                    }
+                    completeLoginFromData(root.optJSONObject("data"), email, password, callback);
+                } catch (Exception e) {
+                    callback.onError("Invalid server response");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    public void resendOtpWithServer(String mfaToken, OtpResendCallback callback) {
+        Map<String, String> params = new HashMap<>();
+        params.put("mfa_token", mfaToken);
+        apiPost("resend_otp.php", params, new SimpleCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    JSONObject root = new JSONObject(responseBody);
+                    if (!root.optBoolean("success", false)) {
+                        JSONObject data = root.optJSONObject("data");
+                        callback.onError(
+                            root.optString("message", "Unable to resend OTP"),
+                            data != null ? data.optInt("resend_available_in", 0) : 0
+                        );
+                        return;
+                    }
+                    JSONObject data = root.optJSONObject("data");
+                    callback.onSuccess(
+                        data != null ? data.optInt("resend_cooldown", 60) : 60,
+                        data != null ? data.optString("otp_debug", "") : "",
+                        data != null ? data.optString("otp_email_error", "") : ""
+                    );
+                } catch (Exception e) {
+                    callback.onError("Invalid server response", 0);
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message, 0);
+            }
+        });
+    }
+
+    private interface OtpResendCallback {
+        void onSuccess(int resendCooldown, String otpDebug, String otpEmailError);
+        void onError(String message, int resendAvailableIn);
+    }
+
+    private void completeLoginFromData(JSONObject data, String email, String password, AuthCallback callback) {
+        try {
+            String fullName = data != null ? data.optString("full_name", "Customer") : "Customer";
+            String savedEmail = data != null ? data.optString("email", email) : email;
+            String phone = data != null ? data.optString("phone", "") : "";
+            String street = data != null ? sanitizeAddressField(data.optString("street", "")) : "";
+            String city = data != null ? sanitizeAddressField(data.optString("city", "")) : "";
+            String barangay = data != null ? sanitizeAddressField(data.optString("barangay", "")) : "";
+            String postalCode = data != null ? sanitizeAddressField(data.optString("postal_code", "")) : "";
+            String province = data != null ? sanitizeAddressField(data.optString("province", "South Cotabato")) : "South Cotabato";
+            String country = data != null ? sanitizeAddressField(data.optString("country", "Philippines")) : "Philippines";
+            double latitude = data != null ? data.optDouble("latitude", 6.1164) : 6.1164;
+            double longitude = data != null ? data.optDouble("longitude", 125.1716) : 125.1716;
+            String role = data != null ? data.optString("role", "customer") : "customer";
+            int userId = data != null ? data.optInt("user_id", 0) : 0;
+            if (isAdminOrStaffRole(role)) {
+                callback.onError("Admin accounts are web-only. Please login on the web dashboard.");
+                return;
+            }
+            currentUserRole = sanitizeMobileRole(role);
+            currentUserId = userId;
+            saveAccountLocally(
+                fullName, savedEmail, password, phone, street, city, barangay, postalCode, province, country, latitude, longitude
+            );
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(KEY_USER_ROLE, currentUserRole)
+                .putInt(KEY_USER_ID, currentUserId)
+                .apply();
+            refreshSavedAddressFromServer(() ->
+                runOnUiThreadIfAlive(() -> callback.onSuccess(fullName, savedEmail))
+            );
+        } catch (Exception e) {
+            callback.onError("Invalid server response");
+        }
     }
 
     public void registerWithServer(
@@ -2554,6 +2662,9 @@ public class MainActivity extends AppCompatActivity {
 
     private double lastCheckoutGpsLat = 6.1164;
     private double lastCheckoutGpsLng = 125.1716;
+    private double lastRiderTrackedLat = 0;
+    private double lastRiderTrackedLng = 0;
+    private long lastRiderTrackedAtMs = 0;
 
     private void reverseGeocodeCheckoutAddress(
         double lat,
@@ -3957,6 +4068,7 @@ public class MainActivity extends AppCompatActivity {
     public void submitReturnRefundToServer(
         int orderId,
         String orderReference,
+        String requestType,
         String reason,
         String payoutMethod,
         String payoutAccount,
@@ -3970,7 +4082,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Map<String, String> params = new HashMap<>();
         params.put("email", getRegisteredEmail());
-        params.put("request_type", "return_and_refund");
+        params.put("request_type", requestType == null || requestType.isEmpty() ? "return_and_refund" : requestType);
         params.put("reason", reason);
         params.put("payout_method", payoutMethod);
         params.put("payout_account", payoutAccount);
@@ -4019,7 +4131,8 @@ public class MainActivity extends AppCompatActivity {
         apiPost("order_tracking.php", params, callback);
     }
 
-    private static final long LIVE_TRACKING_POLL_MS = 3000L;
+    private static final long LIVE_TRACKING_POLL_MS = 2000L;
+    private static final long RIDER_MAP_LOCAL_GPS_MS = 3000L;
     private int liveTrackingOrderId = 0;
     private WebView liveTrackingWebView;
     private TextView liveTrackingStatusView;
@@ -4251,7 +4364,22 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (liveTrackingMetaView != null) {
-                if (hasRiderGps && hasDeliveryGps
+                if (isRiderRole() && hasDeliveryGps) {
+                    if (hasRecentRiderTrackedLocation()) {
+                        updateRiderMapMetaFromDeviceGps(lastRiderTrackedLat, lastRiderTrackedLng);
+                    } else if (hasRiderGps
+                        && !tracking.isNull("distance_km")
+                        && !tracking.isNull("eta_minutes")) {
+                        liveTrackingMetaView.setText(String.format(
+                            Locale.US,
+                            "Distance: %.2f km | ETA: ~%d min (syncing GPS...)",
+                            tracking.optDouble("distance_km", 0),
+                            tracking.optInt("eta_minutes", 0)
+                        ));
+                    } else {
+                        liveTrackingMetaView.setText("Getting your phone GPS location...");
+                    }
+                } else if (hasRiderGps && hasDeliveryGps
                     && !tracking.isNull("distance_km")
                     && !tracking.isNull("eta_minutes")) {
                     liveTrackingMetaView.setText(String.format(
@@ -4269,13 +4397,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            notifyOrderDetailsUiFromTracking(responseBody);
-
-            if (isRiderRole() && liveTrackingOrderId > 0 && hasRiderGps) {
-                fetchFreshGpsForRider((lat, lng) ->
-                    riderUpdateLocationToServer(liveTrackingOrderId, lat, lng, null)
-                );
+            if (hasDeliveryGps) {
+                lastTrackingDeliveryLat = tracking.optDouble("delivery_latitude", Double.NaN);
+                lastTrackingDeliveryLng = tracking.optDouble("delivery_longitude", Double.NaN);
             }
+
+            notifyOrderDetailsUiFromTracking(responseBody);
         } catch (Exception e) {
             if (liveTrackingStatusView != null) {
                 liveTrackingStatusView.setText("Unable to load tracking.");
@@ -4317,6 +4444,93 @@ public class MainActivity extends AppCompatActivity {
         void onGps(double lat, double lng);
     }
 
+    private void recordRiderTrackedLocation(double lat, double lng) {
+        if (Double.isNaN(lat) || Double.isNaN(lng) || (lat == 0.0 && lng == 0.0)) {
+            return;
+        }
+        lastRiderTrackedLat = lat;
+        lastRiderTrackedLng = lng;
+        lastRiderTrackedAtMs = System.currentTimeMillis();
+        lastCheckoutGpsLat = lat;
+        lastCheckoutGpsLng = lng;
+    }
+
+    private boolean hasRecentRiderTrackedLocation() {
+        if (lastRiderTrackedAtMs <= 0) {
+            return false;
+        }
+        long ageMs = System.currentTimeMillis() - lastRiderTrackedAtMs;
+        return ageMs >= 0 && ageMs <= 300000L
+            && !(lastRiderTrackedLat == 0.0 && lastRiderTrackedLng == 0.0);
+    }
+
+    /** Prefer live map tracking coords; avoid profile/register fallback for delivery proof. */
+    private double[] getBestRiderCoordinatesForDelivery() {
+        if (hasRecentRiderTrackedLocation()) {
+            return new double[] {lastRiderTrackedLat, lastRiderTrackedLng};
+        }
+        if (!(lastCheckoutGpsLat == 6.1164 && lastCheckoutGpsLng == 125.1716)
+            || lastRiderTrackedAtMs > 0) {
+            return new double[] {lastCheckoutGpsLat, lastCheckoutGpsLng};
+        }
+        return new double[] {getRegisteredLatitude(), getRegisteredLongitude()};
+    }
+
+    private void submitDeliveryProofWithBestLocation(
+        int orderId,
+        Uri proofUri,
+        String notes,
+        Runnable refresh
+    ) {
+        double[] coords = getBestRiderCoordinatesForDelivery();
+        riderUpdateLocationToServer(orderId, coords[0], coords[1], null);
+        submitRiderProofToServer(
+            orderId, proofUri, coords[0], coords[1], notes, riderProofCallback(refresh));
+        fetchFreshGpsForRider((lat, lng) -> {
+            if (riderLocationOrderId == orderId && orderId > 0) {
+                riderUpdateLocationToServer(orderId, lat, lng, null);
+            }
+        });
+    }
+
+    @SuppressLint("MissingPermission")
+    private Location pickBestKnownLocation(LocationManager locationManager) {
+        if (locationManager == null) {
+            return null;
+        }
+        Location best = null;
+        String[] providers = {
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.FUSED_PROVIDER
+        };
+        for (String provider : providers) {
+            try {
+                if (!locationManager.isProviderEnabled(provider)) {
+                    continue;
+                }
+                Location loc = locationManager.getLastKnownLocation(provider);
+                if (loc == null) {
+                    continue;
+                }
+                if (best == null || loc.getAccuracy() < best.getAccuracy()) {
+                    best = loc;
+                }
+            } catch (Exception ignored) {
+                // Provider may be unavailable on this device.
+            }
+        }
+        return best;
+    }
+
+    private boolean isLocationFreshEnough(Location location) {
+        if (location == null) {
+            return false;
+        }
+        long ageMs = System.currentTimeMillis() - location.getTime();
+        return ageMs >= 0 && ageMs <= 45000 && location.getAccuracy() <= 120f;
+    }
+
     @SuppressLint("MissingPermission")
     public void fetchFreshGpsForRider(GpsCallback callback) {
         if (callback == null) {
@@ -4331,17 +4545,71 @@ public class MainActivity extends AppCompatActivity {
             callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
             return;
         }
-        Location cached = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        if (cached == null) {
-            cached = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-        }
-        if (cached != null) {
-            lastCheckoutGpsLat = cached.getLatitude();
-            lastCheckoutGpsLng = cached.getLongitude();
+
+        Location cached = pickBestKnownLocation(locationManager);
+        if (isLocationFreshEnough(cached)) {
+            recordRiderTrackedLocation(cached.getLatitude(), cached.getLongitude());
             callback.onGps(lastCheckoutGpsLat, lastCheckoutGpsLng);
             return;
         }
-        callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
+
+        final AtomicBoolean resolved = new AtomicBoolean(false);
+        final CancellationSignal cancelSignal = new CancellationSignal();
+
+        Consumer<Location> deliver = location -> {
+            if (resolved.getAndSet(true)) {
+                return;
+            }
+            cancelSignal.cancel();
+            if (location != null) {
+                recordRiderTrackedLocation(location.getLatitude(), location.getLongitude());
+                callback.onGps(lastCheckoutGpsLat, lastCheckoutGpsLng);
+                return;
+            }
+            Location fallback = pickBestKnownLocation(locationManager);
+            if (fallback != null) {
+                recordRiderTrackedLocation(fallback.getLatitude(), fallback.getLongitude());
+                callback.onGps(lastCheckoutGpsLat, lastCheckoutGpsLng);
+            } else if (hasRecentRiderTrackedLocation()) {
+                callback.onGps(lastRiderTrackedLat, lastRiderTrackedLng);
+            } else {
+                callback.onGps(getRegisteredLatitude(), getRegisteredLongitude());
+            }
+        };
+
+        Runnable timeoutFallback = () -> {
+            if (resolved.get()) {
+                return;
+            }
+            deliver.accept(pickBestKnownLocation(locationManager));
+        };
+        mainHandler.postDelayed(timeoutFallback, 12000);
+
+        try {
+            locationManager.getCurrentLocation(
+                LocationManager.GPS_PROVIDER,
+                cancelSignal,
+                mainHandler::post,
+                gpsLocation -> {
+                    if (gpsLocation != null && !resolved.get()) {
+                        deliver.accept(gpsLocation);
+                        return;
+                    }
+                    try {
+                        locationManager.getCurrentLocation(
+                            LocationManager.NETWORK_PROVIDER,
+                            cancelSignal,
+                            mainHandler::post,
+                            deliver
+                        );
+                    } catch (Exception e) {
+                        timeoutFallback.run();
+                    }
+                }
+            );
+        } catch (Exception e) {
+            timeoutFallback.run();
+        }
     }
 
     public void riderUpdateStatusWithGps(int orderId, String status, Map<String, String> extra, SimpleCallback callback) {
@@ -4503,6 +4771,10 @@ public class MainActivity extends AppCompatActivity {
         return new RiderOrderUi.RiderActionHandler() {
             @Override
             public void onStatusUpdate(int orderId, String status, Map<String, String> extra) {
+                if ("decline_assignment".equals(status)) {
+                    showRiderDeclineAssignmentDialog(orderId, refresh);
+                    return;
+                }
                 riderUpdateStatusWithGps(orderId, status, extra, new SimpleCallback() {
                     @Override
                     public void onSuccess(String message) {
@@ -4555,6 +4827,184 @@ public class MainActivity extends AppCompatActivity {
         };
     }
 
+    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        double r = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+            * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    private void updateRiderMapMetaFromDeviceGps(double lat, double lng) {
+        if (!isRiderRole() || liveTrackingMetaView == null) {
+            return;
+        }
+        if (Double.isNaN(lastTrackingDeliveryLat) || Double.isNaN(lastTrackingDeliveryLng)) {
+            return;
+        }
+        double distKm = haversineKm(lat, lng, lastTrackingDeliveryLat, lastTrackingDeliveryLng);
+        int eta = Math.max(2, (int) Math.round((distKm / 25.0) * 60));
+        runOnUiThreadIfAlive(() -> {
+            if (liveTrackingMetaView != null) {
+                liveTrackingMetaView.setText(String.format(
+                    Locale.US,
+                    "Distance: %.2f km | ETA: ~%d min",
+                    distKm,
+                    eta
+                ));
+            }
+        });
+    }
+
+    private void enableRiderDeviceGpsOnMap(WebView webView) {
+        if (webView == null || !isRiderRole()) {
+            return;
+        }
+        webView.post(() -> {
+            try {
+                webView.evaluateJavascript(
+                    "window.setRiderUsesDeviceGps && setRiderUsesDeviceGps(true)",
+                    null
+                );
+            } catch (Exception ignored) {
+                // WebView may be destroyed while leaving rider detail.
+            }
+        });
+    }
+
+    private void pushRiderDeviceLocationToMap(double lat, double lng) {
+        WebView mapView = liveTrackingWebView;
+        if (mapView == null) {
+            return;
+        }
+        mapView.post(() -> {
+            try {
+                mapView.evaluateJavascript(
+                    "window.updateRiderOnly && updateRiderOnly(" + lat + "," + lng + ")",
+                    null
+                );
+            } catch (Exception ignored) {
+                // WebView may be destroyed while leaving rider detail.
+            }
+        });
+        updateRiderMapMetaFromDeviceGps(lat, lng);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void startRiderDeviceLocationUpdates() {
+        stopRiderDeviceLocationUpdates();
+        if (!isRiderRole() || liveTrackingOrderId <= 0) {
+            return;
+        }
+        if (!hasCheckoutLocationPermission()) {
+            Toast.makeText(
+                this,
+                "Turn on location permission so the map follows your phone GPS.",
+                Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager == null) {
+            return;
+        }
+        riderDeviceLocationListener = location -> {
+            if (location == null || liveTrackingOrderId <= 0) {
+                return;
+            }
+            double lat = location.getLatitude();
+            double lng = location.getLongitude();
+            recordRiderTrackedLocation(lat, lng);
+            pushRiderDeviceLocationToMap(lat, lng);
+            long now = System.currentTimeMillis();
+            if (riderLocationOrderId > 0 && now - lastRiderServerPushAtMs >= 5000L) {
+                lastRiderServerPushAtMs = now;
+                riderUpdateLocationToServer(riderLocationOrderId, lat, lng, null);
+            }
+        };
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    1500L,
+                    3f,
+                    riderDeviceLocationListener,
+                    mainHandler.getLooper()
+                );
+            }
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    2500L,
+                    8f,
+                    riderDeviceLocationListener,
+                    mainHandler.getLooper()
+                );
+            }
+            Location cached = pickBestKnownLocation(locationManager);
+            if (cached != null) {
+                riderDeviceLocationListener.onLocationChanged(cached);
+            } else {
+                fetchFreshGpsForRider((lat, lng) -> {
+                    recordRiderTrackedLocation(lat, lng);
+                    pushRiderDeviceLocationToMap(lat, lng);
+                });
+            }
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Rider device location updates failed", e);
+        }
+    }
+
+    private void stopRiderDeviceLocationUpdates() {
+        if (riderDeviceLocationListener == null) {
+            return;
+        }
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager != null) {
+            try {
+                locationManager.removeUpdates(riderDeviceLocationListener);
+            } catch (Exception ignored) {
+                // ignore cleanup errors
+            }
+        }
+        riderDeviceLocationListener = null;
+    }
+
+    private final Runnable riderMapLocalGpsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (liveTrackingOrderId <= 0 || liveTrackingWebView == null || !isRiderRole()) {
+                return;
+            }
+            final WebView mapView = liveTrackingWebView;
+            final int orderId = liveTrackingOrderId;
+            fetchFreshGpsForRider((lat, lng) -> {
+                mapView.post(() -> {
+                    if (mapView != liveTrackingWebView || liveTrackingOrderId != orderId) {
+                        return;
+                    }
+                    try {
+                        mapView.evaluateJavascript(
+                            "window.updateRiderOnly && updateRiderOnly("
+                                + lat + "," + lng + ")",
+                            null
+                        );
+                    } catch (Exception ignored) {
+                        // WebView may be destroyed while leaving rider detail.
+                    }
+                });
+                if (riderLocationOrderId == orderId) {
+                    riderUpdateLocationToServer(orderId, lat, lng, null);
+                }
+            });
+            if (liveTrackingOrderId == orderId && liveTrackingWebView != null) {
+                mainHandler.postDelayed(this, RIDER_MAP_LOCAL_GPS_MS);
+            }
+        }
+    };
+
     private final Runnable riderLocationPushRunnable = new Runnable() {
         @Override
         public void run() {
@@ -4585,11 +5035,33 @@ public class MainActivity extends AppCompatActivity {
     public void startRiderTrackingForOrder(int orderId, WebView webView, TextView metaView) {
         startLiveTracking(orderId, webView, metaView, metaView);
         startRiderLocationPush(orderId);
+        mainHandler.removeCallbacks(riderMapLocalGpsRunnable);
+        if (isRiderRole()) {
+            mainHandler.postDelayed(() -> {
+                enableRiderDeviceGpsOnMap(liveTrackingWebView);
+                startRiderDeviceLocationUpdates();
+            }, 700L);
+        }
     }
 
     public void stopRiderTracking() {
         stopLiveTracking();
         stopRiderLocationPush();
+        stopRiderDeviceLocationUpdates();
+        mainHandler.removeCallbacks(riderMapLocalGpsRunnable);
+        WebView mapView = liveTrackingWebView;
+        if (mapView != null) {
+            mapView.post(() -> {
+                try {
+                    mapView.evaluateJavascript(
+                        "window.setRiderUsesDeviceGps && setRiderUsesDeviceGps(false)",
+                        null
+                    );
+                } catch (Exception ignored) {
+                    // WebView may already be destroyed.
+                }
+            });
+        }
     }
 
     private MaterialAlertDialogBuilder riderDialogBuilder() {
@@ -4668,8 +5140,7 @@ public class MainActivity extends AppCompatActivity {
                     riderProofPickerInProgress = false;
                     clearRiderProofDialogState();
                     dialog.dismiss();
-                    fetchFreshGpsForRider((lat, lng) -> submitRiderProofToServer(
-                        orderId, proofUri, lat, lng, notes, riderProofCallback(refresh)));
+                    submitDeliveryProofWithBestLocation(orderId, proofUri, notes, refresh);
                 });
             });
             dialog.show();
@@ -4749,6 +5220,37 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.e("QuickPuff", "Cancel flow failed", e);
             Toast.makeText(this, "Unable to open cancel dialog.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void showRiderDeclineAssignmentDialog(int orderId, Runnable onRefresh) {
+        if (!isActivityAlive() || orderId <= 0) {
+            return;
+        }
+        try {
+            View form = LayoutInflater.from(this).inflate(R.layout.dialog_rider_cancel, null);
+            EditText notesField = form.findViewById(R.id.rider_cancel_notes);
+            notesField.setHint("Busy — cannot take this assignment");
+            notesField.setText("Busy — cannot take this assignment");
+
+            riderDialogBuilder()
+                .setTitle("Decline Assignment")
+                .setMessage("Too busy for this delivery or return pickup? Admin will assign another rider.")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Decline", (d, w) -> {
+                    Map<String, String> extra = new HashMap<>();
+                    String reason = notesField.getText().toString().trim();
+                    if (!reason.isEmpty()) {
+                        extra.put("decline_reason", reason);
+                    }
+                    riderUpdateStatusWithGps(
+                        orderId, "decline_assignment", extra, riderStatusCallback(onRefresh));
+                })
+                .show();
+        } catch (Exception e) {
+            android.util.Log.e("QuickPuff", "Decline dialog failed", e);
+            Toast.makeText(this, "Unable to open decline dialog.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -4832,6 +5334,11 @@ public class MainActivity extends AppCompatActivity {
         pendingProofUriForDialog = uri;
         final int orderId = pendingProofDialogOrderId;
         final Runnable refresh = pendingProofDialogRefresh;
+        fetchFreshGpsForRider((lat, lng) -> {
+            if (riderLocationOrderId == orderId && orderId > 0) {
+                riderUpdateLocationToServer(orderId, lat, lng, null);
+            }
+        });
         if (pendingProofFileNameView != null && pendingProofFileNameView.isAttachedToWindow()) {
             pendingProofFileNameView.setText("Delivery photo captured");
             Toast.makeText(this, "Photo captured", Toast.LENGTH_SHORT).show();
@@ -4916,8 +5423,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void submitRiderProofToServer(int orderId, Uri proofUri, SimpleCallback callback) {
+        double[] coords = getBestRiderCoordinatesForDelivery();
         submitRiderProofToServer(
-            orderId, proofUri, getRegisteredLatitude(), getRegisteredLongitude(), "", callback);
+            orderId, proofUri, coords[0], coords[1], "", callback);
     }
 
     public void submitRiderProofToServer(
@@ -5886,7 +6394,16 @@ public class MainActivity extends AppCompatActivity {
                 MainActivity activity = (MainActivity) requireActivity();
                 loginButton.setEnabled(false);
                 loginButton.setText("Logging in...");
-                activity.loginWithServer(emailValue, passwordValue, new AuthCallback() {
+                activity.loginWithServer(emailValue, passwordValue, new LoginStartCallback() {
+                    @Override
+                    public void onOtpRequired(String mfaToken, String emailAddress, String passwordValue, int expiresIn, int resendCooldown, int maxAttempts, String otpDebug, String otpEmailError) {
+                        loginButton.setEnabled(true);
+                        loginButton.setText("Login");
+                        activity.loadFragment(OtpFragment.newInstance(
+                            mfaToken, emailAddress, passwordValue, expiresIn, resendCooldown, maxAttempts, otpDebug, otpEmailError
+                        ));
+                    }
+
                     @Override
                     public void onSuccess(String fullName, String email) {
                         inlineError.setVisibility(View.GONE);
@@ -5905,6 +6422,209 @@ public class MainActivity extends AppCompatActivity {
             registerButton.setOnClickListener(v ->
                 ((MainActivity) requireActivity()).loadFragment(new RegisterFragment()));
             return view;
+        }
+    }
+
+    public static class OtpFragment extends Fragment {
+        private static final String ARG_MFA_TOKEN = "mfa_token";
+        private static final String ARG_EMAIL = "email";
+        private static final String ARG_PASSWORD = "password";
+        private static final String ARG_EXPIRES_IN = "expires_in";
+        private static final String ARG_RESEND_COOLDOWN = "resend_cooldown";
+        private static final String ARG_MAX_ATTEMPTS = "max_attempts";
+        private static final String ARG_OTP_DEBUG = "otp_debug";
+        private static final String ARG_OTP_EMAIL_ERROR = "otp_email_error";
+
+        private String mfaToken;
+        private String email;
+        private String password;
+        private int maxAttempts;
+        private int remainingAttempts;
+        private int resendCooldownSeconds;
+        private Handler cooldownHandler;
+        private Runnable cooldownRunnable;
+
+        static OtpFragment newInstance(
+            String mfaToken,
+            String email,
+            String password,
+            int expiresIn,
+            int resendCooldown,
+            int maxAttempts,
+            String otpDebug,
+            String otpEmailError
+        ) {
+            OtpFragment fragment = new OtpFragment();
+            Bundle args = new Bundle();
+            args.putString(ARG_MFA_TOKEN, mfaToken);
+            args.putString(ARG_EMAIL, email);
+            args.putString(ARG_PASSWORD, password);
+            args.putInt(ARG_EXPIRES_IN, expiresIn);
+            args.putInt(ARG_RESEND_COOLDOWN, resendCooldown);
+            args.putInt(ARG_MAX_ATTEMPTS, maxAttempts);
+            args.putString(ARG_OTP_DEBUG, otpDebug == null ? "" : otpDebug);
+            args.putString(ARG_OTP_EMAIL_ERROR, otpEmailError == null ? "" : otpEmailError);
+            fragment.setArguments(args);
+            return fragment;
+        }
+
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            Bundle args = getArguments();
+            if (args != null) {
+                mfaToken = args.getString(ARG_MFA_TOKEN, "");
+                email = args.getString(ARG_EMAIL, "");
+                password = args.getString(ARG_PASSWORD, "");
+                maxAttempts = args.getInt(ARG_MAX_ATTEMPTS, 3);
+                remainingAttempts = maxAttempts;
+                resendCooldownSeconds = args.getInt(ARG_RESEND_COOLDOWN, 60);
+            }
+        }
+
+        @Override
+        public View onCreateView(LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
+            View view = inflater.inflate(R.layout.fragment_otp, container, false);
+            TextView subtitle = view.findViewById(R.id.otp_subtitle);
+            TextView attemptsInfo = view.findViewById(R.id.otp_attempts_info);
+            EditText otpCode = view.findViewById(R.id.otp_code);
+            TextView inlineError = view.findViewById(R.id.otp_inline_error);
+            TextView debugHint = view.findViewById(R.id.otp_debug_hint);
+            Button verifyButton = view.findViewById(R.id.btn_verify_otp);
+            Button resendButton = view.findViewById(R.id.btn_resend_otp);
+            TextView resendNote = view.findViewById(R.id.otp_resend_note);
+            Button cancelButton = view.findViewById(R.id.btn_cancel_otp);
+            MainActivity activity = (MainActivity) requireActivity();
+
+            int expiresIn = getArguments() != null ? getArguments().getInt(ARG_EXPIRES_IN, 300) : 300;
+            int ttlMinutes = Math.max(1, (int) Math.ceil(expiresIn / 60.0));
+            subtitle.setText("We sent a 6-digit code to " + email + ". It expires in " + ttlMinutes + " minute(s).");
+            updateAttemptsInfo(attemptsInfo);
+
+            String otpDebug = getArguments() != null ? getArguments().getString(ARG_OTP_DEBUG, "") : "";
+            String otpEmailError = getArguments() != null ? getArguments().getString(ARG_OTP_EMAIL_ERROR, "") : "";
+            showDebugHint(debugHint, otpDebug, otpEmailError);
+
+            verifyButton.setOnClickListener(v -> {
+                inlineError.setVisibility(View.GONE);
+                String code = otpCode.getText().toString().trim().replaceAll("\\D+", "");
+                if (code.length() != 6) {
+                    inlineError.setText("Please enter the 6-digit OTP.");
+                    inlineError.setVisibility(View.VISIBLE);
+                    return;
+                }
+                verifyButton.setEnabled(false);
+                verifyButton.setText("Verifying...");
+                activity.verifyOtpWithServer(mfaToken, code, email, password, new AuthCallback() {
+                    @Override
+                    public void onSuccess(String fullName, String savedEmail) {
+                        activity.onLoginSuccess();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        verifyButton.setEnabled(true);
+                        verifyButton.setText("Verify OTP");
+                        if (message.contains("Remaining attempts:")) {
+                            try {
+                                String part = message.substring(message.lastIndexOf(':') + 1).trim().replace(".", "");
+                                remainingAttempts = Integer.parseInt(part);
+                                updateAttemptsInfo(attemptsInfo);
+                            } catch (Exception ignored) {
+                                remainingAttempts = Math.max(0, remainingAttempts - 1);
+                                updateAttemptsInfo(attemptsInfo);
+                            }
+                        } else if (message.toLowerCase(Locale.US).contains("maximum otp attempts")
+                            || message.toLowerCase(Locale.US).contains("log in again")) {
+                            activity.loadFragment(new LoginFragment());
+                            Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        inlineError.setText(message);
+                        inlineError.setVisibility(View.VISIBLE);
+                    }
+                });
+            });
+
+            resendButton.setOnClickListener(v -> {
+                inlineError.setVisibility(View.GONE);
+                resendButton.setEnabled(false);
+                activity.resendOtpWithServer(mfaToken, new OtpResendCallback() {
+                    @Override
+                    public void onSuccess(int cooldown, String debugCode, String emailError) {
+                        resendCooldownSeconds = cooldown;
+                        remainingAttempts = maxAttempts;
+                        updateAttemptsInfo(attemptsInfo);
+                        showDebugHint(debugHint, debugCode, emailError);
+                        Toast.makeText(activity, "A new OTP has been sent to your email.", Toast.LENGTH_SHORT).show();
+                        startResendCooldown(resendButton, resendNote, resendCooldownSeconds);
+                    }
+
+                    @Override
+                    public void onError(String message, int resendAvailableIn) {
+                        inlineError.setText(message);
+                        inlineError.setVisibility(View.VISIBLE);
+                        if (resendAvailableIn > 0) {
+                            startResendCooldown(resendButton, resendNote, resendAvailableIn);
+                        } else {
+                            resendButton.setEnabled(true);
+                        }
+                    }
+                });
+            });
+
+            cancelButton.setOnClickListener(v -> activity.loadFragment(new LoginFragment()));
+
+            startResendCooldown(resendButton, resendNote, resendCooldownSeconds);
+            return view;
+        }
+
+        private void updateAttemptsInfo(TextView attemptsInfo) {
+            attemptsInfo.setText("Remaining attempts: " + remainingAttempts + " / " + maxAttempts);
+        }
+
+        private void showDebugHint(TextView debugHint, String otpDebug, String otpEmailError) {
+            if (otpDebug != null && !otpDebug.trim().isEmpty()) {
+                debugHint.setText("Dev hint: OTP is " + otpDebug.trim()
+                    + (otpEmailError != null && !otpEmailError.isEmpty() ? " (email error: " + otpEmailError + ")" : ""));
+                debugHint.setVisibility(View.VISIBLE);
+                return;
+            }
+            debugHint.setVisibility(View.GONE);
+        }
+
+        private void startResendCooldown(Button resendButton, TextView resendNote, int seconds) {
+            stopResendCooldown();
+            cooldownHandler = new Handler(Looper.getMainLooper());
+            final int[] remaining = {Math.max(0, seconds)};
+            cooldownRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (remaining[0] <= 0) {
+                        resendButton.setEnabled(true);
+                        resendNote.setVisibility(View.GONE);
+                        return;
+                    }
+                    resendButton.setEnabled(false);
+                    resendNote.setText("Resend available in " + remaining[0] + "s");
+                    resendNote.setVisibility(View.VISIBLE);
+                    remaining[0]--;
+                    cooldownHandler.postDelayed(this, 1000);
+                }
+            };
+            cooldownHandler.post(cooldownRunnable);
+        }
+
+        private void stopResendCooldown() {
+            if (cooldownHandler != null && cooldownRunnable != null) {
+                cooldownHandler.removeCallbacks(cooldownRunnable);
+            }
+        }
+
+        @Override
+        public void onDestroyView() {
+            stopResendCooldown();
+            super.onDestroyView();
         }
     }
 
@@ -7347,6 +8067,7 @@ public class MainActivity extends AppCompatActivity {
         private void showReturnRefundDialog(OrderInfo order) {
             View dialogView = layoutInflater.inflate(R.layout.dialog_return_refund_request, null);
             TextView orderReference = dialogView.findViewById(R.id.refund_order_reference);
+            Spinner requestTypeSpinner = dialogView.findViewById(R.id.refund_request_type_spinner);
             EditText reasonInput = dialogView.findViewById(R.id.refund_reason_input);
             Button chooseFilesButton = dialogView.findViewById(R.id.refund_choose_files);
             TextView filesStatus = dialogView.findViewById(R.id.refund_files_status);
@@ -7386,6 +8107,7 @@ public class MainActivity extends AppCompatActivity {
             );
 
             MainActivity activity = (MainActivity) requireActivity();
+            activity.bindCheckoutSpinner(requestTypeSpinner, Arrays.asList("Return & Refund", "Damaged Item"));
             activity.bindCheckoutSpinner(methodSpinner, Arrays.asList("GCash", "Maya"));
             MyPurchaseFragment.clearActionButtonTint(chooseFilesButton);
             MyPurchaseFragment.clearActionButtonTint(cancelButton);
@@ -7424,11 +8146,14 @@ public class MainActivity extends AppCompatActivity {
                 }
                 String methodLabel = String.valueOf(methodSpinner.getSelectedItem());
                 String payoutMethod = methodLabel.toLowerCase(Locale.US).contains("maya") ? "maya" : "gcash";
+                String requestTypeLabel = String.valueOf(requestTypeSpinner.getSelectedItem());
+                String requestType = requestTypeLabel.toLowerCase(Locale.US).contains("damaged") ? "damaged_item" : "return_and_refund";
                 submitButton.setEnabled(false);
                 submitButton.setText("Submitting...");
                 activity.submitReturnRefundToServer(
                     order.orderId,
                     order.referenceNumber,
+                    requestType,
                     reason,
                     payoutMethod,
                     account,

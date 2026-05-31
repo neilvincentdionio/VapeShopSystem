@@ -6,7 +6,7 @@
     <title><?= htmlspecialchars($page_title) ?> - Quick Puff Vape Shop System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-<?php helper('order'); ?>
+<?php helper(['order', 'return_refund']); ?>
 <?php
 // Helper function to get delivery status labels
 if (!function_exists('getDeliveryStatusLabel')) {
@@ -808,6 +808,11 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
             background: #fff7ed;
             color: #c2410c;
         }
+
+        .status-rider_declined {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
         
         .status-completed {
             background: #e8f5e8;
@@ -1506,6 +1511,8 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 $deliveryStatusClass = $deliveryStatus;
                                 if ($deliveryStatusClass === 'delivered_to_rider' && delivery_show_reschedule_notice($deliveryStatus, $orderShipmentNotes)) {
                                     $deliveryStatusClass = 'rescheduled';
+                                } elseif ($deliveryStatusClass === 'to_ship' && delivery_show_rider_declined_notice($deliveryStatus, $orderShipmentNotes)) {
+                                    $deliveryStatusClass = 'rider_declined';
                                 }
                                 ?>
                                 <div class="order-status status-<?= esc($deliveryStatusClass) ?>">
@@ -1539,6 +1546,13 @@ $pendingReturnCount = (int) (($returnStatusCounts['return_requested'] ?? 0) + ($
                                 </div>
                                 <?php if (delivery_show_reschedule_notice($deliveryStatus, $orderShipmentNotes)): ?>
                                 <?= view('partials/delivery_reschedule_notice', [
+                                    'shipmentNotes' => $orderShipmentNotes,
+                                    'deliveryStatus' => $deliveryStatus,
+                                    'compact' => true,
+                                ]) ?>
+                                <?php endif; ?>
+                                <?php if (delivery_show_rider_declined_notice($deliveryStatus, $orderShipmentNotes)): ?>
+                                <?= view('partials/delivery_rider_declined_notice', [
                                     'shipmentNotes' => $orderShipmentNotes,
                                     'deliveryStatus' => $deliveryStatus,
                                     'compact' => true,
@@ -2117,7 +2131,8 @@ function openOrderDetailsModal(orderId) {
                 <div><strong>Address:</strong> ${o.shipping_address || 'Not provided'}</div>
                 <div><strong>Coordinates:</strong> ${o.delivery_latitude && o.delivery_longitude ? `${o.delivery_latitude}, ${o.delivery_longitude}` : 'Not set'}</div>
                 <div><strong>Contact:</strong> ${o.contact_number || 'Not provided'}</div>
-                <div><strong>Notes:</strong> ${o.shipment_notes || 'None'}</div>
+                <div><strong>Notes:</strong> ${o.shipment_notes_display || o.shipment_notes || 'None'}</div>
+                ${o.rider_declined_reason ? `<div style="margin-top:.35rem;padding:.45rem .6rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;color:#991b1b;font-size:.88rem;"><strong>Rider declined:</strong> ${o.rider_declined_reason}</div>` : ''}
                 <div><strong>Status:</strong> ${String(o.delivery_status || '').replaceAll('_', ' ')}</div>
                 <div style="margin-top:.35rem;"><strong>Items</strong></div>
                 <div>${items}</div>

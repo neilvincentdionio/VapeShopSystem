@@ -529,6 +529,57 @@ function mobile_distance_meters(float $lat1, float $lng1, float $lat2, float $ln
     return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
 }
 
+function mobile_delivery_completion_max_distance_meters(): float
+{
+    $raw = getenv('DELIVERY_COMPLETION_MAX_DISTANCE_METERS');
+    if ($raw !== false && $raw !== '' && is_numeric($raw)) {
+        return max(100.0, (float) $raw);
+    }
+
+    return 2000.0;
+}
+
+/**
+ * Pick rider coordinates for proof validation: prefer submitted GPS, fall back to last tracked server position.
+ *
+ * @return array{lat: float|null, lng: float|null}
+ */
+function mobile_resolve_rider_proof_coordinates(array $order, ?float $submittedLat, ?float $submittedLng): array
+{
+    $deliveryLat = isset($order['delivery_latitude']) ? (float) $order['delivery_latitude'] : null;
+    $deliveryLng = isset($order['delivery_longitude']) ? (float) $order['delivery_longitude'] : null;
+    $maxMeters = mobile_delivery_completion_max_distance_meters();
+
+    $candidates = [];
+    if ($submittedLat !== null && $submittedLng !== null) {
+        $candidates[] = [$submittedLat, $submittedLng];
+    }
+
+    $trackedLat = isset($order['rider_latitude']) ? (float) $order['rider_latitude'] : null;
+    $trackedLng = isset($order['rider_longitude']) ? (float) $order['rider_longitude'] : null;
+    if ($trackedLat !== null && $trackedLng !== null && ! ($trackedLat == 0.0 && $trackedLng == 0.0)) {
+        $candidates[] = [$trackedLat, $trackedLng];
+    }
+
+    if ($deliveryLat !== null && $deliveryLng !== null && $deliveryLat != 0.0 && $deliveryLng != 0.0) {
+        foreach ($candidates as [$lat, $lng]) {
+            if (mobile_distance_meters($lat, $lng, $deliveryLat, $deliveryLng) <= $maxMeters) {
+                return ['lat' => $lat, 'lng' => $lng];
+            }
+        }
+    }
+
+    if ($submittedLat !== null && $submittedLng !== null) {
+        return ['lat' => $submittedLat, 'lng' => $submittedLng];
+    }
+
+    if ($trackedLat !== null && $trackedLng !== null) {
+        return ['lat' => $trackedLat, 'lng' => $trackedLng];
+    }
+
+    return ['lat' => null, 'lng' => null];
+}
+
 function mobile_parse_latitude(mixed $value): ?float
 {
     if ($value === null || $value === '') {

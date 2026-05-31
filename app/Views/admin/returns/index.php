@@ -152,6 +152,32 @@
             margin-top: .15rem;
             word-break: break-word;
         }
+        .refund-panel-compact__copy-row {
+            display: flex;
+            gap: .4rem;
+            align-items: flex-end;
+            margin: .55rem 0;
+            padding: .55rem .6rem;
+            border: 1px solid #dbeafe;
+            border-radius: 10px;
+            background: #f0f9ff;
+        }
+        .refund-panel-compact__copy-meta {
+            flex: 1;
+            min-width: 0;
+        }
+        .refund-panel-compact__copy-number {
+            display: block;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: .02em;
+            word-break: break-word;
+        }
+        .refund-panel-compact__copy-row .js-copy-payout-number {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
         .refund-panel-compact__label {
             display: block;
             font-size: .72rem;
@@ -212,6 +238,70 @@
             margin-bottom: .35rem;
         }
         .refund-panel-compact__damage-item:last-child { margin-bottom: 0; }
+        .refund-modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            background: rgba(15, 23, 42, 0.55);
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            pointer-events: none;
+        }
+        .refund-modal-backdrop.is-open {
+            display: flex;
+            pointer-events: auto;
+        }
+        .refund-modal {
+            width: min(420px, 100%);
+            max-height: calc(100vh - 2rem);
+            overflow: auto;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+        }
+        .refund-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            padding: 1rem 1rem .75rem;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            background: #fff;
+            z-index: 1;
+        }
+        .refund-modal__header h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            color: #111827;
+        }
+        .refund-modal__close {
+            border: 0;
+            background: #f3f4f6;
+            color: #374151;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+        .refund-modal__body {
+            padding: .25rem 1rem 1rem;
+        }
+        .refund-modal .refund-panel-compact {
+            margin-top: 0;
+            max-width: none;
+            border: 0;
+            padding: .5rem 0 0;
+            background: transparent;
+        }
+        .refund-panel-holder[hidden] {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -319,6 +409,13 @@
                                         <a class="btn btn-outline" href="<?= site_url('admin/order-details/' . $orderId) ?>">
                                             <i class="fas fa-eye"></i> Order Details
                                         </a>
+                                        <?php if ($status === 'return_picked_up'): ?>
+                                            <button type="button"
+                                                    class="btn btn-primary js-open-refund-modal"
+                                                    data-order-id="<?= $orderId ?>">
+                                                <i class="fas fa-hand-holding-usd"></i> Complete Refund
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
 
                                     <?php if ($status === 'return_requested'): ?>
@@ -338,17 +435,42 @@
                                             </div>
                                         </div>
                                     <?php elseif ($status === 'return_picked_up'): ?>
-                                        <?= view('partials/admin_refund_complete_panel', [
-                                            'orderId' => $orderId,
-                                            'meta' => $meta,
-                                            'row' => $row,
-                                        ]) ?>
-                                    <?php elseif ($status === 'return_approved'): ?>
-                                        <?php $riderAccepted = ! empty($meta) && rider_accepted_return_pickup($meta); ?>
-                                        <div class="muted" style="margin-top:.45rem;">
-                                            <i class="fas fa-truck-loading"></i>
-                                            <?= $riderAccepted ? 'Rider accepted — ready for QR scan & pickup' : 'Waiting for rider to accept pickup' ?>
+                                        <div class="refund-panel-holder" id="refund-panel-holder-<?= $orderId ?>" hidden>
+                                            <?= view('partials/admin_refund_complete_panel', [
+                                                'orderId' => $orderId,
+                                                'meta' => $meta,
+                                                'row' => $row,
+                                            ]) ?>
                                         </div>
+                                    <?php elseif ($status === 'return_approved'): ?>
+                                        <?php
+                                        $riderAccepted = ! empty($meta) && rider_accepted_return_pickup($meta);
+                                        $riderDeclined = ! empty($meta['rider_declined_at']);
+                                        $assignedRiderId = (int) ($row['assigned_rider_id'] ?? 0);
+                                        ?>
+                                        <?php if ($assignedRiderId <= 0 && $riderDeclined): ?>
+                                            <div class="return-action-panel" data-order-id="<?= $orderId ?>">
+                                                <div class="muted" style="margin-top:.45rem;color:#b45309;">
+                                                    <i class="fas fa-user-times"></i>
+                                                    Rider declined<?= ! empty($meta['rider_decline_reason']) ? ': ' . esc((string) $meta['rider_decline_reason']) : '' ?> — assign another rider
+                                                </div>
+                                                <label style="margin-top:.55rem;">Assign rider for pickup</label>
+                                                <select class="js-return-rider">
+                                                    <option value="">Select rider</option>
+                                                    <?php foreach (($riders ?? []) as $rider): ?>
+                                                        <option value="<?= (int) ($rider['id'] ?? 0) ?>"><?= esc((string) ($rider['name'] ?? 'Rider')) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <div class="action-stack" style="margin-top:.55rem;">
+                                                    <button type="button" class="btn btn-primary js-return-action" data-action="reassign_rider">Assign Rider</button>
+                                                </div>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="muted" style="margin-top:.45rem;">
+                                                <i class="fas fa-truck-loading"></i>
+                                                <?= $riderAccepted ? 'Rider accepted — ready for QR scan & pickup' : 'Waiting for rider to accept pickup' ?>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php elseif ($status === 'return_refund'): ?>
                                         <div class="muted" style="margin-top:.45rem;"><i class="fas fa-check-circle"></i> Process completed</div>
                                     <?php endif; ?>
@@ -362,7 +484,82 @@
     </div>
 </div>
 
+<div class="refund-modal-backdrop" id="refundModalBackdrop" aria-hidden="true">
+    <div class="refund-modal" role="dialog" aria-modal="true" aria-labelledby="refundModalTitle">
+        <div class="refund-modal__header">
+            <h3 id="refundModalTitle">Complete Refund</h3>
+            <button type="button" class="refund-modal__close js-close-refund-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="refund-modal__body" id="refundModalBody"></div>
+    </div>
+</div>
+
 <script>
+let activeRefundPanelHolder = null;
+
+function closeRefundModal() {
+    const backdrop = document.getElementById('refundModalBackdrop');
+    const modalBody = document.getElementById('refundModalBody');
+    const panel = modalBody?.querySelector('.js-refund-panel');
+
+    if (panel && activeRefundPanelHolder) {
+        activeRefundPanelHolder.appendChild(panel);
+    }
+
+    if (backdrop) {
+        backdrop.classList.remove('is-open');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+
+    if (modalBody) {
+        modalBody.innerHTML = '';
+    }
+
+    activeRefundPanelHolder = null;
+}
+
+function openRefundModal(orderId) {
+    const holder = document.getElementById('refund-panel-holder-' + orderId);
+    const panel = holder?.querySelector('.js-refund-panel');
+    const backdrop = document.getElementById('refundModalBackdrop');
+    const modalBody = document.getElementById('refundModalBody');
+
+    if (!holder || !panel || !backdrop || !modalBody) {
+        return;
+    }
+
+    closeRefundModal();
+    activeRefundPanelHolder = holder;
+    modalBody.appendChild(panel);
+    backdrop.classList.add('is-open');
+    backdrop.setAttribute('aria-hidden', 'false');
+}
+
+document.querySelectorAll('.js-open-refund-modal').forEach(function (button) {
+    button.addEventListener('click', function () {
+        const orderId = parseInt(this.dataset.orderId || '0', 10);
+        if (orderId > 0) {
+            openRefundModal(orderId);
+        }
+    });
+});
+
+document.querySelectorAll('.js-close-refund-modal').forEach(function (button) {
+    button.addEventListener('click', closeRefundModal);
+});
+
+document.getElementById('refundModalBackdrop')?.addEventListener('click', function (event) {
+    if (event.target === this) {
+        closeRefundModal();
+    }
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+        closeRefundModal();
+    }
+});
+
 function refundFeedback(panel, message, type) {
     const el = panel.querySelector('.js-refund-feedback');
     if (!el) {
@@ -404,7 +601,7 @@ function validateAdminRefundPayoutRef(reference, orderId, pendingRef) {
     if (!ref) {
         return {
             valid: false,
-            message: 'Enter or paste the GCash/Maya transaction reference from your send confirmation.',
+            message: 'Invalid transaction reference.',
         };
     }
 
@@ -417,7 +614,7 @@ function validateAdminRefundPayoutRef(reference, orderId, pendingRef) {
     if (pendingNorm && upper === pendingNorm) {
         return {
             valid: false,
-            message: 'Use the transaction reference from GCash/Maya after sending—not the QuickPuff message code (QP…).',
+            message: 'Invalid transaction reference.',
         };
     }
 
@@ -425,14 +622,14 @@ function validateAdminRefundPayoutRef(reference, orderId, pendingRef) {
     if (qpOrderPattern.test(ref)) {
         return {
             valid: false,
-            message: 'The QP code is only for the payment message. Paste the transaction reference from GCash/Maya after you send.',
+            message: 'Invalid transaction reference.',
         };
     }
 
     if (/^QP\d+[A-F0-9]{6,}$/i.test(ref)) {
         return {
             valid: false,
-            message: 'QuickPuff message codes (QP…) cannot be used as a transaction reference.',
+            message: 'Invalid transaction reference.',
         };
     }
 
@@ -448,7 +645,7 @@ function validateAdminRefundPayoutRef(reference, orderId, pendingRef) {
 
     return {
         valid: false,
-        message: 'Enter a valid GCash/Maya transaction reference (10–13 digits from your send confirmation). For testing only, use QWERTY.',
+        message: 'Invalid transaction reference.',
     };
 }
 
@@ -488,6 +685,47 @@ function extractEwalletReference(rawText) {
 
     return '';
 }
+
+document.querySelectorAll('.js-copy-payout-number').forEach(function (button) {
+    button.addEventListener('click', function () {
+        const panel = this.closest('.js-refund-panel');
+        if (!panel) {
+            return;
+        }
+
+        const number = (panel.dataset.payoutAccount || '').trim();
+        if (number === '') {
+            refundFeedback(panel, 'No payout number available.', 'error');
+            return;
+        }
+
+        const onCopied = function () {
+            refundFeedback(panel, 'Number copied: ' + number, 'ok');
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(number).then(onCopied).catch(function () {
+                refundFeedback(panel, 'Copy failed. Select and copy manually.', 'error');
+            });
+            return;
+        }
+
+        const temp = document.createElement('textarea');
+        temp.value = number;
+        temp.setAttribute('readonly', '');
+        temp.style.position = 'absolute';
+        temp.style.left = '-9999px';
+        document.body.appendChild(temp);
+        temp.select();
+        try {
+            document.execCommand('copy');
+            onCopied();
+        } catch (e) {
+            refundFeedback(panel, 'Copy failed. Select and copy manually.', 'error');
+        }
+        document.body.removeChild(temp);
+    });
+});
 
 document.querySelectorAll('.js-send-ewallet').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -531,7 +769,7 @@ document.querySelectorAll('.js-paste-ewallet-ref').forEach(function (button) {
                 panel.dataset.pendingRef || ''
             );
             if (!check.valid) {
-                refundFeedback(panel, check.message || 'Paste only the GCash/Maya transaction reference.', 'error');
+                refundFeedback(panel, 'Invalid transaction reference.', 'error');
                 return;
             }
             const input = panel.querySelector('.js-refund-payout-ref');
@@ -590,6 +828,18 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
             }
         }
 
+        if (action === 'reassign_rider') {
+            const riderId = panel.querySelector('.js-return-rider')?.value || '';
+            if (!riderId) {
+                alert('Please select a rider for return pickup.');
+                return;
+            }
+            payload.rider_id = parseInt(riderId, 10);
+            if (!confirm('Assign this rider for return pickup?')) {
+                return;
+            }
+        }
+
         if (action === 'complete_refund') {
             const payoutRef = panel.querySelector('.js-refund-payout-ref')?.value?.trim() || '';
             const refCheck = validateAdminRefundPayoutRef(
@@ -598,8 +848,8 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
                 panel.dataset.pendingRef || ''
             );
             if (!refCheck.valid) {
-                alert(refCheck.message || 'Enter a valid GCash/Maya transaction reference.');
-                refundFeedback(panel, refCheck.message || '', 'error');
+                refundFeedback(panel, 'Invalid transaction reference.', 'error');
+                panel.querySelector('.js-refund-payout-ref')?.focus();
                 return;
             }
             payload.refund_payout_reference = refCheck.normalized || payoutRef;
@@ -629,9 +879,16 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
             if (data.success) {
                 alert(data.message || 'Updated successfully');
                 window.location.reload();
-            } else {
-                alert(data.message || 'Unable to process return/refund action');
+                return;
             }
+
+            const errMsg = (data.message || '').trim();
+            if (action === 'complete_refund' && /transaction reference/i.test(errMsg)) {
+                refundFeedback(panel, 'Invalid transaction reference.', 'error');
+                return;
+            }
+
+            alert(errMsg || 'Unable to process return/refund action');
         })
         .catch(() => alert('An error occurred while processing the request.'));
     });
@@ -639,6 +896,19 @@ document.querySelectorAll('.js-return-action').forEach(function (button) {
 
 <?php if ($highlightOrderId > 0): ?>
 document.getElementById('return-order-<?= $highlightOrderId ?>')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+<?php
+    $autoOpenRefund = false;
+    foreach ($return_orders as $highlightRow) {
+        if ((int) ($highlightRow['id'] ?? 0) === $highlightOrderId
+            && (string) ($highlightRow['delivery_status'] ?? '') === 'return_picked_up') {
+            $autoOpenRefund = true;
+            break;
+        }
+    }
+?>
+<?php if ($autoOpenRefund): ?>
+openRefundModal(<?= $highlightOrderId ?>);
+<?php endif; ?>
 <?php endif; ?>
 </script>
 </body>

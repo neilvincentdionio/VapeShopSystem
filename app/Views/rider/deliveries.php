@@ -371,6 +371,17 @@
         background: #219653;
     }
 
+    .btn-decline {
+        background: #fff;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+    }
+
+    .btn-decline:hover {
+        background: #fef2f2;
+        border-color: #dc2626;
+    }
+
     .empty-state {
         padding: 2rem;
         text-align: center;
@@ -577,6 +588,10 @@
                                 <button type="button" class="action-btn action-btn--labeled btn-start" onclick="acceptDelivery(<?= (int) $delivery['id'] ?>)" title="Accept this delivery">
                                     <i class="fas fa-check" aria-hidden="true"></i>
                                     <span class="action-label">Accept</span>
+                                </button>
+                                <button type="button" class="action-btn action-btn--labeled btn-decline" onclick="declineDelivery(<?= (int) $delivery['id'] ?>)" title="Decline — too busy for this delivery">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                    <span class="action-label">Decline</span>
                                 </button>
                             <?php elseif ($status === 'accepted_by_rider'): ?>
                                 <span class="action-divider" aria-hidden="true"></span>
@@ -933,6 +948,40 @@ function markPickedUp(orderId) {
 
 function acceptDelivery(orderId) {
     updateRiderDeliveryStatus(orderId, 'accepted_by_rider', 'Delivery accepted.');
+}
+
+function declineDelivery(orderId) {
+    if (!confirm('Decline this delivery?\n\nThe order will go back to admin for reassignment.')) {
+        return;
+    }
+
+    const reason = prompt('Reason (optional):', 'Busy — cannot take this delivery');
+    if (reason === null) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('order_id', String(orderId));
+    params.set('status', 'decline_assignment');
+    if (reason.trim()) {
+        params.set('decline_reason', reason.trim());
+    }
+
+    fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Delivery declined.');
+            reloadDeliveriesPage();
+        } else {
+            alert(data.message || 'Failed to decline delivery');
+        }
+    })
+    .catch(() => alert('An error occurred while declining the delivery'));
 }
 
 function confirmMarkDelivered(orderId) {

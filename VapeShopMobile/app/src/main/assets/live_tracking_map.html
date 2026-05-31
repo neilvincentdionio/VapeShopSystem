@@ -29,13 +29,63 @@
     let storeMarker = null;
     let destMarker = null;
     let riderMarker = null;
+    let routeLine = null;
+    let routeFetchTimer = null;
+    let lastRouteKey = '';
+    let lastPayload = null;
     let animFrame = null;
+    let lastRiderLat = null;
+    let lastRiderLng = null;
+    let riderUsesDeviceGps = false;
+
+    window.setRiderUsesDeviceGps = function (useDevice) {
+        riderUsesDeviceGps = !!useDevice;
+    };
+
+    function hasCoord(lat, lng) {
+        return lat !== null && lat !== undefined && lng !== null && lng !== undefined
+            && !isNaN(Number(lat)) && !isNaN(Number(lng))
+            && !(Number(lat) === 0 && Number(lng) === 0);
+    }
+
+    function haversineM(lat1, lng1, lat2, lng2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2
+            + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
 
     function animateRider(toLat, toLng, durationMs) {
+        const targetLat = Number(toLat);
+        const targetLng = Number(toLng);
+        if (!hasCoord(targetLat, targetLng)) return;
+
+        if (lastRiderLat !== null && lastRiderLng !== null) {
+            const jumpM = haversineM(lastRiderLat, lastRiderLng, targetLat, targetLng);
+            if (jumpM < 8) {
+                durationMs = 0;
+            } else if (jumpM < 40) {
+                durationMs = Math.min(durationMs, 350);
+            }
+        }
+
         if (!riderMarker) {
-            riderMarker = L.marker([toLat, toLng], { icon: riderIcon }).addTo(map).bindPopup('Rider');
+            riderMarker = L.marker([targetLat, targetLng], { icon: riderIcon }).addTo(map).bindPopup('Rider');
+            lastRiderLat = targetLat;
+            lastRiderLng = targetLng;
             return;
         }
+
+        if (durationMs <= 0) {
+            if (animFrame) cancelAnimationFrame(animFrame);
+            riderMarker.setLatLng([targetLat, targetLng]);
+            lastRiderLat = targetLat;
+            lastRiderLng = targetLng;
+            return;
+        }
+
         const from = riderMarker.getLatLng();
         const startLat = from.lat;
         const startLng = from.lng;
@@ -43,23 +93,95 @@
         if (animFrame) cancelAnimationFrame(animFrame);
         const step = (now) => {
             const t = Math.min(1, (now - startTs) / durationMs);
-            riderMarker.setLatLng([
-                startLat + (toLat - startLat) * t,
-                startLng + (toLng - startLng) * t
-            ]);
-            if (t < 1) animFrame = requestAnimationFrame(step);
+            const lat = startLat + (targetLat - startLat) * t;
+            const lng = startLng + (targetLng - startLng) * t;
+            riderMarker.setLatLng([lat, lng]);
+            if (t < 1) {
+                animFrame = requestAnimationFrame(step);
+            } else {
+                lastRiderLat = targetLat;
+                lastRiderLng = targetLng;
+            }
         };
         animFrame = requestAnimationFrame(step);
     }
 
-    function hasCoord(lat, lng) {
-        return lat !== null && lat !== undefined && lng !== null && lng !== undefined
-            && !isNaN(Number(lat)) && !isNaN(Number(lng));
+    function routeDestination(payload) {
+        const phase = String(payload?.phase || 'delivery');
+        if (phase === 'pickup' && hasCoord(payload.store_latitude, payload.store_longitude)) {
+            return { lat: Number(payload.store_latitude), lng: Number(payload.store_longitude) };
+        }
+        if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
+            return { lat: Number(payload.delivery_latitude), lng: Number(payload.delivery_longitude) };
+        }
+        if (hasCoord(payload.store_latitude, payload.store_longitude)) {
+            return { lat: Number(payload.store_latitude), lng: Number(payload.store_longitude) };
+        }
+        return null;
     }
+
+    function drawRouteGuide(fromLat, fromLng, toLat, toLng) {
+        const key = fromLat.toFixed(4) + ',' + fromLng.toFixed(4) + '>' + toLat.toFixed(4) + ',' + toLng.toFixed(4);
+        if (key === lastRouteKey && routeLine) return;
+        lastRouteKey = key;
+
+        if (routeFetchTimer) clearTimeout(routeFetchTimer);
+        routeFetchTimer = setTimeout(async () => {
+            try {
+                const url = 'https://router.project-osrm.org/route/v1/driving/'
+                    + fromLng + ',' + fromLat + ';' + toLng + ',' + toLat
+                    + '?overview=full&geometries=geojson';
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!data?.routes?.length) throw new Error('no route');
+                const coords = (data.routes[0].geometry?.coordinates || []).map(c => [c[1], c[0]]);
+                if (routeLine) map.removeLayer(routeLine);
+                routeLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.92 }).addTo(map);
+            } catch (e) {
+                if (routeLine) map.removeLayer(routeLine);
+                routeLine = L.polyline([[fromLat, fromLng], [toLat, toLng]], {
+                    color: '#27c56f', dashArray: '8 8', weight: 4, opacity: 0.85
+                }).addTo(map);
+            }
+        }, 180);
+    }
+
+    function maybeUpdateRoute(payload, riderLat, riderLng) {
+        const dest = routeDestination(payload);
+        if (!dest || !hasCoord(riderLat, riderLng)) return;
+        drawRouteGuide(Number(riderLat), Number(riderLng), dest.lat, dest.lng);
+    }
+
+    function fitMapPoints(payload, riderLat, riderLng) {
+        const points = [];
+        if (hasCoord(payload.store_latitude, payload.store_longitude)) {
+            points.push([Number(payload.store_latitude), Number(payload.store_longitude)]);
+        }
+        if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
+            points.push([Number(payload.delivery_latitude), Number(payload.delivery_longitude)]);
+        }
+        if (hasCoord(riderLat, riderLng)) {
+            points.push([Number(riderLat), Number(riderLng)]);
+        }
+        if (points.length >= 2) {
+            map.fitBounds(L.latLngBounds(points).pad(0.2));
+        } else if (points.length === 1) {
+            map.setView(points[0], 15);
+        }
+    }
+
+    window.updateRiderOnly = function (lat, lng) {
+        if (!hasCoord(lat, lng)) return;
+        animateRider(Number(lat), Number(lng), 400);
+        if (lastPayload) {
+            maybeUpdateRoute(lastPayload, lat, lng);
+        }
+    };
 
     window.updateTracking = function (payload) {
         if (!payload) return;
-        setTimeout(function () { map.invalidateSize(); }, 150);
+        lastPayload = payload;
+        setTimeout(function () { map.invalidateSize(); }, 120);
 
         const destIcon = L.divIcon({
             className: 'dest-pin-icon',
@@ -75,7 +197,7 @@
         });
 
         if (hasCoord(payload.store_latitude, payload.store_longitude)) {
-            const s = [payload.store_latitude, payload.store_longitude];
+            const s = [Number(payload.store_latitude), Number(payload.store_longitude)];
             if (!storeMarker) {
                 storeMarker = L.marker(s, { icon: storeIcon }).addTo(map).bindPopup(payload.store_address || 'Store');
             } else {
@@ -84,31 +206,30 @@
         }
 
         if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
-            const d = [payload.delivery_latitude, payload.delivery_longitude];
+            const d = [Number(payload.delivery_latitude), Number(payload.delivery_longitude)];
             if (!destMarker) {
-                destMarker = L.marker(d, { icon: destIcon }).addTo(map).bindPopup(payload.delivery_address || 'Your address');
+                destMarker = L.marker(d, { icon: destIcon }).addTo(map).bindPopup(payload.delivery_address || 'Customer');
             } else {
                 destMarker.setLatLng(d);
             }
         }
 
-        const points = [];
-        if (hasCoord(payload.store_latitude, payload.store_longitude)) {
-            points.push([payload.store_latitude, payload.store_longitude]);
-        }
-        if (hasCoord(payload.delivery_latitude, payload.delivery_longitude)) {
-            points.push([payload.delivery_latitude, payload.delivery_longitude]);
-        }
-        if (hasCoord(payload.rider_latitude, payload.rider_longitude)) {
-            animateRider(Number(payload.rider_latitude), Number(payload.rider_longitude), 1000);
-            points.push([Number(payload.rider_latitude), Number(payload.rider_longitude)]);
+        let riderLat = payload.rider_latitude;
+        let riderLng = payload.rider_longitude;
+
+        if (riderUsesDeviceGps) {
+            if (lastRiderLat !== null && lastRiderLng !== null) {
+                riderLat = lastRiderLat;
+                riderLng = lastRiderLng;
+            } else if (hasCoord(riderLat, riderLng)) {
+                animateRider(Number(riderLat), Number(riderLng), 0);
+            }
+        } else if (hasCoord(riderLat, riderLng)) {
+            animateRider(Number(riderLat), Number(riderLng), 500);
         }
 
-        if (points.length >= 2) {
-            map.fitBounds(L.latLngBounds(points).pad(0.22));
-        } else if (points.length === 1) {
-            map.setView(points[0], 15);
-        }
+        fitMapPoints(payload, riderLat, riderLng);
+        maybeUpdateRoute(payload, riderLat, riderLng);
     };
 </script>
 </body>

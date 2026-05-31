@@ -100,6 +100,11 @@
 
     .action-btn.btn-scan { background: #1976d2; }
     .action-btn.btn-accept { background: #f59e0b; color: #fff; }
+    .action-btn.btn-decline {
+        background: #fff;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+    }
     .empty-state { padding: 2.5rem 1rem; text-align: center; color: #666; }
     tr.is-highlighted { background: rgba(39, 197, 111, 0.08); }
 
@@ -228,6 +233,9 @@
                                     <button type="button" class="action-btn btn-accept" onclick="acceptReturnPickup(<?= $orderId ?>)">
                                         <i class="fas fa-check"></i> Accept Pickup
                                     </button>
+                                    <button type="button" class="action-btn btn-decline" onclick="declineReturnPickup(<?= $orderId ?>)">
+                                        <i class="fas fa-times"></i> Decline
+                                    </button>
                                 <?php elseif ($status === 'return_approved' && $riderAccepted): ?>
                                     <button type="button" class="action-btn btn-scan" onclick="openReturnScanModal(<?= $orderId ?>)">
                                         <i class="fas fa-qrcode"></i> Scan QR &amp; Pick Up
@@ -315,6 +323,40 @@ function acceptReturnPickup(orderId) {
         }
     })
     .catch(() => alert('An error occurred while accepting the pickup'));
+}
+
+function declineReturnPickup(orderId) {
+    if (!confirm('Decline this return pickup?\n\nAdmin will assign another rider.')) {
+        return;
+    }
+
+    const reason = prompt('Reason (optional):', 'Busy — cannot take this pickup');
+    if (reason === null) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('order_id', String(orderId));
+    params.set('status', 'decline_assignment');
+    if (reason.trim()) {
+        params.set('decline_reason', reason.trim());
+    }
+
+    fetch('<?= site_url('dashboard/riderUpdateDeliveryStatus') ?>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Return pickup declined.');
+            window.location.reload();
+        } else {
+            alert(data.message || 'Unable to decline return pickup');
+        }
+    })
+    .catch(() => alert('An error occurred while declining the pickup'));
 }
 
 function openReturnMap(orderId) {
